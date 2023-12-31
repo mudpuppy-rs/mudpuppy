@@ -1,0 +1,72 @@
+# Uncomment and edit the [[muds]] sections to configure the MUD list available in the client
+# The configuration is automatically reloaded when you save.
+
+# [[muds]]
+# name = "DuneMUD (TLS)"
+# host = "dunemud.net"
+# port = 6788
+# tls = "Enabled"
+# echo_input = true
+# no_line_wrap = false
+
+# [[muds]]
+# name = "DunemUD (Telnet)"
+# host = "dunemud.net"
+# port = 6789
+# tls = "Disabled"
+
+# Default key bindings for the MUD list.
+[keybindings.MudList.Up]
+MudListPrev = {}
+[keybindings.MudList.Down]
+MudListNext = {}
+[keybindings.MudList.Enter]
+MudListConnect = {}
+[keybindings.MudList."<Ctrl-p>"]
+TabPrev = {}
+[keybindings.MudList."<Ctrl-n>"]
+TabNext = {}
+[keybindings.MudList.q]
+Quit = {}
+[keybindings.MudList.x]
+Quit = {}
+[keybindings.MudList."<Ctrl-d>"]
+Quit = {}
+[keybindings.MudList."<Ctrl-c>"]
+Quit = {}
+[keybindings.MudList."<Ctrl-x>"]
+Quit = {}
+
+# Default key bindings for MUD sessions.
+[keybindings.Mud."<Ctrl-p>"]
+TabPrev = {}
+[keybindings.Mud."<Ctrl-n>"]
+TabNext = {}
+[keybindings.Mud."<Alt-p>"]
+TabSwapLeft = {}
+[keybindings.Mud."<Alt-n>"]
+TabSwapRight = {}
+[keybindings.Mud."<Ctrl-d>"]
+Quit = {}
+[keybindings.Mud."<Ctrl-c>"]
+Quit = {}
+[keybindings.Mud."<Ctrl-q>"]
+Quit = {}
+[keybindings.Mud."<Ctrl-x>"]
+TabClose = {}
+[keybindings.Mud."F2"]
+ToggleInputEcho = {}
+[keybindings.Mud."F3"]
+ToggleLineWrap = {}
+[keybindings.Mud."Up"]
+HistoryPrevious = {}
+[keybindings.Mud."Down"]
+HistoryNext = {}
+[keybindings.Mud."PageUp"]
+ScrollUp = {}
+[keybindings.Mud."PageDown"]
+ScrollDown = {}
+[keybindings.Mud."<Shift-Home>"]
+ScrollTop = {}
+[keybindings.Mud."<Shift-End>"]
+ScrollBottom = {}

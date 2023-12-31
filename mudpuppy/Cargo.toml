@@ -1,0 +1,64 @@
+[package]
+name = "mudpuppy"
+version = "0.1.0-alpha"
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description.workspace = true
+
+[dependencies]
+ansi-to-tui = { workspace = true }
+async-trait = { workspace = true }
+better-panic = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+config = { workspace = true, features = ["toml"] }
+console-subscriber = { workspace = true, optional = true }
+# TODO(XXX): remove serde once KeyPress hack addressed.
+crossterm = { workspace = true, features = ["event-stream", "bracketed-paste", "serde"] }
+deref-derive = { workspace = true }
+directories = { workspace = true }
+futures = { workspace = true }
+happy-eyeballs = { workspace = true, features = ["tokio"] }
+notify = { workspace = true }
+human-panic = { workspace = true }
+pyo3 = { workspace = true }
+pyo3-asyncio-0-21 = { workspace = true }
+pyo3-pylogger = { workspace = true }
+ratatui = { workspace = true, default-features = true, features = ["unstable-widget-ref"] }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+socket2 = { workspace = true }
+strip-ansi-escapes = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-rustls = { workspace = true }
+tokio-util = { workspace = true, features = ["codec"] }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+tracing = { workspace = true }
+tracing-error = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "serde"] }
+unicode-segmentation = { workspace = true, features = [] }
+unicode-width = { workspace = true }
+webpki-roots = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.deb]
+copyright = "2024, Daniel McCarney <daniel@binaryparadox.net>"
+depends = "python3"
+assets = [
+    ["target/release/mudpuppy", "usr/bin/", "755"],
+    ["../README.md", "usr/share/doc/mudpuppy/README", "644"],
+]
+
