@@ -1,3 +1,8 @@
+[![GitHub branch status](https://img.shields.io/github/checks-status/mudpuppy-rs/mudpuppy/main?style=for-the-badge&label=CI)](https://github.com/mudpuppy-rs/mudpuppy/actions/workflows/rust.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/mudpuppy-rs/mudpuppy?include_prereleases&style=for-the-badge)](https://github.com/mudpuppy-rs/mudpuppy/releases)
+[![GitHub License](https://img.shields.io/github/license/mudpuppy-rs/mudpuppy?style=for-the-badge&label=License)](https://github.com/mudpuppy-rs/mudpuppy?tab=MIT-1-ov-file#readme)
+[![Discord](https://img.shields.io/discord/1292557013276168203?style=for-the-badge&label=Discord)](https://discord.gg/bRadchaGFq)
+
 # Mudpuppy
 
 A terminal [MUD] client with a customizable interface and Python scripting.
