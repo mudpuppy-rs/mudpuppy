@@ -105,6 +105,10 @@ impl ScrollWindow {
 
 fn filter_item(item: &output::Item, echo_input: bool) -> bool {
     match item {
+        // Hide gagged MUD items
+        // TODO(XXX): Offer a way to disable gagging for troubleshooting?
+        output::Item::Mud { line } if line.gag => false,
+
         // Hide input items when echo_input is disabled. The user doesn't want to see their own
         // input displayed in the output buff.
         output::Item::Input { .. } if !echo_input => false,
