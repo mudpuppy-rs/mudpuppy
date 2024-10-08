@@ -14,7 +14,9 @@
       perSystem = { config, self', pkgs, lib, system, ... }:
         let
           runtimeDeps = with pkgs; [ python3 ];
-          buildDeps = with pkgs; [ python3 ];
+          buildDeps = with pkgs;
+            [ python3 ] ++ lib.optionals stdenv.hostPlatform.isDarwin
+            [ pkgs.darwin.apple_sdk.frameworks.CoreServices ];
           devDeps = with pkgs; [
             cargo-deny
             cargo-udeps
