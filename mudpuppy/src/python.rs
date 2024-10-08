@@ -272,7 +272,7 @@ impl PyApp {
             state
                 .client_for_id_mut(id)
                 .ok_or(Error::from(id))?
-                .send_line(InputLine::new(line, true))
+                .send_line(InputLine::new(line, true, true))
                 .map_err(Into::into)
         })
     }
