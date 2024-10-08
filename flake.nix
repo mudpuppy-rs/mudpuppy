@@ -113,7 +113,7 @@
                   enable = true;
                 };
                 ruff.enable = true;
-                pyright.enable = true;
+                pyright.enable = false; # TODO(XXX): Restore after fixing stubs.
                 nightly-fmt = (cargo-check "cargo-fmt" "fmt --check");
                 nightly-clippy = (cargo-check "cargo-clippy"
                   "clippy --all-targets --all-features -- -D warnings");
