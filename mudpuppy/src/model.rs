@@ -208,15 +208,19 @@ pub struct InputLine {
     #[pyo3(get)]
     pub original: Option<String>,
 
+    // TODO(XXX): compact flags repr
     #[pyo3(get)]
     pub echo: EchoState,
+
+    #[pyo3(get)]
+    pub scripted: bool,
 }
 
 #[pymethods]
 impl InputLine {
     #[new]
     #[must_use]
-    pub fn new(sent: String, echo: bool) -> Self {
+    pub fn new(sent: String, echo: bool, scripted: bool) -> Self {
         Self {
             sent,
             original: None,
@@ -224,6 +228,7 @@ impl InputLine {
                 true => EchoState::Enabled,
                 false => EchoState::Password,
             },
+            scripted,
         }
     }
 
@@ -242,12 +247,6 @@ impl Display for InputLine {
             EchoState::Enabled => f.write_str(&self.sent),
             EchoState::Password => f.write_str(&"*".repeat(self.sent.len())),
         }
-    }
-}
-
-impl From<String> for InputLine {
-    fn from(value: String) -> Self {
-        Self::new(value, true)
     }
 }
 

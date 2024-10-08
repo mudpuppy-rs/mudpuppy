@@ -98,6 +98,9 @@ async def shortcut(event: Event):
     if line is None:
         mudpuppy_core.set_input(event.id, "")
     else:
+        # TODO(XXX): make this configurable
+        if line.scripted:
+            return
         if line.original is None:
             mudpuppy_core.set_input(event.id, line.sent)
         else:

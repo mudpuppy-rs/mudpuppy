@@ -175,13 +175,17 @@ impl Client {
                     } else {
                         Some(orig_input)
                     },
+                    scripted: false,
                     echo: self.input.echo(),
                 };
                 return self.send_line(input_line);
             }
 
-            let input_line =
-                InputLine::new(orig_input.clone(), self.input.echo() == EchoState::Enabled);
+            let input_line = InputLine::new(
+                orig_input.clone(),
+                self.input.echo() == EchoState::Enabled,
+                false,
+            );
             self.event_tx.send(python::Event::InputLine {
                 id: self.info.id,
                 input: input_line.clone(),
@@ -425,7 +429,7 @@ impl Client {
         }
 
         for line in trigger_send {
-            self.send_line(InputLine::new(line, true))?;
+            self.send_line(InputLine::new(line, true, true))?;
         }
 
         let item = output::Item::Mud { line };
