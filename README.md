@@ -95,6 +95,13 @@ See this example config file for more information. TODO: link to config file.
 mudpuppy
 ```
 
+# User Guide
+
+Mudpuppy offers a [user guide] book that provides detailed information and
+examples.
+
+[user guide]: https://mudpuppy-rs.github.io/mudpuppy/
+
 # Scripting
 
 Python scripts placed in the Mudpuppy config directory are automatically loaded
@@ -102,197 +109,38 @@ when Mudpuppy is started. This is the principle mechanism of scripting: putting
 Python code that interacts with Mudpuppy through the `mudpuppy` and
 `mudpuppy_core` packages in your config dir.
 
-Since Mudpuppy supports connecting to multiple MUDs at one time, you will
-typically need to decide whether your scripts are targeting one specific MUD,
-or all MUDs.
+Mudpuppy supports:
 
-Remember that Mudpuppy is async: most callbacks will need to be async, and you
-will need to await most operations on the `mudpuppy_core` interface.
+* Aliases, matching on user input.
+* Triggers, matching on game output.
+* Timers, running on fixed intervals.
+* Commands, invoked with a special prefix.
 
-Full documentation of the various APIs and scripting patterns is pending. For
-now here's a run-down of the core bits. See the examples in this repo for more
-detail. TODO: link examples.
-
-## Creating an Alias
-
-Aliases map a command pattern to a specific action. They can target a specific
-MUD or all MUDs.
-
-The line that matched the alias, as well as any regexp groups in the pattern are
-provided to the alias callback function alongside the `SessionId` of the MUD.
-
-- **Target a specific MUD, or list of MUDs**: Use `mud_name` to create an alias
-  for a specific MUD, or list of MUDs:
-    ```python
-    @alias(mud_name="Dune (TLS)", pattern="^test$", name="Test Alias")
-    async def test(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
-        # Send a command when the alias is run
-        mudpuppy_core.send(session_id, "say this is an alias test!")
-
-    @alias(mud_name=["Dune (TLS)", "Threshold"], pattern="^eepy$", name="Eepy")
-    async def eepy(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
-        mudpuppy_core.send(session_id, "say I'm eepy!")
-    ```
-
-- **Simple commands**: Use 'expansion` to simplify the above example:
-    ```python
-    @alias(mud_name="Dune (TLS)", pattern="^test$", name="Test Alias", expansion='say this is an alias test!')
-    async def test(_session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
-        # Since we simply want to send an expansion we don't need to do anything
-        # in the function body anymore!
-        pass
-    ```
-
-- **Global Alias**: Create an alias that works across all MUDs by omitting `mud_name`:
-    ```python
-    @alias(pattern="^e$", name="Quick East", expansion="east")
-    async def quick_east(_session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
-        pass
-    ```
-
-## Creating a Trigger
-
-Triggers execute based on matching text patterns in the MUD output. They can also
-be scoped to specific MUDs or be global.
-
-The line that matched the trigger, as well as any regexp groups in the pattern
-are provided to the trigger callback function alongside the `SessionId` of the MUD
-and the `TriggerId` of the trigger. Multi-line triggers are not yet supported.
-
-Like aliases you can make these global by omitting `mud_name`.
-
-- **Specific MUD Trigger**:
-    ```python
-    @trigger(
-        mud_name="Dune (TLS)",
-        pattern="^You (say|exclaim|ask): (.*) narf.$",
-        expansion="say N A R F!!!",
-    )
-    async def narf(_session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
-        pass
-    ```
-
-#### Creating a Prompt Handler
-
-Prompt handlers are invoked when Mudpuppy receives a prompt from the MUD. Like
-aliases and triggers these can target all MUDs or be bound to a particular MUD.
-How Mudpuppy determines what is/isn't a prompt is somewhat complex and described
-separately. TODO: Link to prompt stuff.
-
-The prompt event is provided as an argument to the handler and can be used to
-find the text of the prompt and the `SessionId` of the MUD.
-
-- **Prompt Handler for a Specific MUD**:
-    ```python
-    @on_mud_event("Dune (TLS)", EventType.Prompt)
-    async def test_prompt_handler(event: Event):
-        logging.debug(f'test prompt is: "{str(event.prompt)}"')
-        if str(event.prompt) == "Please enter your name: ":
-            await mudpuppy_core.send_line(event.id, "cooldude1999")
-    ```
-
-- **Global Prompt Handler**:
-    ```python
-    @on_event(EventType.Prompt)
-    async def prompt_handler(event: Event):
-        logging.debug(f"prompt event: {event}")
-    ```
-
-You can also create triggers that only match on prompts by setting
-`prompt=True`. This can be used to conditionally gag prompts:
-
-    ```python
-
-    @trigger(name="Gag login prompts", prompt=True, gag=True, pattern=r"(?:Enter your username: )|(?:Password: )")
-    async def gag_prompts(_session_id: SessionId, _trigger_id: TriggerId, line: str, _groups: Any):
-        logging.debug(f"\nI just gagged this prompt:\n{line}\n")
-    ```
-
-#### Creating a Timer
-
-Timers allow you to execute actions periodically, either globally or for
-a specific MUD.
-
-The timer function receives the `TimerId` of the timer, and potentially the
-`SessionId` of the MUD. This is optional since global timers are run without
-being tied to a specific session.
-
-- **Global Timer**:
-    ```python
-    # A timer that runs every 2 minutes, 10 seconds
-    @timer(name="Global Test Timer", seconds=10, minutes=2)
-    async def global_woohoo(timer_id: TimerId, _session_id: Optional[SessionId]):
-        logging.debug(f"2m10s timer fired: {timer_id}!")
-    ```
-
-- **Specific MUD Timer**:
-    ```python
-    # A timer that runs every 5 seconds.
-    @timer(mud_name="Dune (TLS)", name="Dune MUD Timer", seconds=5)
-    async def test_timer(timer_id: TimerId, session_id: Optional[SessionId]):
-        assert session_id is not None
-        await mudpuppy_core.add_output(
-            session_id, OutputItem.command_result(f"[{timer_id}] Tick tock!")
-        )
-        await mudpuppy_core.send_line(session_id, "say tick tock")
-    ```
-
-- **Max Ticks**:
-    ```python
-    # A timer that runs every 10 minutes, but only 2 times.
-    @timer(name="Global Test Timer", minutes=10, max_ticks=2)
-    async def global_woohoo(timer_id: TimerId, _session_id: Optional[SessionId]):
-        logging.debug(f"global timer fired: {timer_id}!")
-    ```
-
-# Client Commands
-
-In addition to scripting Mudpuppy offers some built-in commands, identified with
-a `/` prefix. The choice of prefix can be changed in your config file.
-
-## `/status`
-
-Shows the current connection status. Use `/status --verbose` for more
-information.
-
-## `/connect`
-
-Connects the current session if it isn't already connected.
-
-## `/disconnect`
-
-Disconnects the current session if it isn't already disconnected.
-
-## `/quit`
-
-Exits Mudpuppy.
-
-## `/reload`
-
-Reloads user python scripts. Scripts can define a handler to be called before
-reloading occurs if any clean-up needs to be done:
+Helpful Python decorators and the async nature of Mudpuppy make creating complex
+behaviours easy:
 
 ```python
-# Called before /reload completes and the module is re-imported.
-def __reload__():
-    pass
+import logging
+import asyncio
+from mudpuppy import alias
+from mudpuppy_core import mudpuppy_core, SessionId, AliasId
+
+@alias(mud_name="Dune", pattern="^kill (.*)$", name="Kill and headbutt")
+async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, groups):
+    # Send through the original line so that we actually start combat in-game
+    # with the 'kill' command.
+    await mudpuppy_core.send_line(session_id, line)
+
+    # Wait for a little bit, and then give them a headbutt!
+    target = groups[0]
+    logging.info(f"building up momentum for a headbutt attack on {target}")
+
+    await asyncio.sleep(5)
+    await mudpuppy_core.send_line(session_id, f"headbutt {target}")
 ```
 
-## `/alias`, `/trigger`, `/timer`
-
-These commands allow creating simple aliases/triggers/timers that last only for
-the duration of the session. To create durable versions pref Python scripting.
-
-# Prompt Detection
-
-Mudpuppy attempts to detect what is/isn't a prompt in a few ways (listed in
-order of how reliable they are):
-
-* Negotiating support for the telnet "EOR" option, and expecting prompts to be
-  terminated with EOR.
-* Seeing lines that end with telnet "GA", and assuming they are prompts.
-* Seeing lines that end without `\r\n`, after a short timeout expires to ensure
-  it wasn't a partial line.
+See the _work-in-progress_ [user guide] for detailed information. API references
+for the Python API are pending.
 
 # Development
 
