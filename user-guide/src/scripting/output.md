@@ -1,22 +1,31 @@
 # Output
 
-Because Mudpuppy is a complex terminal UI (TUI) you can't simply
-`print("hello")` to display output. In fact, if you do so it'll print overtop of
-the TUI and result in visual corruption.
-
-Instead you can should `OutputItem` instances to a specific session's output buffer
-for information you want to display, or use [logging] for debug information.
+Mudpuppy displays outputs per-MUD in a special output buffer. Your Python code
+can add items to be displayed through the `mudpuppy_core` API, or for simple
+debugging, using `print()`.
 
 Presently only the **low-level** API/types are available. In the future there
 will be helpers to make this less painful :-)
 
 [logging]: ../logging.md
 
+## Debug Output
+
+For simple debug output you can use `print()`. It will convert each line of what
+would have been written to stdout into `OutputItem.debug()` instances that get
+added to the currently active session. If called when there is no active
+session, nothing will be displayed - prefer `logging` for this use-case.
+
+You can also use `print()` from `/py` but you must carefully escape the input:
+```
+/py print(\"this is a test\\nhello!\")
+```
+
 ## Adding Output
 
-Output can be added using `mudpuppy_core.add_output()` and providing both the
-`SessionId` to add the output to, and an `OutputItem` to add. Remember this is
-an async operation so you'll need to `await`!
+Other kinds of output can be added using `mudpuppy_core.add_output()` and
+providing both the `SessionId` to add the output to, and an `OutputItem` to add.
+Remember this is an async operation so you'll need to `await`!
 
 ```python
 from mudpuppy_core import mudpuppy_core, OutputItem
