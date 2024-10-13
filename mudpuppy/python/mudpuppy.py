@@ -124,7 +124,9 @@ def on_disconnected(module=None):
 
 
 def on_mud_event(
-    mud_name: str, event_type: Union[EventType, List[EventType]], module=None
+    mud_name: Union[str, List[str]],
+    event_type: Union[EventType, List[EventType]],
+    module=None,
 ):
     def on_mud_event_decorator(handler: EventHandler):
         ensure_async(handler)
@@ -135,15 +137,19 @@ def on_mud_event(
             if sesh_id is None:
                 return  # Global event - skip
             session_info_data = await mudpuppy_core.session_info(sesh_id)
-            if session_info_data.mud_name == mud_name:
-                await handler(event)
+            if isinstance(mud_name, str):
+                if session_info_data.mud_name == mud_name:
+                    await handler(event)
+            elif isinstance(mud_name, list):
+                if session_info_data.mud_name in mud_name:
+                    await handler(event)
 
         return on_mud_event_wrapper
 
     return on_mud_event_decorator
 
 
-def on_mud_new_session(mud_name: str, module=None):
+def on_mud_new_session(mud_name: Union[str, List[str]], module=None):
     def on_mud_new_session_decorator(handler: EventHandler):
         ensure_async(handler)
 
@@ -158,7 +164,7 @@ def on_mud_new_session(mud_name: str, module=None):
     return on_mud_new_session_decorator
 
 
-def on_mud_new_session_or_reload(mud_name: str, module=None):
+def on_mud_new_session_or_reload(mud_name: Union[str, List[str]], module=None):
     def on_mud_new_session_or_reload_decorator(handler: EventHandler):
         ensure_async(handler)
 
@@ -175,7 +181,7 @@ def on_mud_new_session_or_reload(mud_name: str, module=None):
     return on_mud_new_session_or_reload_decorator
 
 
-def on_mud_connected(mud_name: str, module=None):
+def on_mud_connected(mud_name: Union[str, List[str]], module=None):
     def on_mud_connected_decorator(handler: EventHandler):
         ensure_async(handler)
 
@@ -191,7 +197,7 @@ def on_mud_connected(mud_name: str, module=None):
     return on_mud_connected_decorator
 
 
-def on_mud_disconnected(mud_name: str, module=None):
+def on_mud_disconnected(mud_name: Union[str, List[str]], module=None):
     def on_mud_disconnected_decorator(handler: EventHandler):
         ensure_async(handler)
 
@@ -215,7 +221,7 @@ def alias(
     pattern: str,
     name: str,
     expansion: Optional[str] = None,
-    mud_name: Optional[str] = None,
+    mud_name: Optional[Union[str, List[str]]] = None,
     module: Optional[str] = None,
 ):
     def alias_decorator(handler: Callable):

@@ -59,6 +59,18 @@ async def prompt_handler(event: Event):
     logging.debug(f"got prompt event: {event}")
 
 
+@trigger(
+    mud_name=["Test (TLS)", "Test (Telnet)"],
+    name="MultiMud",
+    pattern="^You say: secret.",
+    expansion="say sauce.",
+)
+async def multi_mud_test(
+    _session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups
+):
+    pass
+
+
 @on_mud_event("Test (TLS)", EventType.Prompt)
 async def test_prompt_handler(event: Event):
     logging.debug(f'test prompt is: "{str(event.prompt)}"')
