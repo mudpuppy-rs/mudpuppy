@@ -18,6 +18,7 @@
             [ python3 ] ++ lib.optionals stdenv.hostPlatform.isDarwin
             [ pkgs.darwin.apple_sdk.frameworks.CoreServices ];
           devDeps = with pkgs; [
+            mdbook
             cargo-deny
             cargo-udeps
             cargo-dist
@@ -119,8 +120,8 @@
                   "clippy --all-targets --all-features -- -D warnings");
               };
             };
-            check.enable =
-              false; # Don't run pre-commit hooks in 'nix flake check'
+            # Don't run pre-commit hooks in 'nix flake check'
+            check.enable = false;
           };
         };
     };
