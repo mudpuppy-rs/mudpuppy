@@ -107,7 +107,7 @@ async def shortcut(event: Event):
             mudpuppy_core.set_input(event.id, line.original)
 
     input = await mudpuppy_core.get_input(event.id)
-    logging.info(f"val is: {input}")
+    logging.debug(f"val is: {input}")
 
 
 @on_new_session()
