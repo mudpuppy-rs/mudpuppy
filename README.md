@@ -121,12 +121,17 @@ MUD or all MUDs.
 The line that matched the alias, as well as any regexp groups in the pattern are
 provided to the alias callback function alongside the `SessionId` of the MUD.
 
-- **Target a specific MUD**: Use `mud_name` to create an alias for a specific MUD:
+- **Target a specific MUD, or list of MUDs**: Use `mud_name` to create an alias
+  for a specific MUD, or list of MUDs:
     ```python
     @alias(mud_name="Dune (TLS)", pattern="^test$", name="Test Alias")
     async def test(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
         # Send a command when the alias is run
         mudpuppy_core.send(session_id, "say this is an alias test!")
+
+    @alias(mud_name=["Dune (TLS)", "Threshold"], pattern="^eepy$", name="Eepy")
+    async def eepy(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
+        mudpuppy_core.send(session_id, "say I'm eepy!")
     ```
 
 - **Simple commands**: Use 'expansion` to simplify the above example:
