@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use futures::stream::FuturesUnordered;
 use pyo3::exceptions::PyTypeError;
-use pyo3::types::{PyAnyMethods, PyFunction, PyList, PyListMethods, PyModule, PyTuple};
+use pyo3::types::{
+    PyAnyMethods, PyFunction, PyList, PyListMethods, PyModule, PyStringMethods, PyTuple,
+};
 use pyo3::{
     pyclass, pymethods, pymodule, Bound, Py, PyAny, PyErr, PyObject, PyRef, PyResult, Python,
 };
@@ -88,6 +90,15 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
 
         let module: Py<PyAny> = PyModule::import_bound(py, "mudpuppy_core")?.into();
         module.setattr(py, "mudpuppy_core", py_app)?;
+
+        // Override print() built-in with one that will send output to the active MUD buffer.
+        py.run_bound("import builtins", None, None)?;
+        py.run_bound("import mudpuppy_core", None, None)?;
+        py.run_bound(
+            "builtins.print = mudpuppy_core.mudpuppy_core.print",
+            None,
+            None,
+        )?;
 
         let event_handlers = Py::new(py, EventHandlers::new())?;
         module.setattr(py, "event_handlers", event_handlers.clone())?;
@@ -231,6 +242,52 @@ impl PyApp {
     #[staticmethod]
     fn version() -> String {
         GIT_COMMIT_HASH.to_string()
+    }
+
+    #[pyo3(signature = (*args, sep=None, end=None))]
+    fn print<'py>(
+        &self,
+        py: Python<'py>,
+        args: &Bound<'py, PyTuple>,
+        sep: Option<&str>,
+        end: Option<&str>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // Recreate the basics of print(), but writing to the output string.
+        let sep = sep.unwrap_or(" ");
+        let end = end.unwrap_or("\n");
+        let mut output = String::new();
+        for (i, arg) in args.iter()?.enumerate() {
+            if i > 0 {
+                output.push_str(sep);
+            }
+            let arg_str = arg?.str()?;
+            let arg_str = arg_str.to_str()?;
+            output.push_str(arg_str);
+        }
+        output.push_str(end);
+
+        // Then convert each line of the output into a debug item.
+        // TODO(XXX): Offer a way to pick the item type?
+        let mut line_items = Vec::default();
+        for line in output.lines() {
+            line_items.push(client::output::Item::Debug {
+                line: line.to_string(),
+            });
+        }
+
+        // Finally, push the items to the active session's output.
+        with_state!(self, py, |mut state| {
+            let Some(cur_id) = state.active_session_id else {
+                // TODO(XXX): err? log?
+                return Ok(());
+            };
+            state
+                .client_for_id_mut(cur_id)
+                .unwrap()
+                .output
+                .extend(line_items.into_iter());
+            Ok(())
+        })
     }
 
     fn active_session_id<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
