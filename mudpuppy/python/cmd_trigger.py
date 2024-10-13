@@ -51,6 +51,11 @@ class TriggerCmd(Command):
             action="store_true",
         )
         add_parser.add_argument(
+            "--prompt",
+            help="Only match prompt lines",
+            action="store_true",
+        )
+        add_parser.add_argument(
             "--ansi",
             help="Match trigger with ANSI colour preserved",
             action="store_true",
@@ -102,9 +107,13 @@ class TriggerCmd(Command):
         if args.pattern is None:
             return
         new_trigger = TriggerConfig(args.pattern, args.name)
-        new_trigger.expansion = " ".join(args.command)
+        expansion = " ".join(args.command).strip()
+        if expansion != "":
+            new_trigger.expansion = expansion
         if args.gag:
             new_trigger.gag = True
+        if args.prompt:
+            new_trigger.prompt = True
         if not args.ansi:
             new_trigger.strip_ansi = True
         trig_id = await mudpuppy_core.new_trigger(sesh_id, new_trigger, __name__)
@@ -150,7 +159,7 @@ class TriggerCmd(Command):
 
             output_items.append(
                 OutputItem.command_result(
-                    f"{trigger.id}: Hits={trigger.config.hit_count} Gag={trigger.config.gag} Pattern={repr(trigger.config.pattern())} {label}",
+                    f"{trigger.id}: Hits={trigger.config.hit_count} Gag={trigger.config.gag} Prompt={trigger.config.prompt} Pattern={repr(trigger.config.pattern())} {label}",
                 )
             )
         await mudpuppy_core.add_outputs(sesh_id, output_items)

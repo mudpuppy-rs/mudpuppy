@@ -13,7 +13,6 @@ use pyo3::{pyclass, pymethods, Py, PyRefMut, Python};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use serde::Serialize;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio_util::bytes::Bytes;
 use tracing::{debug, info, instrument, trace, warn, Level};
 
 use crate::client::gmcp::Gmcp;
@@ -118,6 +117,9 @@ impl Client {
             connection::SessionEvent::PartialLine(data) => {
                 let mut prompt = MudLine::from(data);
                 prompt.prompt = true;
+
+                self.process_prompt(&mut prompt, futures)?;
+
                 let item = output::Item::Prompt {
                     prompt: prompt.clone(),
                 };
@@ -403,40 +405,55 @@ impl Client {
             debug!("{item:?}");
         }
         match item {
-            TelnetItem::Line(data) => self.process_line(futures, data),
+            TelnetItem::Line(data) => self.process_output_line(MudLine::from(data), futures),
             TelnetItem::Negotiation(negotiation) => self.process_negotiation(negotiation),
             TelnetItem::IacCommand(iac) => self.process_iac(iac),
             TelnetItem::Subnegotiation(opt, data) => self.process_subnegotiation(opt, &data),
         }
     }
 
-    fn process_line(
+    fn process_output_line(
         &mut self,
+        mut line: MudLine,
         futures: &mut FuturesUnordered<python::PyFuture>,
-        data: Bytes,
     ) -> Result<(), Error> {
-        let mut line = MudLine::from(data);
-        // TODO(XXX): awkward. avoid alloc. Doing this presently to avoid two mutable
-        //  borrows of self - one for triggers, and one for send_line.
-        let mut trigger_send = Vec::new();
-
-        for trigger in self.triggers.values_mut().filter(|trigger| trigger.enabled) {
-            if let Some(expansion) =
-                Self::evaluate_trigger(self.info.id, trigger, &mut line, futures)?
-            {
-                trigger_send.push(expansion);
-            }
-        }
-
-        for line in trigger_send {
-            self.send_line(InputLine::new(line, true, true))?;
-        }
+        self.process_mudline(&mut line, futures)?;
 
         let item = output::Item::Mud { line };
         self.output.push(item);
 
         if let Some(flusher) = &self.prompt_flusher {
             flusher.extend_timeout();
+        }
+
+        Ok(())
+    }
+
+    fn process_prompt(
+        &mut self,
+        prompt: &mut MudLine,
+        futures: &mut FuturesUnordered<python::PyFuture>,
+    ) -> Result<(), Error> {
+        self.process_mudline(prompt, futures)
+    }
+
+    fn process_mudline(
+        &mut self,
+        line: &mut MudLine,
+        futures: &mut FuturesUnordered<python::PyFuture>,
+    ) -> Result<(), Error> {
+        // TODO(XXX): awkward. avoid alloc. Doing this presently to avoid two mutable
+        //  borrows of self - one for triggers, and one for send_line.
+        let mut trigger_send = Vec::new();
+
+        for trigger in self.triggers.values_mut().filter(|trigger| trigger.enabled) {
+            if let Some(expansion) = Self::evaluate_trigger(self.info.id, trigger, line, futures)? {
+                trigger_send.push(expansion);
+            }
+        }
+
+        for line in trigger_send {
+            self.send_line(InputLine::new(line, true, true))?;
         }
 
         Ok(())

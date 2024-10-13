@@ -397,6 +397,9 @@ pub struct TriggerConfig {
     pub strip_ansi: bool,
 
     #[pyo3(get, set)]
+    pub prompt: bool,
+
+    #[pyo3(get, set)]
     pub gag: bool,
 
     #[pyo3(get, set)]
@@ -423,6 +426,9 @@ impl TriggerConfig {
     // TODO(XXX): Tidy, remove unwrap.
     #[must_use]
     pub fn matches(&self, line: &MudLine) -> (bool, Option<Vec<String>>) {
+        if !line.prompt && self.prompt {
+            return (false, None);
+        }
         // TODO(XXX): Cleanup with MSRV 1.81 lifetime coolness
         let stripped_haystack;
         let haystack;
@@ -457,6 +463,7 @@ impl TriggerConfig {
         Ok(Self {
             name,
             strip_ansi: false,
+            prompt: false,
             gag: false,
             callback: None,
             highlight: None,

@@ -116,6 +116,9 @@ fn filter_item(item: &output::Item, echo_input: bool) -> bool {
         // When viewing history we want to see the normal prompt items, but not the held prompt.
         output::Item::HeldPrompt { .. } => false,
 
+        // Hide gagged prompts.
+        output::Item::Prompt { prompt } if prompt.gag => false,
+
         // Show everything else.
         _ => true,
     }

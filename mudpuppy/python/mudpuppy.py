@@ -267,6 +267,7 @@ def trigger(
     name: str,
     gag: bool = False,
     strip_ansi: bool = True,
+    prompt: bool = False,
     expansion: Optional[str] = None,
     mud_name: Optional[str] = None,
     module: Optional[str] = None,
@@ -279,6 +280,7 @@ def trigger(
 
         trigger_config = TriggerConfig(pattern, name)
         trigger_config.gag = gag
+        trigger_config.prompt = prompt
         trigger_config.strip_ansi = strip_ansi
         trigger_config.expansion = expansion
         trigger_config.callback = handler

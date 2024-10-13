@@ -193,6 +193,16 @@ find the text of the prompt and the `SessionId` of the MUD.
         logging.debug(f"prompt event: {event}")
     ```
 
+You can also create triggers that only match on prompts by setting
+`prompt=True`. This can be used to conditionally gag prompts:
+
+    ```python
+
+    @trigger(name="Gag login prompts", prompt=True, gag=True, pattern=r"(?:Enter your username: )|(?:Password: )")
+    async def gag_prompts(_session_id: SessionId, _trigger_id: TriggerId, line: str, _groups: Any):
+        logging.debug(f"\nI just gagged this prompt:\n{line}\n")
+    ```
+
 #### Creating a Timer
 
 Timers allow you to execute actions periodically, either globally or for

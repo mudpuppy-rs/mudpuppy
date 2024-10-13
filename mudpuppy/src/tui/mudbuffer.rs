@@ -97,6 +97,9 @@ impl MudBuffer {
                     // Hide prompt items when hold_prompt is true. The held prompt will supersede
                     // historic prompts.
                     output::Item::Prompt { .. } if self.mud.hold_prompt => false,
+                    // Hide gagged prompts.
+                    output::Item::Prompt { prompt } if prompt.gag => false,
+                    output::Item::HeldPrompt { prompt } if prompt.gag => false,
                     _ => true,
                 }
             },
