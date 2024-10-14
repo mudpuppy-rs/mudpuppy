@@ -8,8 +8,8 @@ on:  # yamllint disable-line rule:truthy
   push:
   pull_request:
   merge_group:
-  # schedule:
-    #- cron: '0 18 * * *'
+   schedule:
+    - cron: '0 18 * * *'
 
 jobs:
   build:
