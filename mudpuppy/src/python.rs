@@ -27,7 +27,7 @@ use crate::model::{
 };
 use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 
-/// Low level event types and APIs for interacting with Mudpuppy.
+/// Low level types and APIs for interacting with Mudpuppy.
 ///
 /// For more convenient interfaces, prefer `mudpuppy` over `mudpuppy_core`.
 // TODO(XXX): switch to declarative module reg.
@@ -1493,24 +1493,13 @@ pub fn generate_pdocs(config: GlobalConfig) {
 
     Python::with_gil(|py| {
         info!("generating pdoc API documentation");
-        py.run_bound(
-            r#"
-from pathlib import Path
-from pdoc import pdoc, render
-
-render.configure(
-    docformat="markdown",
-    template_directory=Path("pdoc-templates"),
-    show_source=False,
-)
-
-to_document = ["mudpuppy_core", "mudpuppy", "cformat", "layout", "commands"]
-
-pdoc(*to_document, output_directory=Path("web/api-docs"))
-            "#,
-            None,
-            None,
+        PyModule::from_code_bound(
+            py,
+            include_str!("../python/mudpuppy_pdoc.py"),
+            "mudpuppy_pdoc.py",
+            "mudpuppy_pdoc",
         )
+        .map(|_| ())
     })
     .unwrap();
 }

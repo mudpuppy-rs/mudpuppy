@@ -8,7 +8,7 @@ from mudpuppy_core import AliasId, OutputItem, SessionId, mudpuppy_core
 
 from mudpuppy import alias
 
-__all__ = ["Command", "CommandCallable", "add_command", "all_commands"]
+__all__ = ["add_command", "all_commands", "Command", "CommandCallable"]
 
 CommandCallable = Callable[[SessionId, Namespace], Awaitable[None]]
 

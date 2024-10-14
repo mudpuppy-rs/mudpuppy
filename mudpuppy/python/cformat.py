@@ -28,7 +28,7 @@ ANSI_CODES = {
 
 def cformat(text: str) -> str:
     """
-    Return `text` but with tokens of the form `<colour>` with ANSI escape codes.
+    Return `text` but with tokens of the form `<colour>` replaced with ANSI escape codes.
 
     See `ANSI_CODES` for available colour tokens.
 
@@ -38,6 +38,7 @@ def cformat(text: str) -> str:
     msg = cformat("<red>red text<reset> normal text")
     ````
     """
+
     def ansi_code(token):
         return f"\033[{ANSI_CODES[token]}m" if token in ANSI_CODES else f"<{token}>"
 
