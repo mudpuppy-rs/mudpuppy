@@ -26,7 +26,71 @@ all_modules = {}
 # Customize mudpuppy_core for better documentation. Since this isn't a plain .py
 # We need to twiddle a pdoc.doc.Module for it directly.
 core_module = doc.Module(mudpuppy_core)
-core_module.obj.__all__ = ["Event"]
+core_module.obj.__all__ = [
+    "mudpuppy_core",
+    "MudpuppyCore",
+    "Config",
+    "SessionId",
+    "SessionInfo",
+    "Mud",
+    "Tls",
+    "Status",
+    "StreamInfo",
+    "PromptMode",
+    "PromptSignal",
+    "Shortcut",
+    "MudLine",
+    "InputLine",
+    "OutputItem",
+    "AliasId",
+    "AliasConfig",
+    "Alias",
+    "TriggerId",
+    "TriggerConfig",
+    "Trigger",
+    "TimerId",
+    "TimerConfig",
+    "Timer",
+    "EventType",
+    "Event",
+    "EventHandlers",
+    "LayoutNode",
+    "Constraint",
+    "Direction",
+    "BufferId",
+    "BufferConfig",
+    "BufferDirection",
+    "ExtraBuffer",
+]
+core_module.get(
+    "mudpuppy_core"
+).docstring = """
+A `MudpuppyCore` instance you can use to interact with Mudppy.
+
+You will typically want to `import` this and use it throughout your scripts:
+```python
+from mudpuppy_core import mudpuppy_core
+print(mudpuppy_core.version())
+```
+"""
+
+core_module.get("Mud.name").annotation_str = ": str"
+core_module.get("Mud.host").annotation_str = ": str"
+core_module.get("Mud.port").annotation_str = ": int"
+core_module.get("Mud.echo_input").annotation_str = ": bool"
+core_module.get("Mud.hold_prompt").annotation_str = ": bool"
+core_module.get("Mud.no_line_wrap").annotation_str = ": bool"
+core_module.get("Mud.no_tcp_keepalive").annotation_str = ": bool"
+core_module.get("Mud.tls").annotation_str = ": Tls"
+
+core_module.get("Tls.Disabled").docstring = "TLS was not enabled."
+core_module.get("Tls.Enabled").docstring = (
+    "TLS was enabled and certificate verification was successful."
+)
+core_module.get("Tls.InsecureSkipVerify").docstring = (
+    "TLS was enabled, but no certificate verification was performed."
+)
+
 all_modules["mudpuppy_core"] = core_module
 
 # For the other built-in modules we can use the .py files directly.
