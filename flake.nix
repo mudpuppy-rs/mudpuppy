@@ -73,10 +73,12 @@
             pushd user-guide
               ${pkgs.mdbook}/bin/mdbook build
             popd
+            cargo run --features=__pdoc
             ${pkgs.lychee}/bin/lychee \
               --verbose \
               'user-guide/book/**/*.md' \
               'user-guide/book/**/*.html' \
+              'web/api-docs/**/*.html' \
               'README.md'
           '';
 

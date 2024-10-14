@@ -142,7 +142,7 @@ builtins.print = mudpuppy_core.mudpuppy_core.print
 import pathlib
 from pdoc import pdoc
 
-outpath = pathlib.Path("api-docs")
+outpath = pathlib.Path("web/api-docs")
 
 pdoc("mudpuppy_core", "mudpuppy", "cformat", "layout", "commands", output_directory=outpath)
             "#,
