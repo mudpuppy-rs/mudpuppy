@@ -23,6 +23,7 @@
             cargo-dist
             cargo-deb
             python3
+            python3Packages.pdoc
             ruff
             pyright
             tokio-console
