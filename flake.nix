@@ -18,7 +18,6 @@
             [ python3 ] ++ lib.optionals stdenv.hostPlatform.isDarwin
             [ pkgs.darwin.apple_sdk.frameworks.CoreServices ];
           devDeps = with pkgs; [
-            mdbook
             cargo-deny
             cargo-udeps
             cargo-dist
@@ -27,6 +26,8 @@
             ruff
             pyright
             tokio-console
+            mdbook
+            linkcheck # wrapper around lychee
           ];
 
           workspaceCargoToml =
@@ -65,6 +66,18 @@
               buildInputs = runtimeDeps;
               nativeBuildInputs = buildDeps ++ devDeps ++ [ rustc ];
             };
+
+          linkcheck = pkgs.writeShellScriptBin "linkcheck" ''
+            set -ex
+            pushd user-guide
+              ${pkgs.mdbook}/bin/mdbook build
+            popd
+            ${pkgs.lychee}/bin/lychee \
+              --verbose \
+              'user-guide/book/**/*.md' \
+              'user-guide/book/**/*.html' \
+              'README.md'
+          '';
 
           rustNightly = (pkgs.rust-bin.selectLatestNightlyWith
             (toolchain: toolchain.default.override { targets = rustTargets; }));
@@ -112,6 +125,13 @@
                 nightly-fmt = (cargo-check "cargo-fmt" "fmt --check");
                 nightly-clippy = (cargo-check "cargo-clippy"
                   "clippy --all-targets --all-features -- -D warnings");
+                linkcheck = {
+                  enable = true;
+                  name = "linkcheck";
+                  files = "\\.md$";
+                  pass_filenames = false;
+                  entry = "linkcheck";
+                };
               };
             };
             # Don't run pre-commit hooks in 'nix flake check'
