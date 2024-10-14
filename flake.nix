@@ -23,6 +23,7 @@
             cargo-dist
             cargo-deb
             python3
+            python3Packages.pdoc
             ruff
             pyright
             tokio-console
@@ -78,10 +79,12 @@
             pushd user-guide
               ${pkgs.mdbook}/bin/mdbook build
             popd
+            python-stubs/render_api_docs.py
             ${pkgs.lychee}/bin/lychee \
               --verbose \
               'user-guide/book/**/*.md' \
               'user-guide/book/**/*.html' \
+              'web/api-docs/**/*.html' \
               'README.md'
           '';
 

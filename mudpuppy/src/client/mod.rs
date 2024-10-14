@@ -60,7 +60,6 @@ impl Client {
     ///
     /// The client will be created in a disconnected state. To connect to the MUD server
     /// you must call [`Client::connect`].
-    #[allow(clippy::missing_panics_doc)] // Py::new panics on failure, but should not fail except for OOM?
     #[must_use]
     pub fn new(
         info: Arc<SessionInfo>,

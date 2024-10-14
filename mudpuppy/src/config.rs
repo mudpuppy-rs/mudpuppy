@@ -299,7 +299,7 @@ impl Config {
         Ok(cfg)
     }
 
-    #[allow(clippy::missing_errors_doc, clippy::missing_panics_doc)] // TODO(XXX): doc
+    #[allow(clippy::missing_errors_doc)] // TODO(XXX): doc
     pub fn load(&mut self) -> Result<(), ConfigError> {
         let default_config: Config = toml::from_str(CONFIG)?;
         let config_file = config_file();

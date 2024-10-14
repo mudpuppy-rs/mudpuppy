@@ -43,48 +43,86 @@ impl idmap::Identifiable<SessionId> for SessionInfo {
 
 numeric_id!(SessionId, u32);
 
+/// MUD configuration.
+///
+/// Identified by a unique `name`. This type holds both information required to connect to a
+/// MUD server (`host`, `port`, `tls`) alongside other per-session settings like whether to
+/// hold prompt lines at the bottom of the screen, or to disable text wrapping.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 #[pyclass]
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
 #[allow(clippy::struct_excessive_bools)] // It's Fine.
 pub struct Mud {
+    /// Name of the MUD.
+    ///
+    /// Used as the label for the session tab, and for listing the MUD on the connection
+    /// screen.
+    ///
+    /// This is the identifier you will use with decorators like `mudpuppy.trigger` for the
+    /// `mud_name` parameter.
     #[pyo3(get)]
     pub name: String,
 
+    /// Host address of the MUD.
+    ///
+    /// This is typically a domain name like `"dunemud.net"` or an IP address like `8.8.8.8` or
+    /// `2607:f8b0:400b:803::200e`.
+    ///
+    /// The `port` number is specified separately - don't include it here.
     #[pyo3(get)]
     pub host: String,
 
+    /// Port number of the MUD.
+    ///
+    /// This varies by game, and may change based on whether you're using TLS or not.
     #[pyo3(get)]
     pub port: u16,
 
+    /// Whether TLS was used for the connection. See `Tls`.
     #[pyo3(get)]
     pub tls: Tls,
 
+    /// Whether TCP keepalives are configured.
     #[serde(default = "default::no_tcp_keepalive")]
     #[pyo3(get)]
     pub no_tcp_keepalive: bool,
 
+    /// Whether to hold the most recent prompt line at the bottom of the output buffer.
+    ///
+    /// You may want to disable this if prompt detection is not working correctly, or if
+    /// you prefer prompts to be treated just like all other output.
     #[serde(default = "default::hold_prompt")]
     #[pyo3(get)]
     pub hold_prompt: bool,
 
+    /// Whether input sent to the MUD is echoed in the output buffer.
     #[serde(default = "default::echo_input")]
     #[pyo3(get)]
     pub echo_input: bool,
 
+    /// Whether output lines are wrapped when they would exceed the width of the output buffer.
+    ///
+    /// You may want to disable this if you prefer to see truncated, but accurately rendered,
+    /// output (e.g. textual table information on a small screen).
     #[serde(default = "default::no_line_wrap")]
     #[pyo3(get)]
     pub no_line_wrap: bool,
 
+    /// Whether to output received GMCP messages in the output buffer.
     #[serde(default = "default::debug_gmcp")]
     pub debug_gmcp: bool,
 
+    /// The percentage of the screen to use for the "split view" for scrolling output history.
     #[serde(default = "default::splitview_percentage")]
     pub splitview_percentage: u16,
 
+    /// The number of columns to use as margin on the sides of the "split view" for scrolling
+    /// output history.
     #[serde(default = "default::splitview_margin_horizontal")]
     pub splitview_margin_horizontal: u16,
 
+    /// The number of rows to use as margin on the top and bottom of the "split view" for scrolling
+    /// output history.
     #[serde(default = "default::splitview_margin_vertical")]
     pub splitview_margin_vertical: u16,
 }
@@ -95,6 +133,7 @@ impl Display for Mud {
     }
 }
 
+/// Possible TLS states for a `MUD`.
 #[derive(
     Clone, Copy, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize,
 )]
@@ -103,7 +142,11 @@ impl Display for Mud {
 pub enum Tls {
     #[default]
     Disabled,
+    /// TLS was enabled.
+    ///
+    /// Certificate verification was performed successfully.
     Enabled,
+    /// TLS was enabled, but no certificate verification was performed.
     InsecureSkipVerify,
 }
 
