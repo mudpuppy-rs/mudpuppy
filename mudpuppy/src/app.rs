@@ -65,6 +65,10 @@ impl App {
     /// breaking from the application loop. Unrecoverable errors will be displayed and then
     /// yielded from this function to initiate shutdown.
     #[allow(clippy::too_many_lines)] // right at threshold, consider refactor later.
+    #[cfg_attr(
+        feature = "__pdoc",
+        allow(unreachable_code, unused_variables, unused_mut)
+    )]
     pub async fn run(&mut self, args: cli::Args) -> Result<()> {
         let mut terminal = init_terminal()?;
 
@@ -98,6 +102,12 @@ impl App {
                 (event_handlers, Vec::default())
             }
         };
+
+        #[cfg(feature = "__pdoc")]
+        {
+            info!("exiting early - doc generation complete");
+            return Ok(());
+        }
 
         let mut event_futures: FuturesUnordered<python::PyFuture> = FuturesUnordered::new();
         let mut draw_interval = interval(args.frame_rate_duration()?);

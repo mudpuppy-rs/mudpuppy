@@ -16,18 +16,17 @@ from mudpuppy_core import (
 
 from mudpuppy import on_event, on_new_session
 
+__all__ = ["LayoutManager", "LayoutHandler", "manager"]
+
 # TODO(XXX): Any should be LayoutManager, but there's a circular definition issue where this
 #   type needs to refer to the class, but the class refers to the type as an arg type.
 LayoutHandler = Callable[[SessionInfo, Any], Awaitable[None]]
 
 
 class LayoutManager:
-    callbacks: List[LayoutHandler]
-    layouts: Dict[SessionId, LayoutNode]
-
     def __init__(self):
-        self.callbacks = []
-        self.layouts = {}
+        self.callbacks: List[LayoutHandler] = []
+        self.layouts: Dict[SessionId, LayoutNode] = {}
 
     def add_callback(self, callback: LayoutHandler):
         logging.debug(f"adding layout callback: {callback}")

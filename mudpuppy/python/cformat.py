@@ -1,6 +1,8 @@
 import logging
 import re
 
+__all__ = ["cformat", "ANSI_CODES"]
+
 ANSI_CODES = {
     "reset": "0",
     "bold": "1",
@@ -24,7 +26,18 @@ ANSI_CODES = {
 }
 
 
-def cformat(text: str):
+def cformat(text: str) -> str:
+    """
+    Return `text` but with tokens of the form `<colour>` with ANSI escape codes.
+
+    See `ANSI_CODES` for available colour tokens.
+
+    Example:
+    ```python
+    from cformat import cformat
+    msg = cformat("<red>red text<reset> normal text")
+    ````
+    """
     def ansi_code(token):
         return f"\033[{ANSI_CODES[token]}m" if token in ANSI_CODES else f"<{token}>"
 

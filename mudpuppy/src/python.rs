@@ -27,11 +27,11 @@ use crate::model::{
 };
 use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 
-/// Initialize the `mudpuppy` Python module.
+/// Low level event types and APIs for interacting with Mudpuppy.
 ///
-/// # Errors
-/// If a class fails to be added to the bound module.
+/// For more convenient interfaces, prefer `mudpuppy` over `mudpuppy_core`.
 // TODO(XXX): switch to declarative module reg.
+#[allow(clippy::missing_errors_doc)]
 #[pymodule]
 pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
@@ -81,8 +81,15 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
     let event_handlers = Python::with_gil(move |py| {
         // Set the Python logging level
         // TODO(XXX): use config to determine level.
-        py.run_bound("import logging", None, None)?;
-        py.run_bound("logging.getLogger().setLevel(0)", None, None)?;
+        py.run_bound(
+            r"
+import logging
+logging.getLogger().setLevel(0)
+        ",
+            None,
+            None,
+        )?;
+        py.run_bound("", None, None)?;
 
         debug!("adding {:?} to Python import path", config_dir());
         let syspath: &PyList = py.import_bound("sys")?.getattr("path")?.extract()?;
@@ -90,18 +97,19 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
 
         let module: Py<PyAny> = PyModule::import_bound(py, "mudpuppy_core")?.into();
         module.setattr(py, "mudpuppy_core", py_app)?;
+        let event_handlers = Py::new(py, EventHandlers::new())?;
+        module.setattr(py, "event_handlers", event_handlers.clone())?;
 
         // Override print() built-in with one that will send output to the active MUD buffer.
-        py.run_bound("import builtins", None, None)?;
-        py.run_bound("import mudpuppy_core", None, None)?;
         py.run_bound(
-            "builtins.print = mudpuppy_core.mudpuppy_core.print",
+            r"
+import builtins
+import mudpuppy_core
+builtins.print = mudpuppy_core.mudpuppy_core.print
+        ",
             None,
             None,
         )?;
-
-        let event_handlers = Py::new(py, EventHandlers::new())?;
-        module.setattr(py, "event_handlers", event_handlers.clone())?;
 
         Ok::<_, Error>(event_handlers)
     })?;
@@ -124,6 +132,25 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
         "cmd_timer",
     );
     debug!("found {} built-in py modules", builtin_modules.len());
+
+    #[cfg(feature = "__pdoc")]
+    {
+        Python::with_gil(|py| {
+            info!("generating pdoc API documentation");
+            py.run_bound(
+                r#"
+import pathlib
+from pdoc import pdoc
+
+outpath = pathlib.Path("api-docs")
+
+pdoc("mudpuppy_core", "mudpuppy", "cformat", "layout", "commands", output_directory=outpath)
+            "#,
+                None,
+                None,
+            )
+        })?;
+    }
 
     let user_modules = user_modules()?;
     debug!("found {} user py modules", user_modules.len());

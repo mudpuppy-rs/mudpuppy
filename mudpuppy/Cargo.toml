@@ -11,6 +11,12 @@ categories.workspace = true
 keywords.workspace = true
 description.workspace = true
 
+[features]
+default = []
+# Generate Python API documentation at startup using pdoc
+# Intended for internal/CI use only.
+__pdoc = []
+
 [dependencies]
 ansi-to-tui = { workspace = true }
 async-trait = { workspace = true }
