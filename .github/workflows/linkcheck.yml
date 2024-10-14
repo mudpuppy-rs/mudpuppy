@@ -1,6 +1,6 @@
 # Link Checker Workflow for PRs/Pushes.
 # Uses 'fail:true' and blocks merge of broken links.
-name: check links
+name: check Links
 
 on:
   push:
