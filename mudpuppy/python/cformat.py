@@ -24,7 +24,7 @@ ANSI_CODES = {
 }
 
 
-def cformat(text: str):
+def cformat(text: str) -> str:
     def ansi_code(token):
         return f"\033[{ANSI_CODES[token]}m" if token in ANSI_CODES else f"<{token}>"
 
@@ -34,6 +34,10 @@ def cformat(text: str):
 
     pattern = re.compile(r"<(.*?)>")
     return pattern.sub(replace_tokens, text)
+
+
+def tokens() -> list[str]:
+    return list(ANSI_CODES.keys())
 
 
 logging.debug("cformat module loaded")

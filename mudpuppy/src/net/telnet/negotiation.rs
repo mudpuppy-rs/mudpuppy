@@ -91,7 +91,6 @@ impl Table {
     }
 
     #[must_use]
-    #[allow(clippy::missing_panics_doc)]
     pub fn enabled_locally(&self) -> Vec<u8> {
         self.options
             .iter()
