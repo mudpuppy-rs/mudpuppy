@@ -100,7 +100,6 @@ impl Input {
     }
 
     #[must_use]
-    #[allow(clippy::missing_panics_doc)]
     pub fn visual_cursor(&self) -> usize {
         if self.cursor == 0 {
             return 0;
