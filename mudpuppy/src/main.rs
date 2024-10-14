@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "__pdoc", allow(unused_imports))]
 use std::error::Error as StdError;
 use std::io::{self, IsTerminal};
 
@@ -13,6 +14,7 @@ use mudpuppy::cli;
 use mudpuppy::config::{self, GlobalConfig};
 use mudpuppy::python;
 
+#[cfg(not(feature = "__pdoc"))]
 fn main() -> Result<(), Box<dyn StdError>> {
     // Note: we can't use the pyo3_asyncio main fn macro because it won't
     //  allow us to append to the init tab before the free-threaded python
@@ -59,5 +61,18 @@ fn main() -> Result<(), Box<dyn StdError>> {
     builder.enable_all();
     pyo3tokio::init(builder);
     Python::with_gil(|py| pyo3tokio::run(py, main()))?;
+    Ok(())
+}
+
+#[cfg(feature = "__pdoc")]
+fn main() -> Result<(), Box<dyn StdError>> {
+    let args = cli::Args::parse();
+    config::init_logging(&args)?;
+
+    info!("loading configuration");
+    let config = GlobalConfig::new()?;
+
+    info!("generating python API docs");
+    python::generate_pdocs(config);
     Ok(())
 }

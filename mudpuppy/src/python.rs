@@ -74,7 +74,10 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 #[instrument(level = "trace", skip(py_app))]
-pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> {
+pub fn init(
+    py_app: PyApp,
+    load_user_modules: bool,
+) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> {
     // Bind a rust backend to the Python logging module.
     pyo3_pylogger::register(CRATE_NAME);
 
@@ -152,8 +155,12 @@ pdoc("mudpuppy_core", "mudpuppy", "cformat", "layout", "commands", output_direct
         })?;
     }
 
-    let user_modules = user_modules()?;
-    debug!("found {} user py modules", user_modules.len());
+    let user_modules = if load_user_modules {
+        user_modules()?
+    } else {
+        Vec::default()
+    };
+    debug!("loaded {} user modules", user_modules.len());
 
     let all_modules: Vec<PyObject> = builtin_modules
         .into_iter()
@@ -1480,6 +1487,28 @@ async fn run_timer(timer_id: TimerId, config: TimerConfig, mut stop_rx: watch::R
             }
         }
     }
+}
+
+#[cfg(feature = "__pdoc")]
+pub fn generate_pdocs(config: GlobalConfig) {
+    use crate::python::mudpuppy_core;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    let (event_tx, _) = unbounded_channel();
+    let (conn_tx, _) = unbounded_channel();
+    let state = Arc::new(RwLock::new(State::new(config.clone(), event_tx, conn_tx)));
+
+    let (waker, _) = unbounded_channel();
+    let py_app = PyApp {
+        config,
+        state,
+        waker,
+    };
+
+    pyo3::append_to_inittab!(mudpuppy_core);
+    pyo3::prepare_freethreaded_python();
+
+    init(py_app, false).unwrap();
 }
 
 // TODO(XXX): I tried, and tried to pull out the common boilerplate in these macros to a fn
