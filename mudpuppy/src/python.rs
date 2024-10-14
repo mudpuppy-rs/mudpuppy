@@ -1492,7 +1492,6 @@ pub fn generate_pdocs(config: GlobalConfig) {
     init(py_app, false).unwrap();
 
     Python::with_gil(|py| {
-        info!("generating pdoc API documentation");
         PyModule::from_code_bound(
             py,
             include_str!("../python/mudpuppy_pdoc.py"),
