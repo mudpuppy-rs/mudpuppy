@@ -26,13 +26,7 @@
             python3
             ruff
             pyright
-            maturin
-            multitail
-            vhs
             tokio-console
-            gdb
-            valgrind
-            heaptrack
           ];
 
           workspaceCargoToml =
