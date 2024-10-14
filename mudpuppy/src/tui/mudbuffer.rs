@@ -214,11 +214,13 @@ impl buffer::Item for output::Item {
         Ok(match self {
             Self::Mud { line: text }
             | Self::Prompt { prompt: text }
-            | Self::HeldPrompt { prompt: text } => {
-                String::from_utf8_lossy(&text.raw).to_string().into_text()?
-            }
+            | Self::HeldPrompt { prompt: text } => String::from_utf8_lossy(&text.raw)
+                .to_string()
+                .replace('\t', "    ")
+                .into_text()?,
             Self::PreviousSession { line, .. } => String::from_utf8_lossy(&line.raw)
                 .to_string()
+                .replace('\t', "    ")
                 .into_text()?
                 .style(Style::default().add_modifier(Modifier::DIM)),
             Self::Input { line, .. } => {
