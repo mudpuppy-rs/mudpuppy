@@ -1,0 +1,27 @@
+{% extends "default/index.html.jinja2" %}
+
+{% block title %}Mudpuppy API Reference{% endblock %}
+
+{% block nav %}
+    <img src="https://pdoc.dev/logo.svg" class="logo" alt="project logo"/>
+    <input type="search" placeholder="Search..." role="searchbox" aria-label="search"
+                   pattern=".+" required>
+    {{ super() }}
+{% endblock %}
+
+{% block content %}
+    <main class="pdoc">
+
+    {% filter to_html %}
+# Mudpuppy Python API Documentation
+
+Here you can find documentation for the various Python modules exposed for your scripts to interact with Mudpuppy
+and MUDs.
+
+If you're new to Mudpuppy you might prefer to read the [user-guide](https://mudpuppy-rs.github.io/mudpuppy/user-guide/)
+before jumping straight into the API documentation.
+    {% endfilter %}
+
+    </main>
+    {% include "search.html.jinja2" %}
+{% endblock %}

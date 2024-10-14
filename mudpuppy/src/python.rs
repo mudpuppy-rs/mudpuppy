@@ -136,25 +136,6 @@ builtins.print = mudpuppy_core.mudpuppy_core.print
     );
     debug!("found {} built-in py modules", builtin_modules.len());
 
-    #[cfg(feature = "__pdoc")]
-    {
-        Python::with_gil(|py| {
-            info!("generating pdoc API documentation");
-            py.run_bound(
-                r#"
-import pathlib
-from pdoc import pdoc
-
-outpath = pathlib.Path("web/api-docs")
-
-pdoc("mudpuppy_core", "mudpuppy", "cformat", "layout", "commands", output_directory=outpath)
-            "#,
-                None,
-                None,
-            )
-        })?;
-    }
-
     let user_modules = if load_user_modules {
         user_modules()?
     } else {
@@ -1509,6 +1490,29 @@ pub fn generate_pdocs(config: GlobalConfig) {
     pyo3::prepare_freethreaded_python();
 
     init(py_app, false).unwrap();
+
+    Python::with_gil(|py| {
+        info!("generating pdoc API documentation");
+        py.run_bound(
+            r#"
+from pathlib import Path
+from pdoc import pdoc, render
+
+render.configure(
+    docformat="markdown",
+    template_directory=Path("pdoc-templates"),
+    show_source=False,
+)
+
+to_document = ["mudpuppy_core", "mudpuppy", "cformat", "layout", "commands"]
+
+pdoc(*to_document, output_directory=Path("web/api-docs"))
+            "#,
+            None,
+            None,
+        )
+    })
+    .unwrap();
 }
 
 // TODO(XXX): I tried, and tried to pull out the common boilerplate in these macros to a fn
