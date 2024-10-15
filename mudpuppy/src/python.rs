@@ -103,16 +103,18 @@ logging.getLogger().setLevel(0)
         let event_handlers = Py::new(py, EventHandlers::new())?;
         module.setattr(py, "event_handlers", event_handlers.clone())?;
 
-        // Override print() built-in with one that will send output to the active MUD buffer.
-        py.run_bound(
-            r"
+        if load_user_modules {
+            // Override print() built-in with one that will send output to the active MUD buffer.
+            py.run_bound(
+                r"
 import builtins
 import mudpuppy_core
 builtins.print = mudpuppy_core.mudpuppy_core.print
         ",
-            None,
-            None,
-        )?;
+                None,
+                None,
+            )?;
+        }
 
         Ok::<_, Error>(event_handlers)
     })?;
@@ -239,6 +241,7 @@ impl PyApp {
         self.config.clone()
     }
 
+    /// Returns the path to the configuration directory.
     #[staticmethod]
     fn config_dir() -> String {
         config_dir().to_string_lossy().to_string()

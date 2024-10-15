@@ -62,9 +62,7 @@ core_module.obj.__all__ = [
     "BufferDirection",
     "ExtraBuffer",
 ]
-core_module.get(
-    "mudpuppy_core"
-).docstring = """
+core_module.get("mudpuppy_core").docstring = """
 A `MudpuppyCore` instance you can use to interact with Mudppy.
 
 You will typically want to `import` this and use it throughout your scripts:
@@ -73,6 +71,10 @@ from mudpuppy_core import mudpuppy_core
 print(mudpuppy_core.version())
 ```
 """
+
+core_module.get(
+    "MudpuppyCore.config"
+).signature._return_annotation = mudpuppy_core.Config
 
 core_module.get("Mud.name").annotation_str = ": str"
 core_module.get("Mud.host").annotation_str = ": str"
@@ -84,14 +86,16 @@ core_module.get("Mud.no_tcp_keepalive").annotation_str = ": bool"
 core_module.get("Mud.tls").annotation_str = ": Tls"
 
 core_module.get("Tls.Disabled").docstring = "TLS was not enabled."
-core_module.get("Tls.Enabled").docstring = (
-    "TLS was enabled and certificate verification was successful."
-)
-core_module.get("Tls.InsecureSkipVerify").docstring = (
-    "TLS was enabled, but no certificate verification was performed."
-)
+core_module.get(
+    "Tls.Enabled"
+).docstring = "TLS was enabled and certificate verification was successful."
+core_module.get(
+    "Tls.InsecureSkipVerify"
+).docstring = "TLS was enabled, but no certificate verification was performed."
 
 all_modules["mudpuppy_core"] = core_module
+
+breakpoint()
 
 # For the other built-in modules we can use the .py files directly.
 for module_name in extract.walk_specs(to_document):
