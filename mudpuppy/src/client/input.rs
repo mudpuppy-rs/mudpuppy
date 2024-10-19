@@ -312,7 +312,7 @@ impl From<&str> for Input {
     }
 }
 
-#[pyclass]
+#[pyclass(eq, eq_int)]
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 pub enum EchoState {
     #[default]

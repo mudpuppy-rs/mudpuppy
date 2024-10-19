@@ -27,7 +27,7 @@ happy-eyeballs = { workspace = true, features = ["tokio"] }
 notify = { workspace = true }
 human-panic = { workspace = true }
 pyo3 = { workspace = true }
-pyo3-asyncio-0-21 = { workspace = true }
+pyo3-async-runtimes = { workspace = true }
 pyo3-pylogger = { workspace = true }
 ratatui = { workspace = true, default-features = true, features = ["unstable-widget-ref"] }
 regex = { workspace = true }
