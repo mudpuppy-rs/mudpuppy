@@ -98,7 +98,7 @@ impl Display for Mud {
 #[derive(
     Clone, Copy, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize,
 )]
-#[pyclass]
+#[pyclass(eq, eq_int)]
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
 pub enum Tls {
     #[default]
@@ -107,7 +107,7 @@ pub enum Tls {
     InsecureSkipVerify,
 }
 
-#[pyclass]
+#[pyclass(eq, eq_int)]
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
@@ -307,7 +307,7 @@ impl Default for PromptMode {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[pyclass]
+#[pyclass(eq, eq_int)]
 pub enum PromptSignal {
     EndOfRecord,
     GoAhead,
@@ -692,6 +692,7 @@ impl TimerConfig {
     ///
     /// If the duration pattern can't be recognized.
     #[new]
+    #[pyo3(signature = (name, duration_ms, callback, session_id=None))]
     pub fn new(
         name: String,
         duration_ms: u64,

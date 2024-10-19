@@ -31,9 +31,8 @@ happy-eyeballs = { version = "0.2", default-features = false }
 human-panic = "2"
 notify = "6"
 pretty_assertions = "1"
-# TODO(XXX): update pyo3.
-pyo3 = { version = "0.21", features = ["experimental-async"] }
-pyo3-asyncio-0-21 = { version = "0.21", features = ["attributes", "tokio-runtime"] }
+pyo3 = { version = "0.22", features = ["experimental-async", "py-clone"] }
+pyo3-async-runtimes = { version = "0.21", features = ["attributes", "tokio-runtime"] }
 pyo3-pylogger = "0.3"
 # TODO(XXX): update ratatui.
 ratatui = { version = "0.27", default-features = false }
@@ -79,3 +78,7 @@ strip = true
 
 [profile.dist]
 inherits = "release"
+
+[patch.crates-io]
+# TODO(@cpu): remove once pyo3-async-runtimes cuts a 0.22 release.
+pyo3-async-runtimes  = { git = 'https://github.com/PyO3/pyo3-async-runtimes.git', rev = '284bd36d0426a988026f878cae22abdb179795e6' }

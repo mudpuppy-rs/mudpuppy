@@ -174,7 +174,7 @@ impl LayoutNode {
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Hash)]
-#[pyclass(name = "Direction")]
+#[pyclass(name = "Direction", eq, eq_int)]
 pub enum PyDirection {
     Horizontal,
     #[default]
@@ -604,7 +604,7 @@ impl Display for BufferConfig {
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-#[pyclass]
+#[pyclass(eq, eq_int)]
 pub enum BufferDirection {
     TopToBottom,
     #[default]

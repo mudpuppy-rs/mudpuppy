@@ -4,7 +4,7 @@ use std::io::{self, IsTerminal};
 use clap::Parser;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::{PyResult, Python};
-use pyo3_asyncio_0_21::tokio as pyo3tokio;
+use pyo3_async_runtimes::tokio as pyo3tokio;
 use tokio::runtime;
 use tracing::{error, info, instrument};
 

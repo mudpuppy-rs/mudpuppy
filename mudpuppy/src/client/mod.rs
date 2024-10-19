@@ -584,7 +584,7 @@ impl Client {
 
             if let Some(callback) = &trigger_config.callback {
                 trace!("preparing callback future for matches: {groups:?}");
-                futures.push(Box::pin(pyo3_asyncio_0_21::tokio::into_future(
+                futures.push(Box::pin(pyo3_async_runtimes::tokio::into_future(
                     callback
                         .call1(py, (session_id, trigger.id(), line.clone(), groups.clone()))?
                         .into_bound(py),
@@ -636,7 +636,7 @@ impl Client {
 
             if let Some(callback) = &alias_config.callback {
                 trace!("preparing callback future for matches: {groups:?}");
-                futures.push(Box::pin(pyo3_asyncio_0_21::tokio::into_future(
+                futures.push(Box::pin(pyo3_async_runtimes::tokio::into_future(
                     callback
                         .call1(py, (session_id, alias.id(), input.clone(), groups.clone()))?
                         .into_bound(py),

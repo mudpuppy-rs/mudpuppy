@@ -9,7 +9,8 @@ use std::sync::Arc;
 use futures::stream::FuturesUnordered;
 use pyo3::exceptions::PyTypeError;
 use pyo3::types::{
-    PyAnyMethods, PyFunction, PyList, PyListMethods, PyModule, PyStringMethods, PyTuple,
+    PyAnyMethods, PyFunction, PyList, PyListMethods, PyModule, PyModuleMethods, PyStringMethods,
+    PyTuple,
 };
 use pyo3::{
     pyclass, pymethods, pymodule, Bound, Py, PyAny, PyErr, PyObject, PyRef, PyResult, Python,
@@ -85,7 +86,11 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
         py.run_bound("logging.getLogger().setLevel(0)", None, None)?;
 
         debug!("adding {:?} to Python import path", config_dir());
-        let syspath: &PyList = py.import_bound("sys")?.getattr("path")?.extract()?;
+        let syspath = py
+            .import_bound("sys")?
+            .getattr("path")?
+            .downcast_into::<PyList>()
+            .map_err(|_| Error::Internal("getting Python syspath".to_string()))?;
         syspath.insert(0, config_dir())?;
 
         let module: Py<PyAny> = PyModule::import_bound(py, "mudpuppy_core")?.into();
@@ -128,11 +133,12 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
     let user_modules = user_modules()?;
     debug!("found {} user py modules", user_modules.len());
 
-    let all_modules: Vec<PyObject> = builtin_modules
-        .into_iter()
-        .chain(user_modules.clone())
-        .collect();
-
+    let all_modules: Vec<PyObject> = Python::with_gil(|_| {
+        builtin_modules
+            .into_iter()
+            .chain(user_modules.clone())
+            .collect()
+    });
     debug!("loaded {} total modules", all_modules.len());
 
     Ok((event_handlers, user_modules))
@@ -300,12 +306,14 @@ impl PyApp {
 
     fn session_info<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .info
-                .as_ref()
-                .clone())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .info
+                    .as_ref()
+                    .clone())
+            })
         })
     }
 
@@ -438,12 +446,14 @@ impl PyApp {
         trig_id: TriggerId,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .triggers
-                .get(trig_id)
-                .cloned())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .triggers
+                    .get(trig_id)
+                    .cloned())
+            })
         })
     }
 
@@ -514,13 +524,15 @@ impl PyApp {
 
     fn triggers<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .triggers
-                .iter()
-                .map(|(_, a)| a.clone())
-                .collect::<Vec<_>>())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .triggers
+                    .iter()
+                    .map(|(_, a)| a.clone())
+                    .collect::<Vec<_>>())
+            })
         })
     }
 
@@ -560,24 +572,28 @@ impl PyApp {
         alias_id: AliasId,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .aliases
-                .get(alias_id)
-                .cloned())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .aliases
+                    .get(alias_id)
+                    .cloned())
+            })
         })
     }
 
     fn aliases<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .aliases
-                .iter()
-                .map(|(_, a)| a.clone())
-                .collect::<Vec<_>>())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .aliases
+                    .iter()
+                    .map(|(_, a)| a.clone())
+                    .collect::<Vec<_>>())
+            })
         })
     }
 
@@ -676,8 +692,8 @@ impl PyApp {
                     config,
                 });
 
-                let task_locals = Python::with_gil(pyo3_asyncio_0_21::tokio::get_current_locals)?;
-                tokio::spawn(pyo3_asyncio_0_21::tokio::scope(
+                let task_locals = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals)?;
+                tokio::spawn(pyo3_async_runtimes::tokio::scope(
                     task_locals,
                     run_timer(timer_id, new_config.clone(), stop_rx),
                 ));
@@ -706,8 +722,8 @@ impl PyApp {
                 timer.stop_tx = stop_tx;
                 timer.running = true;
 
-                let task_locals = Python::with_gil(pyo3_asyncio_0_21::tokio::get_current_locals)?;
-                tokio::spawn(pyo3_asyncio_0_21::tokio::scope(
+                let task_locals = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals)?;
+                tokio::spawn(pyo3_async_runtimes::tokio::scope(
                     task_locals,
                     run_timer(timer_id, config.clone(), stop_rx),
                 ));
@@ -736,7 +752,9 @@ impl PyApp {
     }
 
     fn get_timer<'py>(&self, py: Python<'py>, id: TimerId) -> PyResult<Bound<'py, PyAny>> {
-        with_state!(self, py, |state| Ok(state.timers.get(id).cloned()))
+        with_state!(self, py, |state| Python::with_gil(|_| {
+            Ok(state.timers.get(id).cloned())
+        }))
     }
 
     fn remove_timer<'py>(&self, py: Python<'py>, id: TimerId) -> PyResult<Bound<'py, PyAny>> {
@@ -784,11 +802,13 @@ impl PyApp {
 
     fn timers<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .timers
-                .iter()
-                .map(|(_, a)| a.clone())
-                .collect::<Vec<_>>())
+            Python::with_gil(|_| {
+                Ok(state
+                    .timers
+                    .iter()
+                    .map(|(_, a)| a.clone())
+                    .collect::<Vec<_>>())
+            })
         })
     }
 
@@ -862,11 +882,13 @@ impl PyApp {
 
     fn layout<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .layout
-                .clone())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .layout
+                    .clone())
+            })
         })
     }
 
@@ -892,24 +914,28 @@ impl PyApp {
         buffer_id: tui::layout::BufferId,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .extra_buffers
-                .get(buffer_id)
-                .cloned())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .extra_buffers
+                    .get(buffer_id)
+                    .cloned())
+            })
         })
     }
 
     fn buffers<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
-                .extra_buffers
-                .iter()
-                .map(|(_, a)| a.clone())
-                .collect::<Vec<_>>())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id(id)
+                    .ok_or(Error::from(id))?
+                    .extra_buffers
+                    .iter()
+                    .map(|(_, a)| a.clone())
+                    .collect::<Vec<_>>())
+            })
         })
     }
 
@@ -987,6 +1013,7 @@ impl PyApp {
         })
     }
 
+    #[pyo3(signature = (custom_type, data, id=None))]
     fn emit_event<'py>(
         &self,
         py: Python<'py>,
@@ -1249,7 +1276,7 @@ impl Display for Event {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-#[pyclass]
+#[pyclass(eq, eq_int)]
 pub enum EventType {
     NewSession,
     Connection,
@@ -1340,7 +1367,7 @@ impl EventHandlers {
                         traceback: String::default(),
                     })?;
                 let handler = handler_tuple.get_item(0)?;
-                futures.push(Box::pin(pyo3_asyncio_0_21::tokio::into_future(
+                futures.push(Box::pin(pyo3_async_runtimes::tokio::into_future(
                     handler.call1((event.clone(),))?,
                 )?));
             }
@@ -1424,7 +1451,7 @@ async fn run_timer(timer_id: TimerId, config: TimerConfig, mut stop_rx: watch::R
         tokio::select! {
             _ = interval.tick() => {
                 let awaitable = Python::with_gil(|py|{
-                    pyo3_asyncio_0_21::tokio::into_future(config.callback.bind(py).call1((timer_id, config.session_id,))?)
+                    pyo3_async_runtimes::tokio::into_future(config.callback.bind(py).call1((timer_id, config.session_id,))?)
                 });
                 match awaitable {
                     // TODO(XXX): method for passing error back for ui state...
@@ -1462,7 +1489,7 @@ macro_rules! with_state {
     ($self:ident, $py:ident, |mut $state:ident| $body:expr) => {{
         let state_lock = $self.state.clone();
         let waker = $self.waker.clone();
-        pyo3_asyncio_0_21::tokio::future_into_py($py, async move {
+        pyo3_async_runtimes::tokio::future_into_py($py, async move {
             let _ = waker.send(());
             let mut $state = state_lock.write().await;
             $body
@@ -1471,7 +1498,7 @@ macro_rules! with_state {
     ($self:ident, $py:ident, |$state:ident| $body:expr) => {{
         let state_lock = $self.state.clone();
         let waker = $self.waker.clone();
-        pyo3_asyncio_0_21::tokio::future_into_py($py, async move {
+        pyo3_async_runtimes::tokio::future_into_py($py, async move {
             let _ = waker.send(());
             let $state = state_lock.read().await;
             $body
