@@ -1,6 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::fs;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
@@ -1429,15 +1430,30 @@ fn user_modules() -> Result<Vec<PyObject>, Error> {
             if entry.file_type()?.is_dir() {
                 continue;
             }
-            if let Some(module_name) = entry
+
+            let Some(module_name) = entry
                 .file_name()
                 .to_str()
-                .and_then(|f| f.strip_suffix(".py"))
-            {
-                info!("loading user module {module_name}.py");
-                let module: Py<PyAny> = PyModule::import_bound(py, module_name)?.into();
-                modules.push(module);
+                .and_then(|f| f.strip_suffix(".py").map(ToString::to_string))
+            else {
+                continue;
+            };
+
+            // If there's both a .py with a given name, and a directory
+            // with the matching name, Python will end up loading the directory/__init__.py
+            // That's not what we want here. We only want to load top level .py scripts.
+            let dir_name = config_dir().join(&module_name);
+            if fs::metadata(&dir_name).is_ok_and(|md| md.is_dir()) {
+                warn!(
+                    "skipping user module {module_name}.py because {} directory exists.",
+                    dir_name.display()
+                );
+                continue;
             }
+
+            info!("loading user module {module_name}.py");
+            let module: Py<PyAny> = PyModule::import_bound(py, &*module_name)?.into();
+            modules.push(module);
         }
         Ok(modules)
     })
