@@ -53,28 +53,12 @@ numeric_id!(SessionId, u32);
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
 #[allow(clippy::struct_excessive_bools)] // It's Fine.
 pub struct Mud {
-    /// Name of the MUD.
-    ///
-    /// Used as the label for the session tab, and for listing the MUD on the connection
-    /// screen.
-    ///
-    /// This is the identifier you will use with decorators like `mudpuppy.trigger` for the
-    /// `mud_name` parameter.
     #[pyo3(get)]
     pub name: String,
 
-    /// Host address of the MUD.
-    ///
-    /// This is typically a domain name like `"dunemud.net"` or an IP address like `8.8.8.8` or
-    /// `2607:f8b0:400b:803::200e`.
-    ///
-    /// The `port` number is specified separately - don't include it here.
     #[pyo3(get)]
     pub host: String,
 
-    /// Port number of the MUD.
-    ///
-    /// This varies by game, and may change based on whether you're using TLS or not.
     #[pyo3(get)]
     pub port: u16,
 
@@ -142,11 +126,7 @@ impl Display for Mud {
 pub enum Tls {
     #[default]
     Disabled,
-    /// TLS was enabled.
-    ///
-    /// Certificate verification was performed successfully.
     Enabled,
-    /// TLS was enabled, but no certificate verification was performed.
     InsecureSkipVerify,
 }
 
