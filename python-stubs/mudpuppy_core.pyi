@@ -130,10 +130,6 @@ class MudpuppyCore:
         the currently active mudpuppy session (if any).
 
         The arguments and behaviour match that of `builtins.print`.
-
-        :param args: arguments to be printed
-        :param sep: an optional separator to use between `args`.
-        :param end: an optional ending string to use after `args`.
         """
 
     async def active_session(self) -> Optional[SessionId]:
