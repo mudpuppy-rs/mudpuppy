@@ -95,12 +95,21 @@ See this example config file for more information. TODO: link to config file.
 mudpuppy
 ```
 
-# User Guide
+# Documentation
+
+## User guide
 
 Mudpuppy offers a [user guide] book that provides detailed information and
-examples.
+examples. It's the best place to get started.
 
-[user guide]: https://mudpuppy-rs.github.io/mudpuppy/
+[user guide]: https://mudpuppy-rs.github.io/mudpuppy/user-guide/
+
+## API docs
+
+For scripting purposes you might be interested in seeing [API documentation]
+for the `mudpuppy_core` module as well as the other Python interfaces.
+
+[API documentation]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/
 
 # Scripting
 
@@ -139,8 +148,8 @@ async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, gr
     await mudpuppy_core.send_line(session_id, f"headbutt {target}")
 ```
 
-See the _work-in-progress_ [user guide] for detailed information. API references
-for the Python API are pending.
+See the _work-in-progress_ [user guide] and [API documentation] for more
+information.
 
 # Development
 
