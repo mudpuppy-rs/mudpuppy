@@ -21,7 +21,7 @@ use tokio::sync::{watch, RwLock};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::app::{State, UiState};
-use crate::config::{config_dir, data_dir, GlobalConfig, KeyBindings};
+use crate::config::{config_dir, data_dir, GlobalConfig};
 use crate::error::Error;
 use crate::model::{
     Alias, AliasConfig, AliasId, InputLine, Mud, MudLine, PromptMode, PromptSignal, SessionId,
@@ -38,7 +38,6 @@ use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
     m.add_class::<GlobalConfig>()?;
-    m.add_class::<KeyBindings>()?;
     m.add_class::<Shortcut>()?;
     m.add_class::<SessionInfo>()?;
     m.add_class::<SessionId>()?;

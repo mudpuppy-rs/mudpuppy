@@ -368,7 +368,6 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Default)]
-#[pyclass]
 pub struct KeyBindings(HashMap<String, HashMap<Vec<KeyEvent>, Shortcut>>);
 
 impl<'de> Deserialize<'de> for KeyBindings {
