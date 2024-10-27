@@ -176,7 +176,7 @@ where
                     continue;
                 }
                 let symbol = if symbol.is_empty() { " " } else { symbol };
-                buf.get_mut(area.left() + x, area.top() + y)
+                buf[(area.left() + x, area.top() + y)]
                     .set_symbol(symbol)
                     .set_style(style);
                 x += u16::try_from(width)

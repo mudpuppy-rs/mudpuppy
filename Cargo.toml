@@ -16,14 +16,13 @@ keywords = ["MUD", "telnet", "TUI", "terminal", "multiplayer"]
 description = "A terminal MUD client, scripted with Python"
 
 [workspace.dependencies]
-# TODO(XXX): update ansi-to-tui.
-ansi-to-tui = "5.0.0-rc.1"
+ansi-to-tui = "7"
 async-trait = "0.1"
 better-panic = "0.3"
 clap = "4"
 config = { version = "0.14", default-features = false }
 console-subscriber = "0.4"
-crossterm = { version = "0.27", default-features = false }
+crossterm = { version = "0.28", default-features = false }
 deref-derive = "0.1"
 directories = "5"
 futures = "0.3"
@@ -34,8 +33,7 @@ pretty_assertions = "1"
 pyo3 = { version = "0.22", features = ["experimental-async", "py-clone"] }
 pyo3-async-runtimes = { version = "0.21", features = ["attributes", "tokio-runtime"] }
 pyo3-pylogger = "0.3"
-# TODO(XXX): update ratatui.
-ratatui = { version = "0.27", default-features = false }
+ratatui = { version = "0.29", default-features = false }
 regex = "1"
 serde = "1"
 serde_json = "1"
@@ -51,8 +49,8 @@ tracing = "0.1"
 tracing-error = "0.2"
 tracing-subscriber = "0.3"
 unicode-segmentation = "1"
-# TODO(XXX): use version pinned by ratatui.
-unicode-width = "0.1"
+# See <https://github.com/ratatui/ratatui/issues/1271> for information about why Ratatui pins unicode-width
+unicode-width = "=0.2.0"
 webpki-roots = "0.26"
 
 [workspace.lints.rust]
