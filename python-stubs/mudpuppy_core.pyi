@@ -2220,10 +2220,22 @@ print(f"running {version}")
 
 event_handlers: EventHandlers
 """
-A `EventHandlers` instance for registering event handlers with the client.
+An `EventHandlers` instance for registering event handlers with the client.
 
 It is automatically set up when Mudpuppy is running and has loaded your scripts.
 
 You will typically want to use the `mudpuppy` decorators instead of directly
 interacting with the `EventHandlers`.
+
+To manually register an event handler, you can use `EventHandlers.add_handler()`:
+
+```python
+from mudpuppy_core import mudpuppy_core, event_handlers, Event, EventType
+
+async def on_gmcp_enabled(event: Event):
+    print(f"GMCP enabled for session {event.id}")
+    await mudpuppy_core.gmcp_register(event.id, "Char")
+
+event_handlers.add_handler(EventType.GmcpEnabled, on_gmcp_enabled, __name__)
+```
 """
