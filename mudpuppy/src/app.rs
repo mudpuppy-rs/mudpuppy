@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::io::{self, stdout};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -207,7 +208,7 @@ impl App {
     fn draw(&mut self, state: &mut State, terminal: &mut Terminal<impl Backend>) {
         terminal
             .draw(|frame| {
-                let area = frame.size();
+                let area = frame.area();
 
                 frame.render_widget(Clear, area);
 
@@ -735,7 +736,7 @@ fn init_terminal() -> io::Result<Terminal<impl Backend>> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     // increase the cache size to avoid flickering for indeterminate layouts
-    Layout::init_cache(100);
+    Layout::init_cache(NonZeroUsize::new(100).unwrap());
     Terminal::new(CrosstermBackend::new(stdout()))
 }
 

@@ -1,4 +1,4 @@
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -38,12 +38,12 @@ impl Input {
             .scroll((0, u16::try_from(scroll).unwrap_or_default()));
 
         frame.render_widget(input_text, *area);
-        frame.set_cursor(
-            area.x
-                + u16::try_from(input.visual_cursor().max(scroll) - scroll).unwrap_or_default()
-                + 1,
-            area.y + 1,
-        );
+
+        let cursor_x = area.x
+            + u16::try_from(input.visual_cursor().max(scroll) - scroll).unwrap_or_default()
+            + 1;
+
+        frame.set_cursor_position(Position::from((cursor_x, area.y + 1)));
         Ok(())
     }
 }
