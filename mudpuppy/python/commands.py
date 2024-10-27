@@ -30,18 +30,6 @@ class Command:
         description: Optional[str] = None,
         aliases: Optional[list[str]] = None,
     ):
-        """
-        Create an instance of a `Command` that is run for `/name`.
-
-        `session` is the `mudpuppy_core.SessionId` that the command has been added for with `add_command`.
-
-        `handler` is the `CommandCallable` to invoke when the command is run.
-
-        `description` is an optional description of the command that can be shown in a command list.
-
-        `aliases` is an optional list of other names the command should respond to in addition to `name`.
-        """
-
         self.name = name
         self.session = session
         self.handler = handler
@@ -49,7 +37,10 @@ class Command:
             description=description, exit_on_error=False, add_help=False
         )
         self.parser.add_argument("--help", "-h", action="store_true")
-        self.parser.error = lambda msg: self.on_error(msg)
+        # The parser error method _should_ be NoReturn, e.g. throw an exception
+        # but, we instead want to supress the exception and store the error message
+        # So, snuff the type check with an ignore...
+        self.parser.error = lambda msg: self.on_error(msg)  # type: ignore
         if aliases is not None:
             self.aliases = aliases
         else:
@@ -62,14 +53,14 @@ class Command:
         last_error = message
         logging.error(f"command error: {message}")
 
-    def display_help(self, sesh_id: SessionId):
+    async def display_help(self, sesh_id: SessionId):
         """
         Called when the user requests help for this command.
         """
         file = StringIO()
         self.parser.print_help(file)
         for line in file.getvalue().split("\n"):
-            mudpuppy_core.add_output(sesh_id, OutputItem.command_result(line))
+            await mudpuppy_core.add_output(sesh_id, OutputItem.command_result(line))
 
     async def invoke(self, sesh_id: SessionId, args: str):
         """
@@ -82,7 +73,7 @@ class Command:
         try:
             cli_args = self.parser.parse_args(shlex.split(args))
             if cli_args.help:
-                self.display_help(sesh_id)
+                await self.display_help(sesh_id)
                 return
             logging.debug(f"args = {cli_args}")
 
@@ -103,9 +94,6 @@ class Command:
 
 
 def add_command(sesh_id: SessionId, command: Command):
-    """
-    Register the given `Command` as usable by the given `mudpuppy_core.SessionId`.
-    """
     command_map = commands.get(sesh_id, {})
     command_map[command.name] = command
     for a in command.aliases:

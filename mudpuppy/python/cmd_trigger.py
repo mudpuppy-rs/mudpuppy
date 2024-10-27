@@ -167,4 +167,5 @@ class TriggerCmd(Command):
 
 @on_new_session()
 async def setup(event: Event):
+    assert isinstance(event, Event.NewSession)
     add_command(event.id, TriggerCmd(event.id))

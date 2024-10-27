@@ -43,11 +43,12 @@ class Python(Command):
                 sesh_id, OutputItem.command_result(repr(result))
             )
         except Exception as e:
-            mudpuppy_core.add_output(
+            await mudpuppy_core.add_output(
                 sesh_id, OutputItem.failed_command_result(f"Error running code: {e}")
             )
 
 
 @on_new_session()
 async def setup(event: Event):
+    assert isinstance(event, Event.NewSession)
     add_command(event.id, Python(event.id))

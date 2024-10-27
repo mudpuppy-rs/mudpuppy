@@ -80,6 +80,7 @@ def get_history(session_id: int) -> Optional[History]:
 
 @on_event(EventType.InputLine)
 async def input_sent(event: Event):
+    assert isinstance(event, Event.InputLine)
     if history.get(event.id) is None:
         return
     history[event.id].add(event.input)
@@ -87,6 +88,7 @@ async def input_sent(event: Event):
 
 @on_event(EventType.Shortcut)
 async def shortcut(event: Event):
+    assert isinstance(event, Event.Shortcut)
     if event.shortcut == Shortcut.HistoryNext:
         line = history[event.id].next()
     elif event.shortcut == Shortcut.HistoryPrevious:
@@ -96,15 +98,15 @@ async def shortcut(event: Event):
 
     logging.info(f"populating {event.id} input with: {line}")
     if line is None:
-        mudpuppy_core.set_input(event.id, "")
+        await mudpuppy_core.set_input(event.id, "")
     else:
         # TODO(XXX): make this configurable
         if line.scripted:
             return
         if line.original is None:
-            mudpuppy_core.set_input(event.id, line.sent)
+            await mudpuppy_core.set_input(event.id, line.sent)
         else:
-            mudpuppy_core.set_input(event.id, line.original)
+            await mudpuppy_core.set_input(event.id, line.original)
 
     input = await mudpuppy_core.get_input(event.id)
     logging.debug(f"val is: {input}")
@@ -112,6 +114,7 @@ async def shortcut(event: Event):
 
 @on_new_session()
 async def setup(event: Event):
+    assert isinstance(event, Event.NewSession)
     sesh_info = await mudpuppy_core.session_info(event.id)
     history[event.id] = History(sesh_info)
 

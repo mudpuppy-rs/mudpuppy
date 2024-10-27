@@ -73,6 +73,8 @@ async def multi_mud_test(
 
 @on_mud_event("Test (TLS)", EventType.Prompt)
 async def test_prompt_handler(event: Event):
+    assert isinstance(event, Event.Prompt)
+
     logging.debug(f'test prompt is: "{str(event.prompt)}"')
     if str(event.prompt) == "Please enter your name: ":
         await mudpuppy_core.send_line(event.id, "sneak")
@@ -91,6 +93,8 @@ async def narf(session_id: SessionId, trigger_id: TriggerId, _line: str, groups)
         session_id, f"say don't much care about {groups[1]} tbh"
     )
     trig = await mudpuppy_core.get_trigger(session_id, trigger_id)
+    if trig is None:
+        return
     await mudpuppy_core.send_line(
         session_id, f"say I've done this dance {trig.config.hit_count} times already"
     )
@@ -113,10 +117,23 @@ def ip_highlight(line: MudLine, groups):
     return line
 
 
+@highlight(name="Solaris highlight", pattern=r"^(\d+) solaris$")
+def solaris_highlight(line: MudLine, groups: list[str]):
+    assert len(groups) == 1
+    # Highlight the total in bold
+    hilight = line.__str__().replace(
+        groups[0], cformat(f"<bold><yellow>{groups[0]}<reset><yellow>")
+    )
+    # And then overall line in yellow
+    hilight = cformat(f"<yellow>{hilight}<reset>")
+    line.set(hilight)
+    return line
+
+
 @alias(mud_name="Test (TLS)", pattern="^myip$", name="Check my IP address")
 async def ip_alias(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
     try:
-        import aiohttp
+        import aiohttp  # type: ignore
     except ImportError:
         await mudpuppy_core.add_output(
             session_id, OutputItem.failed_command_result("aiohttp not available")
@@ -179,7 +196,7 @@ async def test_timer(timer_id: TimerId, session_id: Optional[SessionId]):
         await mudpuppy_core.add_output(
             session_id, OutputItem.command_result(f"[{timer_id}] Bye for now...")
         )
-        await mudpuppy_core.cancel_timer(timer_id)
+        await mudpuppy_core.stop_timer(timer_id)
 
 
 @alias(mud_name="Test (TLS)", pattern="^debug$", name="Debug Alias")
@@ -192,7 +209,7 @@ async def callback_debug(
         await mudpuppy_core.add_output(
             session_id, OutputItem.command_result(f"{event_type}:")
         )
-        for handler, module in event_handlers.get_handlers(event_type):
+        for handler, module in event_handlers.get_handlers(event_type):  # type: ignore
             await mudpuppy_core.add_output(
                 session_id, OutputItem.command_result(f"  {module} -> {handler}")
             )

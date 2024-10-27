@@ -150,4 +150,5 @@ class TimerCmd(Command):
 
 @on_new_session()
 async def setup_session(event: Event):
+    assert isinstance(event, Event.NewSession)
     add_command(event.id, TimerCmd(event.id))

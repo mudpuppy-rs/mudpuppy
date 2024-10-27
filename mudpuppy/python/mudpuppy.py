@@ -52,6 +52,7 @@ def on_gmcp(package: str, module=None):
 
         @on_event(EventType.GmcpMessage, module=module or handler.__module__)
         async def gmcp_message_wrapper(event: Event):
+            assert isinstance(event, Event.GmcpMessage)
             if event.package == package:
                 await handler(event.id, json.loads(event.json))
 
@@ -101,6 +102,7 @@ def on_connected(module=None):
 
         @on_event(EventType.Connection, module=module or handler.__module__)
         async def on_connected_decorator(event: Event):
+            assert isinstance(event, Event.Connection)
             if isinstance(event.status, Status.Connected):
                 await handler(event)
 
@@ -115,6 +117,7 @@ def on_disconnected(module=None):
 
         @on_event(EventType.Connection, module=module or handler.__module__)
         async def on_disconnected_decorator(event: Event):
+            assert isinstance(event, Event.Connection)
             if isinstance(event.status, Status.Disconnected):
                 await handler(event)
 
@@ -189,6 +192,7 @@ def on_mud_connected(mud_name: Union[str, List[str]], module=None):
             mud_name, EventType.Connection, module=module or handler.__module__
         )
         async def connected_event_wrapper(event: Event):
+            assert isinstance(event, Event.Connection)
             if isinstance(event.status, Status.Connected):
                 await handler(event)
 
@@ -205,6 +209,7 @@ def on_mud_disconnected(mud_name: Union[str, List[str]], module=None):
             mud_name, EventType.Connection, module=module or handler.__module__
         )
         async def disconnected_event_wrapped(event: Event):
+            assert isinstance(event, Event.Connection)
             if isinstance(event.status, Status.Disconnected):
                 await handler(event)
 
@@ -238,6 +243,9 @@ def alias(
 
             @on_mud_new_session_or_reload(mud_name, module=module or handler.__module__)
             async def alias_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 alias_id = await mudpuppy_core.new_alias(
                     event.id, alias_config, module=module or handler.__module__
                 )
@@ -251,6 +259,9 @@ def alias(
 
             @on_new_session_or_reload(module=module or handler.__module__)
             async def global_alias_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 alias_id = await mudpuppy_core.new_alias(
                     event.id, alias_config, module=module or handler.__module__
                 )
@@ -275,7 +286,7 @@ def trigger(
     strip_ansi: bool = True,
     prompt: bool = False,
     expansion: Optional[str] = None,
-    mud_name: Optional[str] = None,
+    mud_name: Optional[Union[str, List[str]]] = None,
     module: Optional[str] = None,
 ):
     def trigger_decorator(handler: TriggerCallable):
@@ -295,6 +306,9 @@ def trigger(
 
             @on_mud_new_session_or_reload(mud_name, module=module or handler.__module__)
             async def trigger_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 trigger_id = await mudpuppy_core.new_trigger(
                     event.id, trigger_config, module=module or handler.__module__
                 )
@@ -308,6 +322,9 @@ def trigger(
 
             @on_new_session_or_reload(module=module or handler.__module__)
             async def global_trigger_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 trigger_id = await mudpuppy_core.new_trigger(
                     event.id, trigger_config, module=module or handler.__module__
                 )
@@ -322,7 +339,7 @@ def trigger(
 
 
 # Note: Not async!
-HighlightCallable = Callable[[SessionId, TriggerId, str, Any], MudLine]
+HighlightCallable = Callable[[MudLine, list[str]], MudLine]
 
 
 def highlight(
@@ -330,10 +347,10 @@ def highlight(
     pattern: str,
     name: str,
     strip_ansi: bool = True,
-    mud_name: Optional[str] = None,
+    mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
 ):
-    def highlight_decorator(handler: TriggerCallable):
+    def highlight_decorator(handler: HighlightCallable):
         if pattern.strip() == "" or name.strip() == "":
             raise ValueError("pattern and name must be non-empty")
 
@@ -345,6 +362,9 @@ def highlight(
 
             @on_mud_new_session_or_reload(mud_name, module=module or handler.__module__)
             async def highlight_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 trigger_id = await mudpuppy_core.new_trigger(
                     event.id, trigger_config, module=module or handler.__module__
                 )
@@ -358,6 +378,9 @@ def highlight(
 
             @on_new_session_or_reload(module=module or handler.__module__)
             async def global_highlight_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 trigger_id = await mudpuppy_core.new_trigger(
                     event.id, trigger_config, module=module or handler.__module__
                 )
@@ -379,7 +402,7 @@ def timer(
     minutes: int = 0,
     hours: int = 0,
     max_ticks: Optional[int] = None,
-    mud_name: Optional[str] = None,
+    mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
 ):
     if not name.strip():
@@ -405,6 +428,9 @@ def timer(
 
             @on_mud_new_session_or_reload(mud_name, module=module or handler.__module__)
             async def mud_timer_event_wrapper(event: Event):
+                assert isinstance(event, Event.NewSession) or isinstance(
+                    event, Event.ResumeSession
+                )
                 timer_config.session_id = event.id
                 timer_id = await mudpuppy_core.new_timer(
                     timer_config, module=module or handler.__module__
@@ -436,8 +462,10 @@ def timer(
 def unload_handlers(module: str):
     for event_type in event_handlers.get_handler_events():
         handlers_list = event_handlers.get_handlers(event_type)
+        if handlers_list is None:
+            continue
         logging.debug(
             f"event type {event_type} had {len(handlers_list)} handlers before unloading {module} handlers"
         )
-        handlers_list[:] = [h for h in handlers_list if h[1] != module]
+        handlers_list[:] = [h for h in handlers_list if h[1] != module]  # type: ignore
         logging.debug(f"event type {event_type} now has {len(handlers_list)} handlers")

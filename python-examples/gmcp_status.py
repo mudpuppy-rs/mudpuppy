@@ -82,6 +82,7 @@ class StatusArea:
 
 @on_event(EventType.GmcpEnabled)
 async def gmcp_enabled(event: Event):
+    assert isinstance(event, Event.GmcpEnabled)
     logging.debug(f"telling {event.id} that we support gmcp Char")
     await mudpuppy_core.gmcp_register(event.id, "Char")
 
@@ -103,6 +104,11 @@ async def gmcp_status(session_id: SessionId, data: Any):
 
 @on_event(EventType.Python)
 async def py_event(event: Event):
+    assert isinstance(event, Event.Python)
+
+    if event.id is None:
+        return
+
     if event.custom_type == CUSTOM_LAYOUT_READY:
         status_area(event.id)._layout_ready()
 

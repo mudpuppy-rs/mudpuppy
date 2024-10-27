@@ -74,7 +74,7 @@ class LayoutManager:
         constraint: Constraint,
         direction: Direction = Direction.Vertical,
         margin: int = 0,
-        buffer_config: BufferConfig = None,
+        buffer_config: Optional[BufferConfig] = None,
     ) -> Optional[BufferId]:
         if section_name == "" or new_section_name == "":
             raise ValueError("section names must not be empty")
@@ -118,8 +118,8 @@ class LayoutManager:
         new_constraint: Constraint,
         direction: Direction = Direction.Vertical,
         margin: int = 0,
-        buffer_config: BufferConfig = None,
-    ):
+        buffer_config: Optional[BufferConfig] = None,
+    ) -> Optional[BufferId]:
         if section_name == "" or new_section_name == "":
             raise ValueError("section names must not be empty")
 
@@ -160,11 +160,13 @@ class LayoutManager:
 
 @on_new_session()
 async def setup_session(event: Event):
+    assert isinstance(event, Event.NewSession)
     await manager.on_new_session(event.info)
 
 
 @on_event(EventType.ResumeSession)
 async def on_resume(event: Event):
+    assert isinstance(event, Event.ResumeSession)
     info = await mudpuppy_core.session_info(event.id)
     await manager.on_new_session(info)
 
