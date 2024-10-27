@@ -28,7 +28,7 @@ directories = "5"
 futures = "0.3"
 happy-eyeballs = { version = "0.2", default-features = false }
 human-panic = "2"
-notify = "6"
+notify = "7"
 pretty_assertions = "1"
 pyo3 = { version = "0.22", features = ["experimental-async", "py-clone"] }
 pyo3-async-runtimes = { version = "0.21", features = ["attributes", "tokio-runtime"] }
