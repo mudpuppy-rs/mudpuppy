@@ -25,7 +25,7 @@ logging.debug(f"Mudpuppy Python module loaded: {mudpuppy_core}")
 
 
 # It's easy to forget to add the async keyword to a function that should be async.
-def ensure_async(handler: Callable) -> None:
+def __ensure_async(handler: Callable) -> None:
     if not inspect.iscoroutinefunction(handler):
         raise TypeError(
             f"The handler function '{handler.__name__}' must be an async function"
@@ -34,7 +34,7 @@ def ensure_async(handler: Callable) -> None:
 
 def on_event(event_type: Union[EventType, List[EventType]], module=None):
     def on_event_decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
         handler_module = module or handler.__module__
         if isinstance(event_type, list):
             for et in event_type:
@@ -48,7 +48,7 @@ def on_event(event_type: Union[EventType, List[EventType]], module=None):
 
 def on_gmcp(package: str, module=None):
     def on_gmcp_decorator(handler: GmcpHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_event(EventType.GmcpMessage, module=module or handler.__module__)
         async def gmcp_message_wrapper(event: Event):
@@ -65,7 +65,7 @@ def on_new_session(module=None):
         logging.debug(
             f"setting up on_new_session handler for {module} ({handler.__module__}) -> {handler.__name__}"
         )
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_event(EventType.NewSession, module=module or handler.__module__)
         async def on_new_session_decorator(event: Event):
@@ -81,7 +81,7 @@ def on_new_session_or_reload(module=None):
         logging.debug(
             f"setting up on_new_session_or_reload handler for {module} ({handler.__module__}) -> {handler.__name__}"
         )
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_event(
             [EventType.NewSession, EventType.ResumeSession],
@@ -97,7 +97,7 @@ def on_new_session_or_reload(module=None):
 
 def on_connected(module=None):
     def decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_event(EventType.Connection, module=module or handler.__module__)
         async def on_connected_decorator(event: Event):
@@ -111,7 +111,7 @@ def on_connected(module=None):
 
 def on_disconnected(module=None):
     def decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_event(EventType.Connection, module=module or handler.__module__)
         async def on_disconnected_decorator(event: Event):
@@ -129,7 +129,7 @@ def on_mud_event(
     module=None,
 ):
     def on_mud_event_decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_event(event_type, module=module or handler.__module__)
         async def on_mud_event_wrapper(event: Event):
@@ -151,7 +151,7 @@ def on_mud_event(
 
 def on_mud_new_session(mud_name: Union[str, List[str]], module=None):
     def on_mud_new_session_decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_mud_event(
             mud_name, EventType.NewSession, module=module or handler.__module__
@@ -166,7 +166,7 @@ def on_mud_new_session(mud_name: Union[str, List[str]], module=None):
 
 def on_mud_new_session_or_reload(mud_name: Union[str, List[str]], module=None):
     def on_mud_new_session_or_reload_decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_mud_event(
             mud_name,
@@ -183,7 +183,7 @@ def on_mud_new_session_or_reload(mud_name: Union[str, List[str]], module=None):
 
 def on_mud_connected(mud_name: Union[str, List[str]], module=None):
     def on_mud_connected_decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_mud_event(
             mud_name, EventType.Connection, module=module or handler.__module__
@@ -199,7 +199,7 @@ def on_mud_connected(mud_name: Union[str, List[str]], module=None):
 
 def on_mud_disconnected(mud_name: Union[str, List[str]], module=None):
     def on_mud_disconnected_decorator(handler: EventHandler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         @on_mud_event(
             mud_name, EventType.Connection, module=module or handler.__module__
@@ -228,7 +228,7 @@ def alias(
         if pattern.strip() == "" or name.strip() == "":
             raise ValueError("Pattern and name must be non-empty")
 
-        ensure_async(handler)
+        __ensure_async(handler)
 
         alias_config = AliasConfig(pattern, name)
         alias_config.expansion = expansion
@@ -282,7 +282,7 @@ def trigger(
         if pattern.strip() == "" or name.strip() == "":
             raise ValueError("pattern and name must be non-empty")
 
-        ensure_async(handler)
+        __ensure_async(handler)
 
         trigger_config = TriggerConfig(pattern, name)
         trigger_config.gag = gag
@@ -394,7 +394,7 @@ def timer(
         raise ValueError("The total duration must be greater than zero.")
 
     def timer_decorator(handler):
-        ensure_async(handler)
+        __ensure_async(handler)
 
         timer_config = TimerConfig(name, total_delay_ms, handler)
         if max_ticks:
