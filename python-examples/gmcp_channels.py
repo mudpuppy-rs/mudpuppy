@@ -86,6 +86,7 @@ class ChannelLogger:
 
 @on_event(EventType.GmcpEnabled)
 async def gmcp_ready(event: Event):
+    assert isinstance(event, Event.GmcpEnabled)
     logging.debug(f"telling session {event.id} that we support gmcp Comm.Channel")
     await mudpuppy_core.gmcp_register(event.id, "Comm.Channel")
 
@@ -100,7 +101,11 @@ async def channel_text(session_id: SessionId, data: Any):
 
 @on_event(EventType.Python)
 async def py_event(event: Event):
+    assert isinstance(event, Event.Python)
     if event.custom_type != CUSTOM_LAYOUT_READY:
+        return
+
+    if event.id is None:
         return
 
     if loggers.get(event.id) is None:

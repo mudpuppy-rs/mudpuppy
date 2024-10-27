@@ -59,6 +59,7 @@ class ReloadCmd(Command):
 
 @on_new_session()
 async def setup(event: Event):
+    assert isinstance(event, Event.NewSession)
     add_command(event.id, ConnectCmd(event.id))
     add_command(event.id, DisconnectCmd(event.id))
     add_command(event.id, QuitCmd(event.id))

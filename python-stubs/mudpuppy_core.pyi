@@ -16,13 +16,17 @@ __all__ = [
     "InputLine",
     "Event",
     "EventType",
+    "EventHandler",
     "EventHandlers",
-    "Trigger",
-    "TriggerConfig",
-    "TriggerId",
     "Alias",
+    "AliasCallable",
     "AliasConfig",
     "AliasId",
+    "Trigger",
+    "TriggerCallable",
+    "HighlightCallable",
+    "TriggerConfig",
+    "TriggerId",
     "TimerConfig",
     "Timer",
     "TimerId",
@@ -32,6 +36,7 @@ __all__ = [
     "Status",
     "StreamInfo",
     "OutputItem",
+    "Output",
     "Input",
     "EchoState",
     "LayoutNode",
@@ -43,7 +48,7 @@ __all__ = [
     "ExtraBuffer",
 ]
 
-from typing import Optional, Any, Callable, Awaitable
+from typing import Optional, Any, Callable, Awaitable, Tuple
 from enum import StrEnum, auto
 import datetime
 
@@ -68,33 +73,57 @@ You can find the `SessionInfo` associated with a `SessionId` by calling
 `MudpuppyCore.session_info()`.
 """
 
-type AliasId = int
-"""
-An `Alias` identifier.
+class AliasId(int):
+    """
+    An `Alias` identifier.
 
-These are assigned per-`SessionId` using `MudpuppyCore.new_alias()`.
-"""
+    These are assigned per-`SessionId` using `MudpuppyCore.new_alias()`.
+    """
 
-type TriggerId = int
-"""
-A `Trigger` identifier.
+    def __init__(self, value: int):
+        """
+        Construct an `AliasId` for a specific ID.
+        """
+        ...
 
-These are assigned per-`SessionId` using `MudpuppyCore.new_trigger()`.
-"""
+class TriggerId(int):
+    """
+    A `Trigger` identifier.
 
-type TimerId = int
-"""
-A `Timer` identifier.
+    These are assigned per-`SessionId` using `MudpuppyCore.new_trigger()`.
+    """
 
-These are assigned per-`SessionId` using `MudpuppyCore.new_timer()`.
-"""
+    def __init__(self, value: int):
+        """
+        Construct a `TriggerId` for a specific ID.
+        """
+        ...
 
-type BufferId = int
-"""
-An `ExtraBuffer` identifier.
+class TimerId(int):
+    """
+    A `Timer` identifier.
 
-These are assigned per-`SessionId` using `MudpuppyCore.new_buffer()`.
-"""
+    These are assigned per-`SessionId` using `MudpuppyCore.new_timer()`.
+    """
+
+    def __init__(self, value: int):
+        """
+        Construct a `TimerId` for a specific ID.
+        """
+        ...
+
+class BufferId(int):
+    """
+    An `ExtraBuffer` identifier.
+
+    These are assigned per-`SessionId` using `MudpuppyCore.new_buffer()`.
+    """
+
+    def __init__(self, value: int):
+        """
+        Construct a `BufferId` for a specific ID.
+        """
+        ...
 
 class SessionInfo:
     """
@@ -295,6 +324,13 @@ class MudLine:
     Whether the line was gagged by a trigger (e.g. not displayed in output).
     """
 
+    def __init__(self, value: bytes):
+        """
+        Construct a new `MudLine` with the given `value` bytes.
+
+        """
+        ...
+
     def to_str(self) -> str:
         """
         Converts `self.raw` to a UTF8-encoded string and returns it.
@@ -303,6 +339,82 @@ class MudLine:
         the unicode "replacement character".
         """
         ...
+
+    def stripped(self) -> str:
+        """
+        Returns `self.raw` after converting to UTF-8 using `to_str()` and then
+        stripping ANSI control sequences.
+        """
+
+    def set(self, new: str):
+        """
+        Sets the `MudLine`'s `raw` value to the UTF-8 bytes of the string `new`.
+        """
+
+type TriggerCallable = Callable[[SessionId, TriggerId, str, list[str]], Awaitable[None]]
+"""
+An async function that is called when output sent from a MUD matches a trigger pattern.
+Typically assigned to a `TriggerConfig`'s `callback` property, alternatively see
+`mudpuppy.trigger()` for a simple `@trigger()` decorator.
+
+The handler is called with:
+
+* the `mudpuppy_core.SessionId` of the session that received the output
+* the `mudpuppy_core.TriggerId` of the `mudpuppy_core.Trigger` that matched.
+* the `str` output that matched the trigger pattern, and
+* a `list[str]` of captured groups from the trigger pattern (if any).
+
+Example:
+```python
+from mudpuppy_core import mudpuppy_core, SessionId, TriggerId, Trigger
+
+async def my_trigger_handler(
+    session_id: SessionId,
+    trigger_id: TriggerId,
+    line: str,
+    _groups: list[str]
+):
+    trigger: Trigger = await mudpuppy_core.get_trigger(session_id, trigger_id)
+    print(f"trigger {trigger.config.name} has matched output: {line}")
+    print(f"this trigger has matched output {trigger.config.hits} times so far")
+```
+"""
+
+type HighlightCallable = Callable[[MudLine, list[str]], MudLine]
+"""
+A **non-async** function that is called when a line of output from the MUD matches a
+highlight pattern. Typically assigned to a `TriggerConfig`'s `highlight` property.
+Alternatively see `mudpuppy.highlight()` for a simple `@highlight()` decorator.
+
+The handler is called with:
+* a `MudLine` object representing the line of output from the MUD
+* a `list[str]` of captured groups from the highlight pattern (if any)
+
+It **must** return a `MudLine` to display. This can be the same line
+object passed in, or a new line object.
+
+Unlike `AliasCallable`, `TriggerCallable`, and most other callables
+`mudpuppy_core` uses this callable is **not** async. This is because the handler is expected to mutate
+the `MudLine` object in place to apply the desired highlighting. This
+also means you can not `await` other `mudpuppy_core` functions from within a highlight
+and should prefer using `TriggerCallable()` handlers for those tasks.
+
+For example, you could use `MudLine.set_line()` to mutate the provided
+`line` to add ANSI colours using `cformat`:
+
+```python
+from cformat import cformat
+
+# Note: **not async**!
+def example_highlight_callable(line: MudLine, groups):
+    assert(len(groups) == 1)
+    new_line = line.__str__().replace(
+        groups[0], cformat(f"<bold><cyan>{groups[0]}<reset>")
+    )
+    line.set(new_line)
+    return line
+```
+"""
 
 class TriggerConfig:
     """
@@ -345,48 +457,23 @@ class TriggerConfig:
     Set this to `True` to suppress (gag) matched lines.
     """
 
-    callback: Optional[
-        Callable[[SessionId, TriggerId, MudLine, list[str]], Awaitable[None]]
-    ]
+    callback: Optional[TriggerCallable] = None
     """
-    An optional **async** function that receives a `SessionId`, `TriggerId`, `MudLine` and list of string
-    regexp groups as arguments when the trigger matches a `MudLine`.
-
-    The `TriggerId` will be the ID of the trigger that matched the `MudLine`.
-    The `MudLine` is the matched line.
-    The `list[str]` is the list of string regexp groups that matched the `pattern` (if any).
-
-    Your trigger callback function should have a signature like:
-
-    ```python
-    async def my_trigger_callback(sesh: SessionId, trigger_id: TriggerId, line: MudLine, groups: list[str]):
-        ...
-    ```
+    An optional **async** `TriggerCallable` to invoke when the trigger matches.
     """
 
-    highlight: Optional[Callable[[MudLine, list[str]], MudLine]]
+    highlight: Optional[HighlightCallable] = None
     """
-    An optional **synchronous** function that receives a `MudLine` and a list of string
-    regexp groups as arguments when the highlight trigger matches a `MudLine`.
+    An optional **synchronous** `HighlightCallable` to invoke when the `pattern` matches
+    to provide a new `MudLine` to display.
 
     The `MudLine` returned by the callback function will **replace** the matched `MudLine`
     allowing you to (for example) add ANSI highlights colours.
-
-    The optional `highlight` callback is invoked after the optional async `callback`
-    and before the `gag` setting is applied or an `expansion` sent.
-
-    Your highlight callback should have a signature like:
-
-    ```python
-    def my_highlight_callback(line: MudLine, groups: list[str]) -> MudLine:
-        # Do some stuff here...
-        return line
-    ```
     """
 
-    expansion: str
+    expansion: Optional[str] = None
     """
-    A string that will be expanded into an `InputLine` sent to the MUD whenever the
+    An optional string that will be expanded into an `InputLine` sent to the MUD whenever the
     trigger matches if it is non-empty.
 
     The sent `MudLine` will have `MudLine.scripted` set to `True` to differentiate
@@ -400,6 +487,12 @@ class TriggerConfig:
     """
     The number of times `OutputLine`s have matched this `Trigger` since it was created.
     """
+
+    def __init__(self, pattern: str, name: str):
+        """
+        Create a new `TriggerConfig` with a `pattern` and a `name`.
+        """
+        ...
 
     def pattern(self) -> str:
         """
@@ -435,6 +528,30 @@ class Trigger:
     The `TriggerConfig` for the `Trigger`.
     """
 
+type AliasCallable = Callable[[SessionId, AliasId, str, list[str]], Awaitable[None]]
+"""
+An async function that is called when input sent to a MUD matches an alias pattern.
+Typically you will assign an `AliasCallable` to the `callback` property of an `AliasConfig`.
+Alternatively, see `mudpuppy.alias()` for a simple `@alias()` decorator.
+
+The handler is called with:
+
+* the `SessionId` of the session that received the input
+* the `AliasId` of the `Alias` that matched.
+* the `str` input that matched the alias pattern, and
+* a `list[str]` of captured groups from the alias pattern (if any).
+
+Example:
+```python
+from mudpuppy_core import mudpuppy_core, SessionId, AliasId, Alias
+
+async def my_alias_handler(session_id: SessionId, alias_id: AliasId, line: str, _groups: list[str]):
+    alias: Alias = await mudpuppy_core.get_alias(session_id, alias_id)
+    print(f"alias {alias.config.name} has matched input: {line}")
+    print(f"this alias has matched input {alias.config.hits} times so far")
+```
+"""
+
 class AliasConfig:
     """
     Configuration for an `Alias`.
@@ -452,34 +569,9 @@ class AliasConfig:
     A friendly name to identify the alias.
     """
 
-    callback: Optional[
-        Callable[[SessionId, AliasId, MudLine, list[str]], Awaitable[None]]
-    ]
+    callback: Optional[AliasCallable] = None
     """
-    An optional **async** function that receives a `SessionId`, `AliasId`, `InputLine` and list of string
-    regexp groups as arguments when the alias matches a `MudLine`.
-
-    The `AliasId` will be the ID of the alias that matched the `MudLine`.
-    The `InputLine` is the matched input line.
-    The `list[str]` is the list of string regexp groups that matched the `pattern` (if any).
-
-    Your alias callback function should have a signature like:
-
-    ```python
-    async def my_alias_callback(sesh: SessionId, alias_id: AliasId, line: InputLine, groups: list[str]):
-        ...
-    ```
-    """
-
-    expansion = Optional[str]
-    """
-    A string that will be expanded into an `InputLine` sent to the MUD whenever the
-    alias matches if it is non-empty.
-
-    This value will become the `InputLine.sent` value sent to the game, and the
-    line that was matched by the alias will be set to the `InputLine.original` value.
-
-    The sent `InputLine.scripted` property will be set to `True`.
+    An optional **async** `AliasCallable` to invoke when the alias matches.
     """
 
     hit_count: int
@@ -487,10 +579,37 @@ class AliasConfig:
     The number of times `InputLine`s have matched this `AliasConfig` since it was created.
     """
 
+    def __init__(self, pattern: str, name: str):
+        """
+        Create a new `AliasConfig` with a `pattern` and a `name`.
+        """
+        ...
+
     def pattern(self) -> str:
         """
         Return a string representation of the `AliasConfig` regexp pattern.
         """
+        ...
+
+    @property
+    def expansion(self) -> Optional[str]:
+        """
+        An optional string that will be expanded into an `InputLine` sent to the MUD whenever the
+        alias matches if it is non-empty.
+
+        This value will become the `InputLine.sent` value sent to the game, and the
+        line that was matched by the alias will be set to the `InputLine.original` value.
+
+        The sent `InputLine.scripted` property will be set to `True`.
+        """
+        ...
+
+    @expansion.setter
+    def expansion(self, value: Optional[str]):
+        """
+        Set the `expansion` property.
+        """
+        ...
 
 class Alias:
     """
@@ -521,6 +640,8 @@ class Alias:
     The `AliasConfig` for the `Alias`.
     """
 
+type TimerCallable = Callable[[TimerId, Optional[SessionId]], Awaitable[None]]
+
 class TimerConfig:
     """
     Configuration for a `Timer`.
@@ -539,17 +660,12 @@ class TimerConfig:
     A friendly name to identify the timer.
     """
 
-    session_id: Optional[SessionId]
-    """
-    The `SessionId` that the timer is associated with.
-    """
-
     duration: datetime.timedelta
     """
     The duration  that the timer should wait before firing.
     """
 
-    callback: Callable[[TimerId, Optional[SessionId]], Awaitable[None]]
+    callback: TimerCallable
     """
     An **async** function that receives a `TimerId` and optionally a `SessionId` when the timer fires.
 
@@ -560,6 +676,49 @@ class TimerConfig:
         ...
     ```
     """
+
+    def __init__(
+        self,
+        name: str,
+        duration_ms: int,
+        callback: TimerCallable,
+        session: Optional[SessionId] = None,
+    ):
+        """
+        Create a new `TimerConfig` with a `name` that will be run every `duration_ms`
+        milliseconds, invoking `callback`. The timer may optionally be associated
+        with a `SessionId`.
+        """
+        ...
+
+    @property
+    def session_id(self) -> Optional[SessionId]:
+        """
+        An optional `SessionId` that the timer is associated with. Can be both read and set.
+        """
+        ...
+
+    @session_id.setter
+    def session_id(self, id: Optional[SessionId]):
+        """
+        Set the `SessionId`
+        """
+        ...
+
+    @property
+    def max_ticks(self) -> Optional[int]:
+        """
+        An optional maximum number of times the `callback` should be invoked before
+        the timer is automatically removed. Can be both read and set.
+        """
+        ...
+
+    @max_ticks.setter
+    def max_ticks(self, ticks: Optional[int]):
+        """
+        Set the `max_ticks`
+        """
+        ...
 
 class Timer:
     """
@@ -728,19 +887,366 @@ class OutputItem:
         The debug line.
         """
 
-class LayoutNode:
+    @staticmethod
+    def mud(line: MudLine) -> "OutputItem":
+        """
+        Construct a `Mud` `OutputItem` with the given `MudLine`.
+        """
+        ...
+
+    @staticmethod
+    def command_result(msg: str) -> "OutputItem":
+        """
+        Construct a `CommandResult` `OutputItem` with the given `msg`.
+
+        The `CommandResult.error` will be `False`. For a failed command
+        result output item, use `failed_command_result()`.
+        """
+
+    @staticmethod
+    def failed_command_result(msg: str) -> "OutputItem":
+        """
+        Construct a failed `CommandResult` `OutputItem` with the given `msg`.
+
+        The `CommandResult.error` will be `True`.
+        """
+
+    @staticmethod
+    def previous_session(line: MudLine) -> "OutputItem":
+        """
+        Construct a `PreviousSession` `OutputItem` with the given `line`.
+        """
+
+    @staticmethod
+    def debug(line: str) -> "OutputItem":
+        """
+        Construct a `Debug` `OutputItem` with the given `line`.
+        """
+
+class Output:
     """
-    A node in the layout tree.
+    A collection of `OutputItem` instances displayed in an `ExtraBuffer`.
     """
 
-    ...
+    def len(self) -> int:
+        """
+        Returns the number of `OutputItem` instances in the collection.
+        """
+        ...
+
+    def is_empty(self) -> bool:
+        """
+        Returns `True` if the collection is empty, `False` otherwise.
+        """
+        ...
+
+    def push(self, item: OutputItem):
+        """
+        Appends an `OutputItem` to the collection.
+
+        The `BufferConfig.direction` will determine whether items added at the end
+        of the collection are rendered first, or last.
+        """
+
+    def set(self, items: list[OutputItem]):
+        """
+        Sets the collection of `OutputItem` instances to `items`.
+
+        Replaces the existing content with the `items` list.
+        """
+        ...
+
+class Constraint:
+    """
+    A `LayoutNode` constraint.
+    """
+
+    percentage: Optional[int] = None
+    """
+    Set when the `Constraint` is a percentage constraint.
+    """
+
+    ratio: Optional[tuple[int, int]] = None
+    """
+    Set when the `Constraint` is a ratio constraint.
+    """
+
+    length: Optional[int] = None
+    """
+    Set when the `Constraint` is a length constraint.
+    """
+
+    max: Optional[int] = None
+    """
+    Set when the `Constraint` is a max constraint.
+    """
+
+    min: Optional[int] = None
+    """
+    Set when the `Constraint` is a min constraint.
+    """
+
+    @staticmethod
+    def with_percentage(percentage: int) -> "Constraint":
+        """
+        Creates a new `Constraint` with a percentage constraint.
+        """
+        ...
+
+    def set_percentage(self, percentage: int):
+        """
+        Sets the percentage constraint.
+        """
+        ...
+
+    @staticmethod
+    def with_ratio(ratio: tuple[int, int]) -> "Constraint":
+        """
+        Creates a new `Constraint` with a ratio constraint.
+        """
+        ...
+
+    def set_ratio(self, ratio: tuple[int, int]):
+        """
+        Sets the ratio constraint.
+        """
+        ...
+
+    @staticmethod
+    def with_length(length: int) -> "Constraint":
+        """
+        Creates a new `Constraint` with a length constraint.
+        """
+        ...
+
+    def set_length(self, length: int):
+        """
+        Sets the length constraint.
+        """
+        ...
+
+    @staticmethod
+    def with_max(max: int) -> "Constraint":
+        """
+        Creates a new `Constraint` with a max constraint.
+        """
+        ...
+
+    def set_max(self, max: int):
+        """
+        Sets the max constraint.
+        """
+        ...
+
+    @staticmethod
+    def with_min(min: int) -> "Constraint":
+        """
+        Creates a new `Constraint` with a min constraint.
+        """
+        ...
+
+    def set_min(self, min: int):
+        """
+        Sets the min constraint.
+        """
+        ...
+
+    def set_from(self, other: "Constraint"):
+        """
+        Sets the values of this `Constraint` from another `Constraint`.
+        """
+        ...
+
+class Direction(StrEnum):
+    """
+    A direction to use when creating new layout nodes.
+    """
+
+    Horizontal = auto()
+    """
+    Create new sections in the horizontal direction.
+    """
+
+    Vertical = auto()
+    """
+    Create new sections in the vertical direction.
+    """
+
+class LayoutNode:
+    """
+    Each layout node describes a section in the layout tree.
+    """
+
+    def __init__(self, name: str) -> "LayoutNode":
+        """
+        Creates a new `LayoutNode` with the given `name`.
+        """
+        ...
+
+    @property
+    def name(self) -> str:
+        """
+        Name of the section. Can be both read and set.
+        """
+        ...
+
+    @name.setter
+    def name(self, name: str):
+        """
+        Update the name of the section.
+        """
+        ...
+
+    @property
+    def direction(self) -> Direction:
+        """
+        Direction the sub-sections are laid out. Can be both read and set.
+        """
+        ...
+
+    @direction.setter
+    def direction(self, dir: Direction):
+        """
+        Update the direction of the section.
+        """
+        ...
+
+    @property
+    def margin(self) -> int:
+        """
+        Margin between sub-sections. Can be both read and set.
+        """
+        ...
+
+    @margin.setter
+    def margin(self, margin: int):
+        """
+        Update the margin between sub-sections.
+        """
+        ...
+
+    @property
+    def sections(self) -> list[Tuple[Constraint, "LayoutNode"]]:
+        """
+        The list of sub-sections (if any). Can be both read and set.
+
+        Each sub-section is described as a `Tuple` holding a `Constraint` and a `LayoutNode`.
+        """
+        ...
+
+    @sections.setter
+    def sections(self, sections: list[Tuple[Constraint, "LayoutNode"]]):
+        """
+        Update the list of sub-sections.
+        """
+        ...
+
+    def add_section(self, section: "LayoutNode", constraint: Constraint):
+        """
+        Adds a `LayoutNode` as a child section of this node, with size described by
+        the given `constraint`.
+        """
+        ...
+
+    def find_section(self, name: str) -> (Constraint, "LayoutNode"):
+        """
+        Returns the `Constraint` and `LayoutNode` for the section with the given `name`.
+
+        Raises an exception if `name` is not a known section name under the `LayoutNode`.
+        """
+        ...
+
+    def all_layouts(self) -> dict[str, "LayoutNode"]:
+        """
+        Returns a dictionary of all the `LayoutNode` instances in the layout tree,
+        keyed by their section name.
+        """
+        ...
+
+class BufferDirection(StrEnum):
+    """
+    Describes what direction an `ExtraBuffer` should render its contents.
+    """
+
+    BottomToTop = auto()
+    """
+    The default direction, and the way the standard MUD output buffer works.
+
+    Newer items should be rendered first, at the bottom of the buffer. Older
+    items will be rendered afterwards towards the top of the buffer.
+    """
+
+    TopToBottom = auto()
+    """
+    Older items should be rendered first, at the top of the buffer. Newer items
+    will be rendered afterwards, towards the bottom of the buffer.
+    """
 
 class BufferConfig:
     """
     Configuration for an `ExtraBuffer`.
+
+    See `MudpuppyCore.new_buffer()` for more information.
     """
 
+    layout_name: str
+    """
+    The name of the layout section that the buffer should be displayed in.
+
+    See `layout.LayoutManager` for more information.
+    """
     ...
+
+    line_wrap: bool
+    """
+    Whether the content in the `ExtraBuffer` should be line-wrapped.
+    """
+
+    border_top: bool
+    """
+    Whether the top border of the `ExtraBuffer` should be displayed.
+    """
+
+    border_bottom: bool
+    """
+    Whether the bottom border of the `ExtraBuffer` should be displayed.
+    """
+
+    border_left: bool
+    """
+    Whether the left border of the `ExtraBuffer` should be displayed.
+    """
+
+    border_right: bool
+    """
+    Whether the right border of the `ExtraBuffer` should be displayed.
+    """
+
+    direction: BufferDirection
+    """
+    The `BufferDirection` that the content of the `ExtraBuffer` should be displayed in.
+    """
+
+    output: Output
+    """
+    The `Output` collection of `OutputItem`s to be displayed in the `ExtraBuffer`.
+    """
+
+    scroll_pos: int
+    """
+    The scroll position of the `ExtraBuffer`.
+    """
+
+    max_scroll: int
+    """
+    The maximum `scroll_pos` of the `ExtraBuffer`.
+    """
+
+    def __init__(self, layout_name: str):
+        """
+        Create a new `BufferConfig` with the given `layout_name`.
+        """
+        ...
 
 class ExtraBuffer:
     """
@@ -749,7 +1255,15 @@ class ExtraBuffer:
     An extra buffer for displaying output. Typically created by and used by scripts.
     """
 
-    ...
+    id: BufferId
+    """
+    The `BufferId` assigned to the buffer.
+    """
+
+    config: BufferConfig
+    """
+    The `BufferConfig` of the `ExtraBuffer`
+    """
 
 class MudpuppyCore:
     def config(self) -> Config:
@@ -1056,12 +1570,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def new_timer(
-        self, session_id: SessionId, config: TimerConfig, module: str
-    ) -> TimerId:
+    async def new_timer(self, config: TimerConfig, module: str) -> TimerId:
         """
-        Creates a new `Timer` for the given session configured with
-        the given `TimerConfig`.
+        Creates a new `Timer` configured with the given `TimerConfig`.
 
         Returns a `TimerId` that can be used with `MudpuppyCore.get_timer()`,
         `MudpuppyCore.stop_timer()` and `MudpuppyCore.remove_timer()`.
@@ -1073,19 +1584,18 @@ class MudpuppyCore:
         ...
 
     async def get_timer(
-        self, session_id: SessionId, timer_id: TimerId
+        self, timer_id: TimerId
     ) -> Optional[Timer]:
         """
-        Returns the `Timer` for the given `TimerId` if it exists for the provided session.
+        Returns the `Timer` for the given `TimerId` if it exists.
 
         See `MudpuppyCore.new_timer()` for creating timers.
         """
         ...
 
-    async def stop_timer(self, session_id: SessionId, timer_id: TimerId):
+    async def stop_timer(self, timer_id: TimerId):
         """
-        Disables the timer with the given `TimerId` for the given session if it
-        is currently enabled.
+        Disables the timer with the given `TimerId` if it is currently enabled.
 
         The timer will no longer be evaluated when the timer interval elapses.
 
@@ -1095,10 +1605,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def start_timer(self, session_id: SessionId, timer_id: TimerId):
+    async def start_timer(self, timer_id: TimerId):
         """
-        Starts a timer with the given `TimerId` for the given session if it
-        was previously stopped.
+        Starts a timer with the given `TimerId` if it was previously stopped.
 
         You can use `MudpuppyCore.get_timer()` to get a `Timer` to determine if
         it is currently enabled or disabled. Use `MudpuppyCore.disable_timer()` to
@@ -1106,10 +1615,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_timer(self, session_id: SessionId, timer_id: TimerId):
+    async def remove_timer(self, timer_id: TimerId):
         """
-        Removes the timer with the given `TimerId` for the given session if it
-        exists.
+        Removes the timer with the given `TimerId` if it exists.
 
         The timer will be deleted and its `TimerId` will no longer be valid. You
         will need to recreate it with `MudpuppyCore.new_timer()` if you want to
@@ -1120,18 +1628,18 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_module_timers(self, session_id: SessionId, module: str):
+    async def remove_module_timers(self, module: str):
         """
-        Removes all timers created by the given module for the given session.
+        Removes all timers created by the given module.
 
         This is useful when a module is reloaded and timers need to be recreated
         to avoid duplicates.
         """
         ...
 
-    async def timers(self, session_id: SessionId) -> list[Timer]:
+    async def timers(self) -> list[Timer]:
         """
-        Returns a list of `Timer` instances for the given session.
+        Returns a list of `Timer` instances.
         """
         ...
 
@@ -1164,6 +1672,14 @@ class MudpuppyCore:
         This is the primary mechanism of displaying data to the user.
 
         Use `MudpuppyCore.add_outputs()` if you have a `list[OutputItem]` to add.
+        """
+        ...
+
+    async def add_outputs(self, session_id: SessionId, outputs: list[OutputItem]):
+        """
+        Adds a list of `OutputItem` instances to the main output buffer for the given session.
+
+        USe `MudpuppyCore.add_output()` if you only have one `OutputItem` to add.
         """
         ...
 
@@ -1378,7 +1894,7 @@ class Shortcut(StrEnum):
     A shortcut to navigate to the next line in the input history.
     """
 
-    HistoryPrev = auto()
+    HistoryPrevious = auto()
     """
     A shortcut to navigate to the previous line in the input history.
     """
@@ -1526,6 +2042,14 @@ class Event:
     The callback will be provided an `Event` of the matching type as an
     argument.
     """
+
+    def session_id(self) -> Optional[SessionId]:
+        """
+        Returns the `SessionId` associated with the event, if any.
+
+        Returns `None` for global events.
+        """
+        ...
 
     class NewSession:
         """
@@ -1690,7 +2214,7 @@ class Event:
         The `SessionId` that sent the input line.
         """
 
-        line: InputLine
+        input: InputLine
         """
         The line of input that was sent.
         """
@@ -1766,9 +2290,9 @@ class Event:
         The `SessionId` that received the GMCP message.
         """
 
-        module: str
+        package: str
         """
-        The GMCP module name that the message is for.
+        The GMCP package name that the message is for.
         """
 
         json: str
@@ -1826,25 +2350,6 @@ class Event:
         """
         The `SessionId` that is being resumed.
         """
-
-class BufferDirection(StrEnum):
-    """
-    Describes what direction an `ExtraBuffer` should render its contents.
-    """
-
-    BottomToTop = auto()
-    """
-    The default direction, and the way the standard MUD output buffer works.
-
-    Newer items should be rendered first, at the bottom of the buffer. Older
-    items will be rendered afterwards towards the top of the buffer.
-    """
-
-    TopToBottom = auto()
-    """
-    Older items should be rendered first, at the top of the buffer. Newer items
-    will be rendered afterwards, towards the bottom of the buffer.
-    """
 
 class PromptSignal(StrEnum):
     """
@@ -2042,20 +2547,16 @@ class Input:
         """
         ...
 
-class Direction(StrEnum):
-    """
-    A direction to use when creating new layout nodes.
-    """
+type EventHandler = Callable[[Event], Awaitable[None]]
+"""
+An async function that handles a `mudpuppy_core.Event` object as its sole argument.
 
-    Horizontal = auto()
-    """
-    Create new sections in the horizontal direction.
-    """
-
-    Vertical = auto()
-    """
-    Create new sections in the vertical direction.
-    """
+Example:
+```python
+async def my_event_handler(event: mudpuppy_core.Event):
+    print(f"my_event_handler received event {event}")
+```
+"""
 
 class EventHandlers:
     """
@@ -2066,7 +2567,7 @@ class EventHandlers:
     def add_handler(
         self,
         event_type: EventType,
-        handler: Callable[[Event], Awaitable[None]],
+        handler: EventHandler,
         module: str,
     ):
         """
@@ -2088,7 +2589,7 @@ class EventHandlers:
 
     def get_handlers(
         self, event_type: EventType
-    ) -> Optional[list[Callable[[Event], Awaitable[None]]]]:
+    ) -> Optional[list[EventHandler]]:
         """
         Returns a list of handlers for the given `EventType` if any are registered.
         """
@@ -2097,107 +2598,6 @@ class EventHandlers:
     def get_handler_events(self) -> list[EventType]:
         """
         Returns a list of `EventType`s for which handlers are registered.
-        """
-        ...
-
-class Constraint:
-    """
-    A `LayoutNode` constraint.
-    """
-
-    percentage: Optional[int]
-    """
-    Set when the `Constraint` is a percentage constraint.
-    """
-
-    ratio: Optional[tuple[int, int]]
-    """
-    Set when the `Constraint` is a ratio constraint.
-    """
-
-    length: Optional[int]
-    """
-    Set when the `Constraint` is a length constraint.
-    """
-
-    max: Optional[int]
-    """
-    Set when the `Constraint` is a max constraint.
-    """
-
-    min: Optional[int]
-    """
-    Set when the `Constraint` is a min constraint.
-    """
-
-    @staticmethod
-    def with_percentage(percentage: int) -> "Constraint":
-        """
-        Creates a new `Constraint` with a percentage constraint.
-        """
-        ...
-
-    def set_percentage(self, percentage: int):
-        """
-        Sets the percentage constraint.
-        """
-        ...
-
-    @staticmethod
-    def with_ratio(ratio: tuple[int, int]) -> "Constraint":
-        """
-        Creates a new `Constraint` with a ratio constraint.
-        """
-        ...
-
-    def set_ratio(self, ratio: tuple[int, int]):
-        """
-        Sets the ratio constraint.
-        """
-        ...
-
-    @staticmethod
-    def with_length(length: int) -> "Constraint":
-        """
-        Creates a new `Constraint` with a length constraint.
-        """
-        ...
-
-    def set_length(self, length: int):
-        """
-        Sets the length constraint.
-        """
-        ...
-
-    @staticmethod
-    def with_max(max: int) -> "Constraint":
-        """
-        Creates a new `Constraint` with a max constraint.
-        """
-        ...
-
-    def set_max(self, max: int):
-        """
-        Sets the max constraint.
-        """
-        ...
-
-    @staticmethod
-    def with_min(min: int) -> "Constraint":
-        """
-        Creates a new `Constraint` with a min constraint.
-        """
-        ...
-
-    def set_min(self, min: int):
-        """
-        Sets the min constraint.
-        """
-        ...
-
-    def set_from(self, other: "Constraint"):
-        """
-        Sets the values of this `Constraint` from another `Constraint`.
         """
         ...
 
@@ -2220,14 +2620,15 @@ print(f"running {version}")
 
 event_handlers: EventHandlers
 """
-An `EventHandlers` instance for registering event handlers with the client.
+An `EventHandlers` instance for registering `EventHandler` instances
+with the client.
 
 It is automatically set up when Mudpuppy is running and has loaded your scripts.
 
-You will typically want to use the `mudpuppy` decorators instead of directly
-interacting with the `EventHandlers`.
+You will typically want to use the `mudpuppy` decorators (e.g. `mudpuppy.on_event()`)
+instead of directly interacting with the `EventHandlers`.
 
-To manually register an event handler, you can use `EventHandlers.add_handler()`:
+To manually register an `EventHandler`, you can use `EventHandlers.add_handler()`:
 
 ```python
 from mudpuppy_core import mudpuppy_core, event_handlers, Event, EventType

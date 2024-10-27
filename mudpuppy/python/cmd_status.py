@@ -50,6 +50,7 @@ class StatusCmd(Command):
             return items
 
         info = status.info
+        assert isinstance(info, StreamInfo.Tcp) or isinstance(info, StreamInfo.Tls)
         items.append(OutputItem.command_result(f"IP: {info.ip}"))
         items.append(OutputItem.command_result(f"Port: {info.port}"))
         if not isinstance(info, StreamInfo.Tls):
@@ -65,4 +66,5 @@ class StatusCmd(Command):
 
 @on_new_session()
 async def setup(event: Event):
+    assert isinstance(event, Event.NewSession)
     add_command(event.id, StatusCmd(event.id))

@@ -1,3 +1,4 @@
 [tool.pyright]
 include = ["mudpuppy/python", "python-examples"]
-stubPath = "python-typings"
+stubPath = "python-stubs"
+reportMissingModuleSource = false

@@ -20,9 +20,9 @@ class TelnetNawsHandler:
         self.state = {}
 
     @staticmethod
-    def on_connect(session: SessionId):
+    async def on_connect(session: SessionId):
         logging.debug(f"naws: enabling Telnet NAWS protocol for conn {session}")
-        mudpuppy_core.request_enable_option(session, NAWS_OPTION)
+        await mudpuppy_core.request_enable_option(session, NAWS_OPTION)
 
     def on_enabled(self, session: SessionId):
         logging.debug(f"naws: enabled for conn {session}")
@@ -34,10 +34,10 @@ class TelnetNawsHandler:
         logging.debug(f"naws: disabled for conn {session}")
         del self.state[session]
 
-    def resize(self, session: SessionId, columns: int, rows: int):
+    async def resize(self, session: SessionId, columns: int, rows: int):
         logging.debug(f"naws: session {session} resized to {columns}x{rows}")
         self.state[session] = (columns, rows)
-        mudpuppy_core.send_subnegotiation(
+        await mudpuppy_core.send_subnegotiation(
             session,
             NAWS_OPTION,
             struct.pack(">HH", columns, rows),
@@ -46,16 +46,19 @@ class TelnetNawsHandler:
 
 @on_connected()
 async def connected(event: Event):
-    handler.on_connect(event.id)
+    assert isinstance(event, Event.Connection)
+    await handler.on_connect(event.id)
 
 
 @on_disconnected()
 async def disconnected(event: Event):
+    assert isinstance(event, Event.Connection)
     handler.on_disabled(event.id)
 
 
 @on_event(EventType.OptionEnabled)
 async def telnet_option_enabled(event: Event):
+    assert isinstance(event, Event.OptionEnabled)
     if event.option != NAWS_OPTION:
         return
     handler.on_enabled(event.id)
@@ -63,6 +66,7 @@ async def telnet_option_enabled(event: Event):
 
 @on_event(EventType.OptionDisabled)
 async def telnet_option_disabled(event: Event):
+    assert isinstance(event, Event.OptionDisabled)
     if event.option != NAWS_OPTION:
         return
     handler.on_disabled(event.id)
@@ -70,7 +74,8 @@ async def telnet_option_disabled(event: Event):
 
 @on_event(EventType.BufferResized)
 async def buffer_resized(event: Event):
-    handler.resize(event.id, event.dimensions[0], event.dimensions[1])
+    assert isinstance(event, Event.BufferResized)
+    await handler.resize(event.id, event.dimensions[0], event.dimensions[1])
 
 
 handler = TelnetNawsHandler()

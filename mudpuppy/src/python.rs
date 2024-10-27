@@ -61,6 +61,7 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PromptMode>()?;
     m.add_class::<client::Status>()?;
     m.add_class::<net::stream::Info>()?;
+    m.add_class::<client::output::Output>()?;
     m.add_class::<client::output::Item>()?;
     m.add_class::<client::input::Input>()?;
     m.add_class::<client::input::EchoState>()?;

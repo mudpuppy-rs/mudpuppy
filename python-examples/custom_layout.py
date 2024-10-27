@@ -113,7 +113,7 @@ class TestCustomLayout:
         logging.debug(f"resizing status area by {amount}")
         constraint = manager.get_constraint(self.session_id, STATUS_SECTION)
         logging.debug(f"current: {constraint}")
-        if constraint.percentage == 0:
+        if constraint.percentage is None or constraint.percentage == 0:
             return
         constraint.set_from(Constraint.with_percentage(constraint.percentage + amount))
         logging.debug(f"now: {constraint}")
@@ -131,7 +131,7 @@ class TestCustomLayout:
         logging.debug(f"resizing channel area by {amount}")
         constraint = manager.get_constraint(self.session_id, CHANNEL_CAPTURE_SECTION)
         logging.debug(f"current: {constraint}")
-        if constraint.percentage == 0:
+        if constraint.percentage is None or constraint.percentage == 0:
             return
         constraint.set_from(Constraint.with_percentage(constraint.percentage + amount))
         logging.debug(f"now: {constraint}")
@@ -153,6 +153,8 @@ async def layout_init(session: SessionInfo, layout_manager: LayoutManager):
 @on_event(EventType.KeyPress)
 async def on_key(event: Event):
     import json
+
+    assert isinstance(event, Event.KeyPress)
 
     key_data = json.loads(event.json)
     layout = layouts.get(event.id)
