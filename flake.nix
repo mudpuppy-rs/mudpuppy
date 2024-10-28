@@ -48,13 +48,7 @@
               inherit (mudpuppyCargoToml.package) name version;
               src = ./.;
               buildAndTestSubdir = "mudpuppy";
-              cargoLock = {
-                lockFile = ./Cargo.lock;
-                outputHashes = {
-                  "pyo3-async-runtimes-0.21.0" =
-                    "sha256-+zMamQGI5xyEDc8356/fKKft+7ABS0a9EcwDa1L/mOc=";
-                };
-              };
+              cargoLock.lockFile = ./Cargo.lock;
               buildFeatures = features;
               buildInputs = runtimeDeps;
               nativeBuildInputs = buildDeps;
