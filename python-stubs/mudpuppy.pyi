@@ -71,7 +71,7 @@ def on_event(
     ```python
     @on_event(mudpuppy_core.EventType.Subnegotiation)
     async def telnet_subneg_receive(event: mudpuppy_core.Event):
-        assert(instanceof(event, mudpuppy_core.Event.Subnegotiation))
+        assert isinstance(event, mudpuppy_core.Event.Subnegotiation)
         if event.option != 42:
             return
         print(f"telnet CHARSET subneg. for session {event.id}: {event.data.hex()}")
@@ -93,7 +93,7 @@ def on_mud_event(
     ```python
     @on_mud_event(["Test (TLS)", "Test (Telnet)"], mudpuppy_core.EventType.Prompt)
     async def prompt_handler(event: mudpuppy_core.Event):
-        assert(instanceof(event, mudpuppy_core.Event.Prompt))
+        assert isinstance(event, mudpuppy_core.Event.Prompt)
         print(f"Test MUD received prompt: {str(event.prompt)}")
     ```
     """
@@ -155,7 +155,7 @@ def on_new_session(
     ```python
     @on_new_session()
     async def new_session_handler(event: mudpuppy_core.Event):
-        assert(instanceof(event, mudpuppy_core.Event.NewSession))
+        assert instance(event, mudpuppy_core.Event.NewSession)
         print(f"new {event.mud} session created: {event.id}")
     ```
     """
@@ -174,8 +174,8 @@ def on_mud_new_session(
     ```python
     @on_mud_new_session("Test (TLS)")
     async def new_session_handler(event: mudpuppy_core.Event):
-        assert(instanceof(event, mudpuppy_core.Event.NewSession))
-        assert(event.mud.name == "Test (TLS)")
+        assert isinstance(event, mudpuppy_core.Event.NewSession)
+        assert event.mud.name == "Test (TLS)"
         print(f"new {event.mud} session created: {event.id}")
     ```
     """
@@ -204,9 +204,9 @@ def on_new_session_or_reload(
     ```python
     @on_new_session_or_reload()
     async def new_or_resumed_handler(event: mudpuppy_core.Event):
-        if instanceof(event, mudpuppy_core.Event.ResumeSession):
+        if isinstance(event, mudpuppy_core.Event.ResumeSession):
             print(f"resuming session: {event.id}")
-        elif instanceof(event, mudpuppy_core.Event.NewSession):
+        elif isinstance(event, mudpuppy_core.Event.NewSession):
             print(f"new {event.mud} session created: {event.id}")
     ```
     """
@@ -245,8 +245,8 @@ def on_connected(
     ```python
     @on_connected()
     async def connected_handler(event: mudpuppy_core.Event):
-        assert(instanceof(event, mudpuppy_core.Event.Connection))
-        assert(instanceof(event.status, mudpuppy_core.Status.Connected))
+        assert isinstance(event, mudpuppy_core.Event.Connection)
+        assert isinstance(event.status, mudpuppy_core.Status.Connected)
         print(f"session {event.id} connected: {event.status}")
     ```
     """
@@ -285,8 +285,8 @@ def on_disconnected(
     ```python
     @on_disconnected()
     async def disconnected_handler(event: mudpuppy_core.Event):
-        assert(instanceof(event, mudpuppy_core.Event.Connection))
-        assert(instanceof(event.status, mudpuppy_core.Status.Disconnected))
+        assert isinstance(event, mudpuppy_core.Event.Connection)
+        assert isinstance(event.status, mudpuppy_core.Status.Disconnected)
         print(f"session {event.id} disconnected")
     ```
     """
@@ -353,7 +353,7 @@ def alias(
 
     @alias(mud_name="Test (TLS)", pattern="^kill (.*)$", name="Start combat alias")
     async def start_combat(session_id: SessionId, _alias_id: AliasId, _line: str, groups: list[str]):
-        assert(len(groups) == 1)
+        assert len(groups) == 1
         target = groups[0]
         await mudpuppy_core.send(session_id, f"backstab {target}")
         await asyncio.sleep(10)
@@ -573,7 +573,7 @@ def timer(
     async def auto_save(
         _timer_id: TimerId, session_id: Optional[SessionId]
     ):
-        assert(session_id is not None)
+        assert session_id is not None
         await mudpuppy_core.send_line(session_id, "save")
     ```
     """

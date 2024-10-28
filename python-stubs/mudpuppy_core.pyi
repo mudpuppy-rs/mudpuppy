@@ -407,7 +407,7 @@ from cformat import cformat
 
 # Note: **not async**!
 def example_highlight_callable(line: MudLine, groups):
-    assert(len(groups) == 1)
+    assert len(groups) == 1
     new_line = line.__str__().replace(
         groups[0], cformat(f"<bold><cyan>{groups[0]}<reset>")
     )
