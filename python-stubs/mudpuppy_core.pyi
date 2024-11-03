@@ -1358,6 +1358,19 @@ class MudpuppyCore:
 
         The input will be marked as "scripted" to differentiate it from true user input
         typed at the keyboard.
+
+        Prefer using `MudpuppyCore.send_lines()` for sending multiple lines.
+        """
+        ...
+
+    async def send_lines(self, session_id: SessionId, lines: list[str]):
+        """
+        Sends a list of lines of text to the given session as if they were input sent by the user.
+
+        The input will be marked as "scripted" to differentiate it from true user input
+        typed at the keyboard.
+
+        Prefer using `MudpuppyCore.send_line()` for sending a single line.
         """
         ...
 
