@@ -296,6 +296,11 @@ class Mud:
     Describes the TLS configuration for the MUD.
     """
 
+    command_separator: Optional[str]
+    """
+    An optional command separator to use when sending multiple commands in a single line.
+    """
+
 class MudLine:
     """
     A line received from a MUD.
@@ -1359,7 +1364,24 @@ class MudpuppyCore:
         The input will be marked as "scripted" to differentiate it from true user input
         typed at the keyboard.
 
+        [Command splitting](https://mudpuppy-rs.github.io/mudpuppy/user-guide/input.html#command-splitting) 
+        works the same as for normal user input.
+
+        Unlike true user input, aliases are **not** evaluated for `send_line()`
+        input. This also means it isn't possible to send slash
+        [command](https://mudpuppy-rs.github.io/mudpuppy/user-guide/commands.html)
+        input in this manner.
+
         Prefer using `MudpuppyCore.send_lines()` for sending multiple lines.
+
+        Example:
+
+        ```python
+        from mudpuppy_core import mudpuppy_core
+        session_id = ...
+        mudpuppy_core.send_line(session_id, "hello") # Sends 'hello'
+        mudpuppy_core.send_line(session_id, "hello;;wave") # Sends 'hello' and then 'wave'
+        ```
         """
         ...
 

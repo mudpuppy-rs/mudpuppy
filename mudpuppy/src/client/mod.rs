@@ -160,38 +160,24 @@ impl Client {
             ..
         } = event
         {
-            let orig_input = self.input.pop().unwrap_or_default();
-            let mut input = Some(orig_input.clone());
-            let session_id = self.info.id;
-
-            for alias in self.aliases.values_mut().filter(|alias| alias.enabled) {
-                Self::evaluate_alias(session_id, alias, &mut input, futures)?;
-            }
-
-            if let Some(input) = input {
-                let input_line = InputLine {
-                    sent: input.clone(),
-                    original: if input == orig_input {
-                        None
-                    } else {
-                        Some(orig_input)
-                    },
-                    scripted: false,
-                    echo: self.input.echo(),
-                };
-                return self.send_line(input_line);
-            }
-
-            let input_line = InputLine::new(
-                orig_input.clone(),
-                self.input.echo() == EchoState::Enabled,
-                false,
-            );
-            self.event_tx.send(python::Event::InputLine {
-                id: self.info.id,
-                input: input_line.clone(),
-            })?;
-            self.output.push(output::Item::Input { line: input_line });
+            return match self.input.pop().map(|s| s.trim().to_string()) {
+                Some(s) if !s.is_empty() => {
+                    let mud = self.config.must_lookup_mud(&self.info.mud_name)?;
+                    match mud.command_separator {
+                        Some(sep) => {
+                            for fragment in s.split(&sep).filter_map(|f| match f.trim() {
+                                "" => None,
+                                trimmed => Some(trimmed),
+                            }) {
+                                self.transmit_input(fragment.to_string(), futures)?;
+                            }
+                            Ok(())
+                        }
+                        None => self.transmit_input(s, futures),
+                    }
+                }
+                _ => Ok(()),
+            };
         }
         self.input.handle_key_event(event);
         self.event_tx.send(python::Event::KeyPress {
@@ -199,6 +185,41 @@ impl Client {
             // TODO(XXX): using json serialization as a quick hack. Unpack data we need instead.
             json: serde_json::to_string(&event).unwrap_or_default(),
         })?;
+        Ok(())
+    }
+
+    fn transmit_input(
+        &mut self,
+        orig_input: String,
+        futures: &mut FuturesUnordered<python::PyFuture>,
+    ) -> Result<(), Error> {
+        let mut input = Some(orig_input.clone());
+        let session_id = self.info.id;
+
+        for alias in self.aliases.values_mut().filter(|alias| alias.enabled) {
+            Self::evaluate_alias(session_id, alias, &mut input, futures)?;
+        }
+
+        if let Some(input) = input {
+            let input_line = InputLine {
+                sent: input.clone(),
+                original: if input == orig_input {
+                    None
+                } else {
+                    Some(orig_input)
+                },
+                scripted: false,
+                echo: self.input.echo(),
+            };
+            return self.send_line(input_line);
+        }
+
+        let input_line = InputLine::new(orig_input, self.input.echo() == EchoState::Enabled, false);
+        self.event_tx.send(python::Event::InputLine {
+            id: self.info.id,
+            input: input_line.clone(),
+        })?;
+        self.output.push(output::Item::Input { line: input_line });
         Ok(())
     }
 
@@ -278,10 +299,31 @@ impl Client {
     ///
     /// # Errors
     /// If the client is not connected.
-    #[instrument(level = Level::TRACE, skip(self, line), fields(sent = %line, original = ?line.original))]
+    #[instrument(level = Level::TRACE, skip(self, line), fields(sent = ?line.sent, original = ?line.original, scripted = ?line.scripted))]
     pub fn send_line(&mut self, line: InputLine) -> Result<(), Error> {
-        debug!("sending line");
-        // TODO(XXX): data send event.
+        let mud = self.config.must_lookup_mud(&self.info.mud_name)?;
+
+        match &mud.command_separator {
+            Some(sep) => {
+                for fragment in line.sent.split(sep) {
+                    if fragment.trim() == "" {
+                        continue;
+                    }
+                    self.send_line_internal(InputLine::new(
+                        fragment.to_string(),
+                        bool::from(line.echo),
+                        line.scripted,
+                    ))?;
+                }
+                Ok(())
+            }
+            None => self.send_line_internal(line),
+        }
+    }
+
+    #[instrument(level = Level::TRACE, skip(self, line), fields(sent = ?line.sent))]
+    fn send_line_internal(&mut self, line: InputLine) -> Result<(), Error> {
+        debug!("send");
         self.connected_handle()?
             .send(connection::Action::Send(TelnetItem::Line(
                 line.sent.clone().into(),
@@ -621,11 +663,13 @@ impl Client {
         futures: &mut FuturesUnordered<python::PyFuture>,
     ) -> Result<(), Error> {
         Python::with_gil(|py| {
+            let Some(input_str) = input else {
+                return Ok::<_, Error>(());
+            };
+
             let mut alias_config: PyRefMut<'_, AliasConfig> = alias.config.extract(py)?;
 
-            // Safety: input is always Some(), we only use an option so the alias can replace
-            //  w/ None to avoid sending anything.
-            let (matched, groups) = alias_config.matches(input);
+            let (matched, groups) = alias_config.matches(input_str);
             if !matched {
                 return Ok::<_, Error>(());
             }
