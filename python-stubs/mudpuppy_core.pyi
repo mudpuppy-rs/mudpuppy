@@ -1596,9 +1596,7 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_timer(
-        self, timer_id: TimerId
-    ) -> Optional[Timer]:
+    async def get_timer(self, timer_id: TimerId) -> Optional[Timer]:
         """
         Returns the `Timer` for the given `TimerId` if it exists.
 
@@ -2600,9 +2598,7 @@ class EventHandlers:
         """
         ...
 
-    def get_handlers(
-        self, event_type: EventType
-    ) -> Optional[list[EventHandler]]:
+    def get_handlers(self, event_type: EventType) -> Optional[list[EventHandler]]:
         """
         Returns a list of handlers for the given `EventType` if any are registered.
         """
