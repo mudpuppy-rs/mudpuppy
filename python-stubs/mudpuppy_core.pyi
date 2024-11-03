@@ -1321,7 +1321,7 @@ class MudpuppyCore:
         For more control over output, use `MudpuppyCore.add_output()` instead.
         """
 
-    async def active_session(self) -> Optional[SessionId]:
+    async def active_session_id(self) -> Optional[SessionId]:
         """
         Returns the ID of the currently active session, or `None` if no session
         is active.
