@@ -1,10 +1,12 @@
 import inspect
 import json
 import logging
+import warnings
 from typing import Any, Awaitable, Callable, List, Optional, Union
 
 from mudpuppy_core import (
     AliasConfig,
+    OutputItem,
     AliasId,
     Event,
     EventType,
@@ -469,3 +471,27 @@ def unload_handlers(module: str):
         )
         handlers_list[:] = [h for h in handlers_list if h[1] != module]  # type: ignore
         logging.debug(f"event type {event_type} now has {len(handlers_list)} handlers")
+
+
+def custom_showwarning(message, category, filename, lineno, _file=None, _line=None):
+    # Log the warning to the mudpuppy log file.
+    full_msg = f"{filename}:{lineno}: {category.__name__}: {message}"
+    logging.warning(full_msg)
+
+    async def handle_runtime_warning(full_msg: str):
+        sesh_id = await mudpuppy_core.active_session_id()
+        if sesh_id is None:
+            return
+
+        await mudpuppy_core.add_outputs(
+            sesh_id,
+            [OutputItem.failed_command_result(line) for line in full_msg.splitlines()],
+        )
+
+    import asyncio
+
+    asyncio.create_task(handle_runtime_warning(full_msg))
+
+
+# Set up custom warning handling
+warnings.showwarning = custom_showwarning
