@@ -267,11 +267,8 @@ impl GlobalConfig {
     ///
     /// Returns an error if the MUD can't be found in the configuration by the given name.
     pub fn must_lookup_mud(&self, mud_name: &str) -> Result<Mud> {
-        self.lookup(
-            |config| config.muds.iter().find(|m| m.name == mud_name).cloned(),
-            None,
-        )
-        .ok_or(Error::Config(ConfigError::MissingMud(mud_name.to_string())))
+        self.lookup_mud(mud_name)
+            .ok_or(ConfigError::MissingMud(mud_name.to_string()).into())
     }
 }
 

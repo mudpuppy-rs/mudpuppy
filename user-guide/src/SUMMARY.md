@@ -6,6 +6,7 @@
 
 - [Command line](cli.md)
 - [Config](config.md)
+- [Input](input.md)
 - [Commands](commands.md)
 - [Logging](logging.md)
 - [Scripting](scripting/README.md)

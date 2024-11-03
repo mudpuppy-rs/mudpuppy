@@ -109,6 +109,10 @@ pub struct Mud {
     /// output history.
     #[serde(default = "default::splitview_margin_vertical")]
     pub splitview_margin_vertical: u16,
+
+    /// The command separator to use when sending multiple commands in a single message.
+    #[serde(default = "default::command_separator")]
+    pub command_separator: Option<String>,
 }
 
 impl Display for Mud {
@@ -587,10 +591,7 @@ impl AliasConfig {
     ///
     // TODO(XXX): Tidy, remove unwrap.
     #[must_use]
-    pub fn matches(&self, input: &Option<String>) -> (bool, Option<Vec<String>>) {
-        let Some(input) = input else {
-            return (false, None);
-        };
+    pub fn matches(&self, input: &str) -> (bool, Option<Vec<String>>) {
         match self.regex.captures(input) {
             Some(matches) => {
                 let captures = matches
@@ -781,5 +782,10 @@ mod default {
 
     pub(super) fn no_tcp_keepalive() -> bool {
         false
+    }
+
+    #[allow(clippy::unnecessary_wraps)] // Matching config field.
+    pub(super) fn command_separator() -> Option<String> {
+        Some(";;".to_string())
     }
 }

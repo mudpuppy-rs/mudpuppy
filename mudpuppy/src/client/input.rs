@@ -328,6 +328,15 @@ impl Display for EchoState {
     }
 }
 
+impl From<EchoState> for bool {
+    fn from(state: EchoState) -> Self {
+        match state {
+            EchoState::Enabled => true,
+            EchoState::Password => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
