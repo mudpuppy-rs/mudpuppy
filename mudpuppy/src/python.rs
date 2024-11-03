@@ -352,6 +352,23 @@ impl PyApp {
         })
     }
 
+    fn send_lines<'py>(
+        &self,
+        py: Python<'py>,
+        id: SessionId,
+        lines: Vec<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        with_state!(self, py, |mut state| {
+            for line in lines {
+                state
+                    .client_for_id_mut(id)
+                    .ok_or(Error::from(id))?
+                    .send_line(InputLine::new(line, true, true))?;
+            }
+            Ok(())
+        })
+    }
+
     fn connect<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
