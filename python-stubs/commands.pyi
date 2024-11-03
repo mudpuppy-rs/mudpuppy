@@ -78,6 +78,13 @@ class Command:
         """Called by the arg parser when an error occurs"""
         ...
 
+    async def invoke(self, sesh_id: mudpuppy_core.SessionId, args: str):
+        """
+        Invoke the command for the provided `mudpuppy_core.SessionId` by parsing `args` with the `Command`'s
+        parser.
+        """
+        ...
+
 def add_command(sesh_id: mudpuppy_core.SessionId, command: Command):
     """
     Register the given `Command` as usable by the given `mudpuppy_core.SessionId`.

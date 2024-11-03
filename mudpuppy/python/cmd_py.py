@@ -1,5 +1,6 @@
 import logging
-from argparse import Namespace
+from argparse import Namespace, REMAINDER
+import inspect
 
 from commands import Command, add_command
 from mudpuppy_core import Event, OutputItem, SessionId, mudpuppy_core
@@ -12,36 +13,51 @@ class Python(Command):
         super().__init__(
             "python", session, self.run, "Run Python code", aliases=["py", "eval"]
         )
-        self.parser.add_argument("code", nargs="+", help="Code to execute or evaluate")
+        self.parser.add_argument(
+            "code", nargs=REMAINDER, help="Code to execute or evaluate"
+        )
+
+        import commands
+        import history
+        import mudpuppy
+
+        self.eval_globals = globals().copy()
+        self.eval_globals.update(
+            {
+                "history": history,
+                "commands": commands,
+                "mudpuppy": mudpuppy,
+                "config": mudpuppy_core.config(),
+                "session": session,
+                "session_info": None,
+            }
+        )
+
+    async def invoke(self, sesh_id: SessionId, args: str):
+        processed_args = args.replace(r'"', r"\"")
+        processed_args = processed_args.replace(r"'", r"\'")
+        await super().invoke(sesh_id, processed_args)
 
     async def run(self, sesh_id: SessionId, args: Namespace):
-        code = " ".join(args.code if args.code is not None else [])
+        code = " ".join(args.code) if args.code else ""
         logging.debug(
             f"pycmd: eval: {code}",
         )
         try:
-            import commands
-            import history
-
-            import mudpuppy
-
             session_info = await mudpuppy_core.session_info(sesh_id)
+            self.eval_globals["session_info"] = session_info
 
-            eval_globals = globals().copy()
-            eval_globals.update(
-                {
-                    "history": history,
-                    "commands": commands,
-                    "mudpuppy": mudpuppy,
-                    "config": mudpuppy_core.config(),
-                    "session": sesh_id,
-                    "session_info": session_info,
-                }
-            )
-            result = eval(code, eval_globals)
-            await mudpuppy_core.add_output(
-                sesh_id, OutputItem.command_result(repr(result))
-            )
+            try:
+                result = eval(code, self.eval_globals)
+                if inspect.isawaitable(result):
+                    result = await result
+                if result is not None:
+                    await mudpuppy_core.add_output(
+                        sesh_id, OutputItem.command_result(repr(result))
+                    )
+            except SyntaxError:
+                exec(code, self.eval_globals)
+
         except Exception as e:
             await mudpuppy_core.add_output(
                 sesh_id, OutputItem.failed_command_result(f"Error running code: {e}")
