@@ -196,31 +196,49 @@ impl Client {
         let mut input = Some(orig_input.clone());
         let session_id = self.info.id;
 
+        // Run the line through each enabled alias to see if any match. A mutable ref to the input
+        // is passed to allow changing it, or  replacing it with None.
         for alias in self.aliases.values_mut().filter(|alias| alias.enabled) {
             Self::evaluate_alias(session_id, alias, &mut input, futures)?;
         }
 
-        if let Some(input) = input {
-            let input_line = InputLine {
-                sent: input.clone(),
-                original: if input == orig_input {
-                    None
-                } else {
-                    Some(orig_input)
-                },
-                scripted: false,
-                echo: self.input.echo(),
-            };
-            return self.send_line(input_line);
+        // If the alias replaced input with none we want to skip transmitting a line to the MUD
+        // but still want to record the input event.
+        let skip_transmit = input.is_none();
+
+        let mut input_line = InputLine {
+            sent: orig_input.clone(),
+            original: None,
+            scripted: false,
+            echo: self.input.echo(),
+        };
+
+        // If the alias expanded the input (or replaced it with None) then we change what is sent
+        // and preserve the original input as such.
+        if input != Some(orig_input) {
+            trace!("input was mutated by alias");
+            input_line.original = Some(input_line.sent);
+            input_line.sent = input.unwrap_or_default();
         }
 
-        let input_line = InputLine::new(orig_input, self.input.echo() == EchoState::Enabled, false);
-        self.event_tx.send(python::Event::InputLine {
-            id: self.info.id,
-            input: input_line.clone(),
-        })?;
-        self.output.push(output::Item::Input { line: input_line });
-        Ok(())
+        // If we're not transmitting anything, send an event and add the input to the output
+        // buffer as if it were sent.
+        if skip_transmit {
+            trace!("pushing non-transmitted line: {input_line:?}");
+            self.output.push(output::Item::Input {
+                line: input_line.clone(),
+            });
+            self.event_tx.send(python::Event::InputLine {
+                id: self.info.id,
+                input: input_line,
+            })?;
+            return Ok(());
+        }
+
+        // If there's a line to send, send it. The internal send line machinery will add it
+        // to our output and emit the event.
+        trace!("transmitting line: {input_line:?}");
+        self.send_line(input_line.clone())
     }
 
     /// Connect the client to the MUD server.
@@ -309,11 +327,12 @@ impl Client {
                     if fragment.trim() == "" {
                         continue;
                     }
-                    self.send_line_internal(InputLine::new(
-                        fragment.to_string(),
-                        bool::from(line.echo),
-                        line.scripted,
-                    ))?;
+                    let mut line = line.clone();
+                    if line.sent != fragment {
+                        line.original = Some(line.sent);
+                        line.sent = fragment.to_string();
+                    }
+                    self.send_line_internal(line)?;
                 }
                 Ok(())
             }
