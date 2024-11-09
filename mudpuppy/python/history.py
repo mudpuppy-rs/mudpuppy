@@ -8,6 +8,7 @@ from mudpuppy_core import (
     SessionInfo,
     Shortcut,
     mudpuppy_core,
+    OutputItem,
 )
 
 from mudpuppy import on_event, on_new_session
@@ -18,6 +19,9 @@ class History:
     lines: list[InputLine]
     max_lines: int
     cursor_pos: Optional[int] = None
+    # When input matched an alias, should the history be populated with the _input_ to the alias (default) or what
+    # was sent to the game when the alias was expanded?
+    use_alias_expanded: bool = False
 
     def __init__(self, session: SessionInfo, max_lines: int = 1000):
         self.session = session
@@ -25,53 +29,92 @@ class History:
         self.lines = []
         logging.debug(f"history constructed for conn: {self.session}")
 
+    def __repr__(self) -> str:
+        return f"History({self.session.id}, lines={len(self.lines)} max_lines={self.max_lines} cursor_pos={self.cursor_pos})"
+
     def reset_cursor(self):
         self.cursor_pos = None
 
     def add(self, line: InputLine):
         if line.sent.strip() == "":
+            logging.warn(f"{self} ignoring empty line")
             return
 
-        if self.cursor_pos is not None:
+        if self.cursor_pos is not None and not line.scripted:
+            logging.debug(f"{self} resetting cursor pos due to new user input")
             self.cursor_pos = None
 
-        logging.debug(f"[{self.session}] history: adding line: {line}")
         self.lines.append(line)
+        logging.debug(
+            f"{self} added line: {line} (original={line.original} scripted={line.scripted})"
+        )
         while len(self.lines) >= self.max_lines:
-            logging.debug(f"[{self.session}] history: removing line: {self.lines[0]}")
-            self.lines.pop(0)
-        logging.debug(f"[{self.session}] history: {len(self.lines)} lines in history")
+            removed = self.lines.pop(0)
+            logging.debug(f"{self} dropped old line: {removed}")
 
-    def next(self) -> Optional[InputLine]:
+    def next(self, *, skip_scripted: bool = True) -> Optional[InputLine]:
         logging.debug(
-            f"[{self.session}] history: moving next from {self.cursor_pos} - {len(self.lines)} of history"
+            f"{self} moving next from {self.cursor_pos} skip_scripted={skip_scripted}"
         )
+        # If we're not already scrolling back in history, we can't move forward.
         if self.cursor_pos is None:
             return None
-        elif self.cursor_pos < len(self.lines) - 1:
+
+        # Searching forwards for an appropriate line
+        while self.cursor_pos < len(self.lines) - 1:
             self.cursor_pos += 1
-        else:
-            self.cursor_pos = None
-            return
+            line = self.lines[self.cursor_pos]
+            skip = line.scripted and skip_scripted
+            logging.debug(f"{self} pos updated - line={line}, skip={skip}")
+            if skip:
+                continue
+            return line
 
-        logging.debug(f"[{self.session}] history: post-move next: {self.cursor_pos}")
-        return self.lines[self.cursor_pos]
+        # Reset the cursor pos if we ran out of history in this direction.
+        self.cursor_pos = None
+        logging.debug(f"{self} finished next() without finding input to use")
+        return None
 
-    def prev(self) -> Optional[InputLine]:
+    def prev(self, *, skip_scripted: bool = True) -> Optional[InputLine]:
         logging.debug(
-            f"[{self.session}] history: moving prev from {self.cursor_pos} - {len(self.lines)} of history"
+            f"{self} moving prev from {self.cursor_pos} skip_scripted={skip_scripted}"
         )
 
+        # No history to scroll through.
         if len(self.lines) == 0:
+            logging.debug(f"{self} no history to move through.")
             return None
 
+        # Starting out through scrolling history
         if self.cursor_pos is None:
-            self.cursor_pos = len(self.lines) - 1
-        elif self.cursor_pos > 0:
-            self.cursor_pos -= 1
+            self.cursor_pos = len(self.lines)
+            logging.debug(f"{self} set initial pos for new scroll")
 
-        logging.debug(f"[{self.session}] history: post-move prev: {self.cursor_pos}")
-        return self.lines[self.cursor_pos]
+        # Searching backwards for an appropriate line
+        while self.cursor_pos > 0:
+            self.cursor_pos -= 1
+            line = self.lines[self.cursor_pos]
+            skip = line.scripted and skip_scripted
+            logging.debug(f"{self} pos updated - line={line}, skip={skip}")
+            if skip:
+                continue
+            return line
+
+        logging.debug(f"{self} finished prev() without finding input to use")
+        return None
+
+    async def debug(self):
+        output = []
+        for idx, line in enumerate(self.lines):
+            selected = ""
+            if idx == self.cursor_pos:
+                selected = "* "
+            output.append(
+                OutputItem.debug(f"{selected}{idx}: {line} (scripted={line.scripted})")
+            )
+
+        logging.debug(f"{self} adding debug output")
+        await mudpuppy_core.add_outputs(self.session.id, output)
 
 
 def get_history(session_id: int) -> Optional[History]:
@@ -89,27 +132,26 @@ async def input_sent(event: Event):
 @on_event(EventType.Shortcut)
 async def shortcut(event: Event):
     assert isinstance(event, Event.Shortcut)
+
+    h = history[event.id]
     if event.shortcut == Shortcut.HistoryNext:
-        line = history[event.id].next()
+        line = h.next()
     elif event.shortcut == Shortcut.HistoryPrevious:
-        line = history[event.id].prev()
+        line = h.prev()
     else:
         return
 
-    logging.info(f"populating {event.id} input with: {line}")
     if line is None:
         await mudpuppy_core.set_input(event.id, "")
     else:
-        # TODO(XXX): make this configurable
-        if line.scripted:
-            return
-        if line.original is None:
-            await mudpuppy_core.set_input(event.id, line.sent)
-        else:
-            await mudpuppy_core.set_input(event.id, line.original)
+        logging.info(
+            f"history: populating {event.id} input with: {line} (original={line.original} scripted={line.scripted})"
+        )
+        value = line.sent
+        if line.original is not None and not h.use_alias_expanded:
+            value = line.original
 
-    input = await mudpuppy_core.get_input(event.id)
-    logging.debug(f"val is: {input}")
+        await mudpuppy_core.set_input(event.id, value)
 
 
 @on_new_session()
