@@ -226,18 +226,19 @@ AliasCallable = Callable[[SessionId, AliasId, str, Any], Awaitable[None]]
 def alias(
     *,
     pattern: str,
-    name: str,
+    name: Optional[str] = None,
     expansion: Optional[str] = None,
     mud_name: Optional[Union[str, List[str]]] = None,
     module: Optional[str] = None,
 ):
     def alias_decorator(handler: Callable):
-        if pattern.strip() == "" or name.strip() == "":
+        alias_name = name or handler.__name__
+        if pattern.strip() == "" or alias_name.strip() == "":
             raise ValueError("Pattern and name must be non-empty")
 
         __ensure_async(handler)
 
-        alias_config = AliasConfig(pattern, name)
+        alias_config = AliasConfig(pattern, alias_name)
         alias_config.expansion = expansion
         alias_config.callback = handler
 
@@ -253,7 +254,7 @@ def alias(
                 )
                 if alias_id:
                     logging.debug(
-                        f"{mud_name} alias with name {name} created with ID: {alias_id}"
+                        f"{mud_name} alias with name {alias_name} created with ID: {alias_id}"
                     )
 
             return alias_event_wrapper
@@ -269,7 +270,7 @@ def alias(
                 )
                 if alias_id:
                     logging.debug(
-                        f"Global alias with name {name} created with ID: {alias_id}"
+                        f"Global alias with name {alias_name} created with ID: {alias_id}"
                     )
 
             return global_alias_event_wrapper
@@ -283,7 +284,7 @@ TriggerCallable = Callable[[SessionId, TriggerId, str, Any], Awaitable[None]]
 def trigger(
     *,
     pattern: str,
-    name: str,
+    name: Optional[str],
     gag: bool = False,
     strip_ansi: bool = True,
     prompt: bool = False,
@@ -292,12 +293,13 @@ def trigger(
     module: Optional[str] = None,
 ):
     def trigger_decorator(handler: TriggerCallable):
-        if pattern.strip() == "" or name.strip() == "":
+        trigger_name = name or handler.__name__
+        if pattern.strip() == "" or trigger_name.strip() == "":
             raise ValueError("pattern and name must be non-empty")
 
         __ensure_async(handler)
 
-        trigger_config = TriggerConfig(pattern, name)
+        trigger_config = TriggerConfig(pattern, trigger_name)
         trigger_config.gag = gag
         trigger_config.prompt = prompt
         trigger_config.strip_ansi = strip_ansi
@@ -316,7 +318,7 @@ def trigger(
                 )
                 if trigger_id:
                     logging.debug(
-                        f"{mud_name} trigger with name {name} created with ID: {trigger_id}"
+                        f"{mud_name} trigger with name {trigger_name} created with ID: {trigger_id}"
                     )
 
             return trigger_event_wrapper
@@ -332,7 +334,7 @@ def trigger(
                 )
                 if trigger_id:
                     logging.debug(
-                        f"Global trigger with name {name} created with ID: {trigger_id}"
+                        f"Global trigger with name {trigger_name} created with ID: {trigger_id}"
                     )
 
             return global_trigger_event_wrapper
@@ -347,16 +349,17 @@ HighlightCallable = Callable[[MudLine, list[str]], MudLine]
 def highlight(
     *,
     pattern: str,
-    name: str,
+    name: Optional[str] = None,
     strip_ansi: bool = True,
     mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
 ):
     def highlight_decorator(handler: HighlightCallable):
-        if pattern.strip() == "" or name.strip() == "":
+        highlight_name = name or handler.__name__
+        if pattern.strip() == "" or highlight_name.strip() == "":
             raise ValueError("pattern and name must be non-empty")
 
-        trigger_config = TriggerConfig(pattern, name)
+        trigger_config = TriggerConfig(pattern, highlight_name)
         trigger_config.strip_ansi = strip_ansi
         trigger_config.highlight = handler
 
@@ -372,7 +375,7 @@ def highlight(
                 )
                 if trigger_id:
                     logging.debug(
-                        f"{mud_name} highlight trigger with name {name} created with ID: {trigger_id}"
+                        f"{mud_name} highlight trigger with name {highlight_name} created with ID: {trigger_id}"
                     )
 
             return highlight_event_wrapper
@@ -388,7 +391,7 @@ def highlight(
                 )
                 if trigger_id:
                     logging.debug(
-                        f"Global highlight trigger with name {name} created with ID: {trigger_id}"
+                        f"Global highlight trigger with name {highlight_name} created with ID: {trigger_id}"
                     )
 
             return global_highlight_event_wrapper
@@ -398,7 +401,7 @@ def highlight(
 
 def timer(
     *,
-    name: str,
+    name: Optional[str] = None,
     milliseconds: int = 0,
     seconds: int = 0,
     minutes: int = 0,
@@ -407,21 +410,23 @@ def timer(
     mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
 ):
-    if not name.strip():
-        raise ValueError("The 'name' argument must be a non-empty string.")
-
     total_delay_ms = (
         milliseconds + (seconds * 1000) + (minutes * 60 * 1000) + (hours * 3600 * 1000)
     )
 
-    logging.debug(f"timer {name} will run every {total_delay_ms} ms")
     if total_delay_ms <= 0:
         raise ValueError("The total duration must be greater than zero.")
 
     def timer_decorator(handler):
+        timer_name = name or handler.__name__
+        if not timer_name.strip():
+            raise ValueError("The 'name' argument must be a non-empty string.")
+
         __ensure_async(handler)
 
-        timer_config = TimerConfig(name, total_delay_ms, handler)
+        logging.debug(f"timer {timer_name} will run every {total_delay_ms} ms")
+
+        timer_config = TimerConfig(timer_name, total_delay_ms, handler)
         if max_ticks:
             timer_config.max_ticks = max_ticks
         logging.debug(f"config: {timer_config}")
@@ -439,7 +444,7 @@ def timer(
                 )
                 if timer_id:
                     logging.debug(
-                        f"{mud_name} timer with name '{name}' created with ID: {timer_id}"
+                        f"{mud_name} timer with name '{timer_name}' created with ID: {timer_id}"
                     )
 
             return mud_timer_event_wrapper
@@ -453,7 +458,7 @@ def timer(
                 )
                 if timer_id:
                     logging.debug(
-                        f"Global timer with name '{name}' created with ID: {timer_id}"
+                        f"Global timer with name '{timer_name}' created with ID: {timer_id}"
                     )
 
             return global_timer_event_wrapper

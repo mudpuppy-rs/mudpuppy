@@ -28,7 +28,7 @@ script:
 from mudpuppy import alias
 from mudpuppy_core import mudpuppy_core, SessionId, AliasId
 
-@alias(pattern="^e$", name="Quick East", expansion="east")
+@alias(pattern="^e$", expansion="east")
 async def quick_east(_session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
     pass
 ```
@@ -42,6 +42,10 @@ equivalent to using [send_line()] directly:
 async def quick_east(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
     await mudpuppy_core.send_line(session_id, "east")
 ```
+
+If you want to customize the name of the alias, provide a `name="Custom Name"` 
+argument to the [@alias] decorator. Otherwise, the name of the decorated function
+is used.
 
 [@alias]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#alias
 [send_line()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudpuppyCore.send_line
@@ -65,7 +69,7 @@ from mudpuppy import alias
 from mudpuppy_core import mudpuppy_core, SessionId, AliasId
 
 
-@alias(mud_name="Dune", pattern="^kill (.*)$", name="Kill and headbutt")
+@alias(mud_name="Dune", pattern="^kill (.*)$")
 async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, groups):
     # Send through the original line so that we actually start combat in-game
     # with the 'kill' command.
@@ -83,7 +87,7 @@ If you wanted to have this alias also available on MUDs named "DevDune" and
 "Dune (Alt)" the `mud_name` can be changed to a list:
 
 ```python
-@alias(mud_name=["Dune","DevDune","Dune (alt)"], pattern="^kill (.*)$", name="Kill and headbutt")
+@alias(mud_name=["Dune","DevDune","Dune (alt)"], pattern="^kill (.*)$")
 async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, groups):
     ...
 ```
@@ -101,7 +105,7 @@ usages:
 from mudpuppy import alias
 from mudpuppy_core import mudpuppy_core, SessionId, AliasId, OutputItem
 
-@alias(pattern="^backstab$", name="Backstab limiter")
+@alias(pattern="^backstab$")
 async def backstab(session_id: SessionId, alias_id: AliasId, line: str, _groups):
     alias_info = await mudpuppy_core.get_alias(session_id, alias_id)
 
