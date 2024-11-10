@@ -229,31 +229,29 @@ impl buffer::Item for output::Item {
             Self::ConnectionEvent { status } => {
                 vec![Line::from([self.icon().unwrap(), status.into()].concat())].into()
             }
-            Self::Debug { line } => vec![Line::from(
-                [
-                    self.icon().unwrap(),
-                    vec![Span::styled(
-                        line.clone(),
-                        Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
-                    )],
-                ]
-                .concat(),
-            )]
-            .into(),
-            Self::CommandResult { error, message } => vec![Line::from(
-                [
-                    self.icon().unwrap(),
-                    vec![Span::styled(
-                        message.clone(),
-                        Style::default().fg(match error {
-                            true => Color::LightRed,
-                            false => Color::LightBlue,
-                        }),
-                    )],
-                ]
-                .concat(),
-            )]
-            .into(),
+            Self::Debug { line } => {
+                let mut content = line.replace('\t', "    ").into_text()?;
+                for line in &mut content.lines {
+                    line.style = Style::default().add_modifier(Modifier::DIM);
+                    if let Some(spans) = self.icon() {
+                        line.spans.splice(0..0, spans);
+                    }
+                }
+                content
+            }
+            Self::CommandResult { error, message } => {
+                let mut content = message.replace('\t', "    ").into_text()?;
+                for line in &mut content.lines {
+                    line.style = Style::default().fg(match error {
+                        true => Color::LightRed,
+                        false => line.style.fg.unwrap_or(Color::LightBlue),
+                    });
+                    if let Some(spans) = self.icon() {
+                        line.spans.splice(0..0, spans);
+                    }
+                }
+                content
+            }
         })
     }
 }
