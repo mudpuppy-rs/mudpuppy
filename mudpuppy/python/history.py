@@ -36,7 +36,11 @@ class History:
         self.cursor_pos = None
 
     def add(self, line: InputLine):
-        if line.sent.strip() == "":
+        if (
+            line.sent.strip() == ""
+            and line.original is not None
+            and line.original.strip() == ""
+        ):
             logging.warn(f"{self} ignoring empty line")
             return
 
