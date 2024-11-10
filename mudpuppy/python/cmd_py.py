@@ -1,6 +1,8 @@
 import logging
 from argparse import Namespace, REMAINDER
 import inspect
+import contextlib
+import io
 
 from commands import Command, add_command
 from mudpuppy_core import Event, OutputItem, SessionId, mudpuppy_core
@@ -20,6 +22,7 @@ class Python(Command):
         import commands
         import history
         import mudpuppy
+        from cformat import cformat
 
         self.eval_globals = globals().copy()
         self.eval_globals.update(
@@ -30,6 +33,7 @@ class Python(Command):
                 "config": mudpuppy_core.config(),
                 "session": session,
                 "session_info": None,
+                "cformat": cformat,
             }
         )
 
@@ -47,16 +51,23 @@ class Python(Command):
             session_info = await mudpuppy_core.session_info(sesh_id)
             self.eval_globals["session_info"] = session_info
 
-            try:
-                result = eval(code, self.eval_globals)
-                if inspect.isawaitable(result):
-                    result = await result
-                if result is not None:
-                    await mudpuppy_core.add_output(
-                        sesh_id, OutputItem.command_result(repr(result))
-                    )
-            except SyntaxError:
-                exec(code, self.eval_globals)
+            with contextlib.redirect_stdout(io.StringIO()) as stdout_buff:
+                try:
+                    result = eval(code, self.eval_globals)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if result is not None:
+                        await mudpuppy_core.add_output(
+                            sesh_id, OutputItem.command_result(repr(result))
+                        )
+                except SyntaxError:
+                    exec(code, self.eval_globals)
+
+            stdout = [
+                OutputItem.command_result(line)
+                for line in stdout_buff.getvalue().splitlines()
+            ]
+            await mudpuppy_core.add_outputs(sesh_id, stdout)
 
         except Exception as e:
             await mudpuppy_core.add_output(
