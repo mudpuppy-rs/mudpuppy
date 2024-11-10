@@ -162,6 +162,11 @@ async def on_key(event: Event):
         logging.warning(f"no custom layout found for {event.id}")
         return
 
+    # Windows will generate both key up and key down events.
+    if key_data.get("kind", "") != "Press":
+        logging.debug("ignoring non-press event")
+        return
+
     if isinstance(key_data["code"], dict) and key_data["code"].get("F") == 5:
         layout.toggle_channel_area()
         return
