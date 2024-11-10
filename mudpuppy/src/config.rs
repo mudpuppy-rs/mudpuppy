@@ -122,7 +122,11 @@ pub fn init_panic_handler() {
 #[must_use]
 pub fn data_dir() -> &'static Path {
     static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
-    lazy_overridable_dir(&format!("{CRATE_NAME}_DATA"), DirType::Data, &DATA_DIR)
+    lazy_overridable_dir(
+        &format!("{}_DATA", CRATE_NAME.to_uppercase()),
+        DirType::Data,
+        &DATA_DIR,
+    )
 }
 
 #[must_use]
@@ -130,7 +134,7 @@ pub fn data_dir() -> &'static Path {
 pub fn config_dir() -> &'static Path {
     static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
     lazy_overridable_dir(
-        &format!("{CRATE_NAME}_CONFIG"),
+        &format!("{}_CONFIG", CRATE_NAME.to_uppercase()),
         DirType::Config,
         &CONFIG_DIR,
     )
