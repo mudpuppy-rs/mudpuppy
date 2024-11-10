@@ -35,6 +35,7 @@ pub struct Args {
         help = "Log level filter. Default is INFO"
     )]
     pub log_level: LevelFilter,
+    // If you add new CLI args, don't forget to update `user-guide/src/cli.md`.
 }
 
 impl Args {
