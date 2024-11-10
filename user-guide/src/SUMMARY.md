@@ -16,3 +16,4 @@
     - [Custom Commands](scripting/custom_commands.md)
     - [Output](scripting/output.md)
     - [Prompts](scripting/prompts.md)
+- [Tutorial](tutorial/README.md)

@@ -6,13 +6,16 @@ to [aliases] when you want to support parse command-line arguments and flags.
 
 The default command prefix is `/` but can be altered in configuration.
 
+For more information, consult the API reference for the [commands module].
+
 [commands]: ../commands.md
 [aliases]: aliases.md
+[commands module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/commands.html
 
 ## Simple command
 
-Commands are created by extending the `Command` class and registering the
-command for a specific session with `commands.add_command()`.
+Commands are created by extending the [Command class] and registering the
+command for a specific session with [commands.add_command()].
 
 Your command's `__init__()` should call the `super().__init__` with:
 
@@ -21,7 +24,7 @@ Your command's `__init__()` should call the `super().__init__` with:
 2. The command's main func.
 3. A description of the command.
 
-Here's a simple command that when `/simple` is run, will log a message.
+Here's a simple command that when `/simple` is run, will [log] a message.
 
 ```python
 import logging
@@ -41,6 +44,10 @@ class SimpleCmd(Command):
         logging.debug("Hello world!")
 
 ```
+
+[Command class]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/commands.html#Command
+[commands.add_command()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/commands.html#add_command
+[log]: ../logging.md
 
 ## Command-line args
 

@@ -39,7 +39,6 @@ a UNIX-like operating system you could run:
 MUDPUPPY_CONFIG=$HOME/mudpuppy-test/config MUDPUPPY_DATA=$HOME/mudpuppy-test/data mudpuppy
 ```
 
-
 ## Mudpuppy packages
 
 Your Python scripts can `import mudpuppy` and `import mudpuppy_core` to get
@@ -49,8 +48,11 @@ In general `mudpuppy_core` has low-level APIs, and helpful type definitions. On
 the other hand `mudpuppy` has higher-level APIs, such as decorators for making
 triggers/aliases/etc.
 
-**TODO: API documentation auto-generated from the Python should be linked
-here**.
+For full documentation on the available packages and APIs, reference the [API
+documentation]. This guide aims to provide helpful overviews while the API
+documentation aims for complete detail.
+
+[API documentation]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/index.html
 
 ## Async
 
