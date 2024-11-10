@@ -106,16 +106,16 @@ class TriggerCmd(Command):
     async def add(self, sesh_id: SessionId, args: Namespace):
         if args.pattern is None:
             return
-        new_trigger = TriggerConfig(args.pattern, args.name)
+        new_trigger = TriggerConfig(
+            args.pattern,
+            args.name,
+            gag=args.gag,
+            prompt=args.prompt,
+            strip_ansi=not args.ansi,
+        )
         expansion = " ".join(args.command).strip()
         if expansion != "":
             new_trigger.expansion = expansion
-        if args.gag:
-            new_trigger.gag = True
-        if args.prompt:
-            new_trigger.prompt = True
-        if not args.ansi:
-            new_trigger.strip_ansi = True
         trig_id = await mudpuppy_core.new_trigger(sesh_id, new_trigger, __name__)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Created trigger {trig_id}")
