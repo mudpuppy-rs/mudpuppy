@@ -28,6 +28,8 @@ __all__ = [
     "highlight",
     "TimerCallable",
     "timer",
+    "alias_max_hits",
+    "trigger_max_hits",
     "unload_handlers",
 ]
 
@@ -310,6 +312,7 @@ def alias(
     expansion: Optional[str] = None,
     mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
+    max_hits: Optional[int] = None,
 ) -> Callable[[mudpuppy_core.AliasCallable], mudpuppy_core.AliasCallable]:
     """
     Decorator to register an async `mudpuppy_core.AliasCallable` function as an alias handler for
@@ -333,6 +336,10 @@ def alias(
     `expansion` will be sent to the MUD as input. This is a convenient shorthand
     for writing `await mudpuppy_core.MudpuppyCore.send_line(session_id, expansion)`
     in the body of your `mudpuppy_core.AliasCallable`.
+
+    An optional `max_hits` integer may be provided. If set, the alias will only be
+    invoked `max_hits` times before being automatically disabled with
+    `mudpuppy_core.MudpuppyCore.disable_alias()`.
 
     If a `mud_name`, or list of `mud_name`'s are provided then the alias will only be
     registered for sessions with the specified `mud_name`'s.
@@ -372,6 +379,7 @@ def trigger(
     expansion: Optional[str] = None,
     mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
+    max_hits: Optional[int] = None,
 ) -> Callable[[mudpuppy_core.TriggerCallable], mudpuppy_core.TriggerCallable]:
     """
     Decorator to register an async `mudpuppy_core.TriggerCallable` function as a trigger handler for
@@ -413,6 +421,10 @@ def trigger(
     `expansion` will be sent to the MUD as input.  This is a convenient shorthand
     for writing `await mudpuppy_core.MudpuppyCore.send_line(session_id, expansion)`
     in the body of your `mudpuppy_core.TriggerCallable`.
+
+    An optional `max_hits` integer may be provided. If set, the trigger will only be
+    invoked `max_hits` times before being automatically disabled with
+    `mudpuppy_core.MudpuppyCore.disable_trigger()`.
 
     If a `mud_name`, or list of `mud_name`'s are provided then the trigger will only be
     registered for sessions with the specified `mud_name`'s.
@@ -579,6 +591,48 @@ def timer(
     ):
         assert session_id is not None
         await mudpuppy_core.send_line(session_id, "save")
+    ```
+    """
+    ...
+
+def trigger_max_hits(
+    *, handler: mudpuppy_core.TriggerCallable, max_hits: int = 1
+) -> mudpuppy_core.TriggerCallable:
+    """
+    Wrap a `mudpuppy_core.TriggerCallable` to limit the number of times it can be invoked.
+
+    Example:
+    ```python
+    from mudpuppy_core import mudpuppy_core, TriggerConfig
+    from mudpuppy import trigger_max_hits
+
+    async def my_trigger_handler(_session_id: mudpuppy_core.SessionId, trigger_id: mudpuppy_core.TriggerId, line: str, _groups: list[str]):
+        print(f"trigger {trigger_id} matched line: {line}")
+
+    # Wrap the handler w/ mudpuppy.trigger_max_hits to limit to 3 hits
+    trigger_config = TriggerConfig("^test$", "test trigger", handler=trigger_max_hits(handler=my_trigger_handler, max_hits=3))
+    trigger_id = await mudpuppy_core.new_trigger(trigger_config)
+    ```
+    """
+    ...
+
+def alias_max_hits(
+    *, handler: mudpuppy_core.AliasCallable, max_hits: int = 1
+) -> mudpuppy_core.AliasCallable:
+    """
+    Wrap a `mudpuppy_core.AliasCallable` to limit the number of times it can be invoked.
+
+    Example:
+    ```python
+    from mudpuppy_core import mudpuppy_core, AliasConfig
+    from mudpuppy import alias_max_hits
+
+    async def my_alias_handler(_session_id: mudpuppy_core.SessionId, alias_id: mudpuppy_core.AliasId, line: str, _groups: list[str]):
+        print(f"alias {alias_id} matched line: {line}")
+
+    # Wrap the handler w/ mudpuppy.alias_max_hits to limit to 3 hits
+    alias_config = AliasConfig("^test$", "test alias", handler=alias_max_hits(handler=my_alias_handler, max_hits=3))
+    alias_id = await mudpuppy_core.new_alias(alias_config)
     ```
     """
     ...

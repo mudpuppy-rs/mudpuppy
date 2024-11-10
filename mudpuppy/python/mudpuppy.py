@@ -230,6 +230,7 @@ def alias(
     expansion: Optional[str] = None,
     mud_name: Optional[Union[str, List[str]]] = None,
     module: Optional[str] = None,
+    max_hits: Optional[int] = None,
 ):
     def alias_decorator(handler: Callable):
         alias_name = name or handler.__name__
@@ -237,6 +238,9 @@ def alias(
             raise ValueError("Pattern and name must be non-empty")
 
         __ensure_async(handler)
+
+        if max_hits is not None:
+            handler = alias_max_hits(handler=handler, max_hits=max_hits)
 
         alias_config = AliasConfig(
             pattern, alias_name, expansion=expansion, callback=handler
@@ -291,6 +295,7 @@ def trigger(
     expansion: Optional[str] = None,
     mud_name: Optional[Union[str, List[str]]] = None,
     module: Optional[str] = None,
+    max_hits: Optional[int] = None,
 ):
     def trigger_decorator(handler: TriggerCallable):
         trigger_name = name or handler.__name__
@@ -298,6 +303,9 @@ def trigger(
             raise ValueError("pattern and name must be non-empty")
 
         __ensure_async(handler)
+
+        if max_hits is not None:
+            handler = trigger_max_hits(handler=handler, max_hits=max_hits)
 
         trigger_config = TriggerConfig(
             pattern,
@@ -499,6 +507,52 @@ def custom_showwarning(message, category, filename, lineno, _file=None, _line=No
     import asyncio
 
     asyncio.create_task(handle_runtime_warning(full_msg))
+
+
+def trigger_max_hits(*, handler: TriggerCallable, max_hits: int = 1) -> TriggerCallable:
+    __ensure_async(handler)
+
+    async def trigger_max_hits_wrapper(
+        session_id: SessionId, trigger_id: TriggerId, line: str, groups: list[str]
+    ):
+        # Call the wrapped handler.
+        await handler(session_id, trigger_id, line, groups)
+
+        trigger = await mudpuppy_core.get_trigger(session_id, trigger_id)
+        if trigger is None:
+            logging.warning(f"trigger_max_hits: trigger ID {trigger_id} missing")
+            return
+
+        if trigger.config.hit_count >= max_hits:
+            logging.debug(
+                f"trigger_max_hits: '{trigger.config.name}' ({trigger_id}) hit max limit of {max_hits}"
+            )
+            await mudpuppy_core.disable_trigger(session_id, trigger_id)
+
+    return trigger_max_hits_wrapper
+
+
+def alias_max_hits(*, handler: AliasCallable, max_hits: int = 1) -> AliasCallable:
+    __ensure_async(handler)
+
+    async def alias_max_hits_wrapper(
+        session_id: SessionId, alias_id: AliasId, line: str, groups: list[str]
+    ):
+        # Call the wrapped handler.
+        await handler(session_id, alias_id, line, groups)
+
+        alias = await mudpuppy_core.get_alias(session_id, alias_id)
+        if alias is None:
+            logging.warning(f"alias_max_hits: alias ID {alias_id} missing")
+            return
+
+        if alias.config.hit_count >= max_hits:
+            logging.debug(
+                f"alias_max_hits: '{alias.config.name}' ({alias_id}) hit max limit of {max_hits}"
+            )
+            await mudpuppy_core.disable_alias(session_id, alias_id)
+
+    return alias_max_hits_wrapper
 
 
 # Set up custom warning handling
