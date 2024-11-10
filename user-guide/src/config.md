@@ -26,7 +26,7 @@ from mudpuppy_core import mudpuppy_core
 path = mudpuppy_core.config_dir()
 ```
 
-## Customizing config/data directories
+### Customizing config/data directories
 
 You can also set the `MUDPUPPY_CONFIG` and `MUDPUPPY_DATA` environment variables
 to customize the config and data dir that Mudpuppy will use. For example, on
