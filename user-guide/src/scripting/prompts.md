@@ -16,7 +16,8 @@ unterminated prompt mode. In the future this will be more flexible.
 
 ## Prompt Event Handlers
 
-To write a handler that fires for every prompt line for any MUD, write:
+To write a handler that fires for every prompt line for any MUD, use the
+[mudpuppy][mudpuppy-module] module's [@on_event] decorator:
 
 ```python
 from mudpuppy_core import EventType, Event, SessionId, MudLine
@@ -41,7 +42,8 @@ async def prompt_handler(event: Event):
 ```
 
 Similar to [aliases], [triggers], and [timers] it's also possible to write
-a handler that only fires for prompt events for specifically named MUDs.
+a handler that only fires for prompt events for specifically named MUDs using
+[@on_mud_event].
 
 ```python
 @on_mud_event(["Dune", "OtherMud"], EventType.Prompt)
@@ -49,14 +51,22 @@ async def prompt_handler(event: Event):
     ...
 ```
 
+[mudpuppy-module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html
+[@on_event]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#on_event
+[@on_mud_event]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#on_mud_event
+
+[aliases]: aliases.md
+[timers]: timers.md
+[triggers]: triggers.md
 
 ## Prompt Triggers
 
-`MudLine`'s that are detected as a prompt have the `prompt` field set to `True`.
+[MudLine]'s that are detected as a prompt have the [prompt field] set to `True`.
 See [triggers] for more information on how to write triggers that only match
 prompt lines.
 
 This is genereally more useful if you want to only match certain prompt
 patterns, or to gag prompts.
 
-[triggers]: triggers.md
+[MudLine]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudLine
+[prompt field]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudLine.prompt

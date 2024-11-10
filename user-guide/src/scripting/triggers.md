@@ -12,17 +12,25 @@ a database when you see it on the ground.
 name, or so that they're available for all MUDs you connect to.
 
 * The line that matched the trigger, as well as any regexp groups in the pattern are
-provided to the trigger callback function alongside the `SessionId` of the MUD.
+provided to the trigger callback function alongside the [SessionId] of the MUD.
 
 <div class="warning">
 Note that all triggers are matched a line at a time. Multi-line triggers are not
 yet supported.
 </div>
 
+Search the [API documentation] for [Trigger][trigger-search] to learn more.
+
+[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
+[API documentation]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/index.html
+[trigger-search]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html?search=Trigger
+[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
+
 ## Basic global trigger
 
 To make a basic trigger that would match the line "Your ship has landed." and
-automatically send "enter ship" you can add this to a mudpuppy Python script:
+automatically send "enter ship" you can use the [mudpuppy module]'s [@trigger]
+decorator.
 
 ```python
 @trigger(
@@ -36,7 +44,7 @@ async def quick_ship(_session_id: SessionId, _trigger_id: TriggerId, _line: str,
 
 Providing expansion is a short-cut for "expanding" the input that was matched by
 the pattern, by replacing it with the expansion value. The above example is
-equivalent to the more verbose:
+equivalent to awaiting [send_line()] directly:
 
 ```python
 @trigger(
@@ -47,10 +55,15 @@ async def quick_ship(session_id: SessionId, _trigger_id: TriggerId, _line: str, 
     await mudpuppy_core.send_line(session_id, "enter ship")
 ```
 
+[mudpuppy module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#trigger
+[@trigger]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html
+[send_line()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudpuppyCore.send_line
+
 ## Per-MUD triggers
 
 Like [aliases](aliases.md) you can define triggers for only certain MUDs by
-providing a `mud_name` string, or list of strings:
+providing a `mud_name` string, or list of strings as an argument to the
+[@trigger] decorator:
 
 ```python
 @trigger(
@@ -67,7 +80,7 @@ async def quick_ship(_session_id: SessionId, _trigger_id: TriggerId, _line: str,
 ## Output gags
 
 If you want to silence, supress or "gag" lines of output you can write a trigger
-that matches the lines you wish to gag, setting `gag=True` in the trigger
+that matches the lines you wish to gag, setting `gag=True` in the [@trigger]
 decorator:
 
 ```python
@@ -84,7 +97,7 @@ async def quiet_saves(_session_id: SessionId, _trigger_id: TriggerId, _line: str
 ## Matching prompt lines
 
 You can also create triggers that only match prompt lines by specifying
-`prompt=True` in the `@trigger` decorator. This can also be combined with
+`prompt=True` in the [@trigger] decorator. This can also be combined with
 `gag=True` to gag matched prompts.
 
 See [prompts] for more information on how prompts are detected.
@@ -110,7 +123,7 @@ By default triggers are created with `strip_ansi=True`. Lines of text will have
 any ANSI colour codes removed before evaluating the trigger pattern.
 
 If you want to write a trigger that matches on ANSI you need to specify
-`strip_ansi=False` in the `@trigger` decorator:
+`strip_ansi=False` in the [@trigger] decorator:
 
 ```python
 import logging

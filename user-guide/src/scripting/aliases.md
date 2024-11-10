@@ -10,12 +10,19 @@ more complex actions like making an HTTP request.
 name, or so that they're available for all MUDs you connect to.
 
 * The line that matched the alias, as well as any regexp groups in the pattern are
-provided to the alias callback function alongside the `SessionId` of the MUD.
+provided to the alias callback function alongside the [SessionId] of the MUD.
+
+Search the [API documentation] for [Alias][alias-search] to learn more.
+
+[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
+[API documentation]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/index.html
+[alias-search]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html?search=Alias
 
 ## Basic global alias
 
 To make a basic alias that would expand the input "e" to "east" for all MUDs you
-can add this to a mudpuppy Python script:
+can use the [@alias] decorator. For example, adding this to a mudpuppy Python
+script:
 
 ```python
 from mudpuppy import alias
@@ -28,13 +35,16 @@ async def quick_east(_session_id: SessionId, _alias_id: AliasId, _line: str, _gr
 
 Providing `expansion` is a short-cut for "expanding" the input that was matched
 by the pattern, by replacing it with the `expansion` value. The above example is
-equivalent to the more verbose:
+equivalent to using [send_line()] directly:
 
 ```python
 @alias(pattern="^e$", name="Quick East")
 async def quick_east(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
     await mudpuppy_core.send_line(session_id, "east")
 ```
+
+[@alias]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#alias
+[send_line()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudpuppyCore.send_line
 
 ## Per-MUD alias
 
@@ -80,8 +90,9 @@ async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, gr
 
 ## Alias info
 
-You can use the `AliasId` passed to the alias handler to access information
-about the alias, like how many times it has matched.
+You can use the [AliasId] passed to the alias handler to access information
+about the alias, like how many times it has matched. See the [get_alias()] and
+[AliasConfig] API references for more information.
 
 This can be used for things like disabling an alias after a certain number of
 usages:
@@ -107,3 +118,7 @@ async def backstab(session_id: SessionId, alias_id: AliasId, line: str, _groups)
     # Do the backstab
     await mudpuppy_core.send_line(session_id, line)
 ```
+
+[AliasId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#AliasId
+[get_alias()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudpuppyCore.get_alias
+[AliasConfig]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#AliasConfig
