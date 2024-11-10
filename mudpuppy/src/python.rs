@@ -10,8 +10,8 @@ use std::sync::Arc;
 use futures::stream::FuturesUnordered;
 use pyo3::exceptions::PyTypeError;
 use pyo3::types::{
-    PyAnyMethods, PyFunction, PyList, PyListMethods, PyModule, PyModuleMethods, PyStringMethods,
-    PyTuple,
+    PyAnyMethods, PyBool, PyBoolMethods, PyFunction, PyList, PyListMethods, PyModule,
+    PyModuleMethods, PyStringMethods, PyTuple,
 };
 use pyo3::{
     pyclass, pymethods, pymodule, Bound, Py, PyAny, PyErr, PyObject, PyRef, PyResult, Python,
@@ -230,6 +230,44 @@ impl PyApp {
                 None => Err(Error::Alias(alias_id.into()).into()),
             }
         })
+    }
+
+    // Verify that a callback is an async coroutine function.
+    fn require_coroutine(py: Python<'_>, name: &str, callback: &Py<PyAny>) -> PyResult<()> {
+        // TODO(XXX): possible optimization - cache ref to this fn?
+        let iscoroutinefunction = py
+            .import_bound("inspect")?
+            .getattr("iscoroutinefunction")?
+            .downcast_into::<PyFunction>()
+            .map_err(|_| Error::Internal("getting inspect iscoroutinefunction".to_string()))?;
+
+        let is_coroutine = iscoroutinefunction
+            .call1((callback,))?
+            .downcast::<PyBool>()?
+            .is_true();
+
+        match is_coroutine {
+            true => Ok(()),
+            false => Err(PyTypeError::new_err(format!(
+                "{name} must be a coroutine function"
+            ))),
+        }
+    }
+
+    // Verify that a callback is **not** an async coroutine function, but a regular callable.
+    fn require_callable(py: Python<'_>, name: &str, callback: &Py<PyAny>) -> PyResult<()> {
+        if Self::require_coroutine(py, name, callback).is_ok() {
+            return Err(PyTypeError::new_err(format!(
+                "{name} must be a regular function, not a coroutine"
+            )));
+        }
+
+        match callback.bind(py).is_callable() {
+            true => Ok(()),
+            false => Err(PyTypeError::new_err(format!(
+                "{name} must be a callable function"
+            ))),
+        }
     }
 }
 
@@ -456,6 +494,15 @@ impl PyApp {
                         return Ok::<_, PyErr>(None);
                     }
                 }
+
+                if let Some(callback) = &new_config.callback {
+                    Self::require_coroutine(pyy, "trigger callback", callback)?;
+                }
+
+                if let Some(highlight) = &new_config.highlight {
+                    Self::require_callable(pyy, "trigger highlight callback", highlight)?;
+                }
+
                 Ok(Some(triggers.construct(|id| Trigger {
                     id,
                     enabled: true,
@@ -582,6 +629,11 @@ impl PyApp {
                         return Ok::<_, PyErr>(None);
                     }
                 }
+
+                if let Some(callback) = &new_config.callback {
+                    Self::require_coroutine(pyy, "alias callback", callback)?;
+                }
+
                 Ok(Some(aliases.construct(|id| Alias {
                     id,
                     enabled: true,
@@ -710,6 +762,8 @@ impl PyApp {
                     }
                 }
                 let (stop_tx, stop_rx) = watch::channel(false);
+
+                Self::require_coroutine(pyy, "timer callback", &new_config.callback)?;
 
                 let timer_id = timers.construct(|id| Timer {
                     id,
