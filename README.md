@@ -73,6 +73,9 @@ Advanced users may want to build from source. TODO: link to instructions.
 | MacOS   | `/Users/$USERNAME/Library/Application Support/mudpuppy/config.toml` |
 | Windows | `C:\Users\$USER\AppData\Roaming\mudpuppy\config.toml`            |
 
+You can also customize the location with the `MUDPUPPY_CONFIG` and
+`MUDPUPPY_DATA` environment variables.
+
 ```toml
 [[muds]]
 name = "Dune (TLS)"
