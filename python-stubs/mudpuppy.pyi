@@ -306,7 +306,7 @@ def on_mud_disconnected(
 def alias(
     *,
     pattern: str,
-    name: str,
+    name: Optional[str] = None,
     expansion: Optional[str] = None,
     mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
@@ -315,7 +315,8 @@ def alias(
     Decorator to register an async `mudpuppy_core.AliasCallable` function as an alias handler for
     a specific pattern. A `mudpuppy_core.Alias` will be automatically created for the decorated
     function when `mudpuppy_core.EventType.NewSession` and
-    `mudpuppy_core.EventType.ResumeSession` events occur.
+    `mudpuppy_core.EventType.ResumeSession` events occur. If no `name` is provided, the name of
+    the decorated function is used as the alias name.
 
     When input is provided matching the compiled regexp `pattern` the decorated function
     will be invoked with the `mudpuppy_core.SessionId` of the session that received the
@@ -351,7 +352,7 @@ def alias(
     import asyncio
     from mudpuppy_core import mudpuppy_core, SessionId, AliasId
 
-    @alias(mud_name="Test (TLS)", pattern="^kill (.*)$", name="Start combat alias")
+    @alias(mud_name="Test (TLS)", pattern="^kill (.*)$")
     async def start_combat(session_id: SessionId, _alias_id: AliasId, _line: str, groups: list[str]):
         assert len(groups) == 1
         target = groups[0]
@@ -364,7 +365,7 @@ def alias(
 def trigger(
     *,
     pattern: str,
-    name: str,
+    name: Optional[str] = None,
     gag: bool = False,
     strip_ansi: bool = True,
     prompt: bool = False,
@@ -376,7 +377,8 @@ def trigger(
     Decorator to register an async `mudpuppy_core.TriggerCallable` function as a trigger handler for
     a specific pattern. A `mudpuppy_core.Trigger` will be automatically created for the decorated
     function when `mudpuppy_core.EventType.NewSession` and
-    `mudpuppy_core.EventType.ResumeSession` events occur.
+    `mudpuppy_core.EventType.ResumeSession` events occur. If no `name` is provided, the name of
+    the decorated function is used as the trigger name.
 
     When output is received matching the compiled regexp `pattern` the decorated function
     will be invoked with the `mudpuppy_core.SessionId` of the session that received the
@@ -430,7 +432,7 @@ def trigger(
     from mudpuppy_core import mudpuppy_core, SessionId, TriggerId
     from mudpuppy import trigger
 
-    @trigger(name="Auto-keep", pattern="^You wear (.*)$")
+    @trigger(pattern="^You wear (.*)$")
     async def auto_keep(
         session_id: SessionId, _trigger_id: TriggerId, _line: str, groups: list[str]
     ):
@@ -442,7 +444,7 @@ def trigger(
 def highlight(
     *,
     pattern: str,
-    name: str,
+    name: Optional[str] = None,
     strip_ansi: bool = True,
     mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
@@ -452,7 +454,8 @@ def highlight(
     handler for a specific pattern. A `mudpuppy_core.Trigger` for the highlight
     will be automatically created for the decorated function when
     `mudpuppy_core.EventType.NewSession` and `mudpuppy_core.EventType.ResumeSession`
-    events occur.
+    events occur. If no `name` is provided, the name of the decorated function is used as
+    the highlight trigger name.
 
     When output is received matching the compiled regexp `pattern` the decorated function
     will be invoked with the `mudpuppy_core.MudLine` that matched the `pattern`,
@@ -488,7 +491,7 @@ def highlight(
     ```python
     from mudpuppy import highlight
 
-    @highlight(name="Solaris highlight", pattern=r"^(\\d+) solaris$")
+    @highlight(pattern=r"^(\\d+) solaris$")
     def solaris_highlight(line: mudpuppy_core.MudLine, groups: list[str]):
         assert len(groups) == 1
         # Highlight the total in bold
@@ -531,7 +534,7 @@ async def my_timer_handler(timer_id: mudpuppy_core.TimerId, sesh: Optional[mudpu
 
 def timer(
     *,
-    name: str,
+    name: Optional[str] = None,
     milliseconds: int = 0,
     seconds: int = 0,
     minutes: int = 0,
@@ -544,7 +547,8 @@ def timer(
     Decorator to register an async `TimerCallable` function as a timer handler run every
     specified duration. A `mudpuppy_core.Timer` will be automatically created for the decorated
     function when `mudpuppy_core.EventType.NewSession` and
-    `mudpuppy_core.EventType.ResumeSession` events occur.
+    `mudpuppy_core.EventType.ResumeSession` events occur. If no `name` is provided, the name of
+    the decorated function is used as the timer name.
 
     A duration is calculated based on the `milliseconds`, `seconds`, `minutes`, and `hours`
     arguments. After the duration has expired the `TimerCallable` is invoked. This will
@@ -569,7 +573,7 @@ def timer(
     from mudpuppy_core import mudpuppy_core, SessionId, TimerId
     from mudpuppy import timer
 
-    @timer(name="Auto-save", minutes=10, seconds=30)
+    @timer(minutes=10, seconds=30)
     async def auto_save(
         _timer_id: TimerId, session_id: Optional[SessionId]
     ):

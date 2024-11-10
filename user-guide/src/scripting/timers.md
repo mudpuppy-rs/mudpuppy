@@ -24,12 +24,16 @@ Since global timers run without being tied to a specific MUD they are provided
 the currently focused active [SessionID] (if there is one!) as an argument:
 
 ```python
-@timer(name="Party Timer", seconds=10, minutes=2)
+@timer(seconds=10, minutes=2)
 async def party(timer_id: TimerId, session_id: Optional[SessionId]):
     logging.debug(f"2m10s timer fired: {timer_id}!")
     if session_id is not None:
         await mudpuppy_core.send_line(session_id, "say PARTY TIME!!!")
 ```
+
+If you want to customize the name of the timer, provide a `name="Custom Name"`
+argument to the [@timer] decorator. Otherwise, the name of the decorated function
+is used.
 
 [mudpuppy module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html
 [@timer]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#timer
@@ -42,7 +46,7 @@ named "Dune", and that only runs 3 times total (with a 10s wait between each
 run).
 
 ```python
-@timer(mud_name="Dune", name="Heal Timer", seconds=10, max_ticks=3)
+@timer(mud_name="Dune", seconds=10, max_ticks=3)
 async def heal_timer(_timer_id: TimerId, session_id: SessionId):
     await mudpuppy_core.send_line(session_id, "heal")
 ```

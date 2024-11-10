@@ -34,7 +34,6 @@ decorator.
 
 ```python
 @trigger(
-    name="quick ship",
     pattern=r"^Your ship has landed\.$"
     expansion="enter ship",
 )
@@ -42,13 +41,16 @@ async def quick_ship(_session_id: SessionId, _trigger_id: TriggerId, _line: str,
     pass
 ```
 
+If you want to customize the name of the trigger, provide a `name="Custom Name"`
+argument to the [@trigger] decorator. Otherwise, the name of the decorated function
+is used.
+
 Providing expansion is a short-cut for "expanding" the input that was matched by
 the pattern, by replacing it with the expansion value. The above example is
 equivalent to awaiting [send_line()] directly:
 
 ```python
 @trigger(
-    name="quick ship",
     pattern=r"^Your ship has landed\.$"
 )
 async def quick_ship(session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
@@ -67,7 +69,6 @@ providing a `mud_name` string, or list of strings as an argument to the
 
 ```python
 @trigger(
-    name="quick ship",
     mud_name=["Dune", "DevDune"],
     pattern=r"^Your ship has landed\.$",
     expansion="enter ship",
@@ -85,7 +86,6 @@ decorator:
 
 ```python
 @trigger(
-    name="silence save spam",
     pattern=r"^(?:Autosave)|(?:Your character has been saved safely)\.$",
     gag=True
 )
@@ -106,7 +106,6 @@ See [prompts] for more information on how prompts are detected.
 import logging
 
 @trigger(
-    name="Gag login prompts",
     prompt=True,
     gag=True,
     pattern=r"(?:Enter your username: )|(?:Password: )"
@@ -129,7 +128,6 @@ If you want to write a trigger that matches on ANSI you need to specify
 import logging
 
 @trigger(
-    name="Match bold",
     strip_ansi=False,
     pattern=r"\033\[[\d]+;1m(.*)\033\[0m",
 )
