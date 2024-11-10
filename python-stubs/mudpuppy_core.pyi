@@ -493,9 +493,22 @@ class TriggerConfig:
     The number of times `OutputLine`s have matched this `Trigger` since it was created.
     """
 
-    def __init__(self, pattern: str, name: str):
+    def __init__(
+        self,
+        pattern: str,
+        name: str,
+        *,
+        strip_ansi: bool = False,
+        prompt: bool = False,
+        gag: bool = False,
+        callback: Optional[TriggerCallable] = None,
+        highlight: Optional[HighlightCallable] = None,
+        expansion: Optional[str] = None,
+    ):
         """
         Create a new `TriggerConfig` with a `pattern` and a `name`.
+
+        Optionally you may specify `strip_ansi`, `prompt`, `gag`, `callback`, `highlight`, and `expansion`.
         """
         ...
 
@@ -584,9 +597,17 @@ class AliasConfig:
     The number of times `InputLine`s have matched this `AliasConfig` since it was created.
     """
 
-    def __init__(self, pattern: str, name: str):
+    def __init__(
+        self,
+        pattern: str,
+        name: str,
+        callback: Optional[AliasCallable] = None,
+        expansion: Optional[str] = None,
+    ):
         """
         Create a new `AliasConfig` with a `pattern` and a `name`.
+
+        You can optionally provide a `callback` and an `expansion` string.
         """
         ...
 
@@ -1364,7 +1385,7 @@ class MudpuppyCore:
         The input will be marked as "scripted" to differentiate it from true user input
         typed at the keyboard.
 
-        [Command splitting](https://mudpuppy-rs.github.io/mudpuppy/user-guide/input.html#command-splitting) 
+        [Command splitting](https://mudpuppy-rs.github.io/mudpuppy/user-guide/input.html#command-splitting)
         works the same as for normal user input.
 
         Unlike true user input, aliases are **not** evaluated for `send_line()`

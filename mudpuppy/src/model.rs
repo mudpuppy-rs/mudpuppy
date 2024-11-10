@@ -485,16 +485,27 @@ impl TriggerConfig {
     ///
     /// If the regex pattern can't be compiled.
     #[new]
-    pub fn new(pattern: &str, name: String) -> Result<Self, Error> {
+    #[pyo3(signature = (pattern, name, *, strip_ansi=false, prompt=false, gag=false, callback=None, highlight=None, expansion=None))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        pattern: &str,
+        name: String,
+        strip_ansi: bool,
+        prompt: bool,
+        gag: bool,
+        callback: Option<PyObject>,
+        highlight: Option<PyObject>,
+        expansion: Option<String>,
+    ) -> Result<Self, Error> {
         let regex = Regex::new(pattern).map_err(TriggerError::Pattern)?;
         Ok(Self {
             name,
-            strip_ansi: false,
-            prompt: false,
-            gag: false,
-            callback: None,
-            highlight: None,
-            expansion: None,
+            strip_ansi,
+            prompt,
+            gag,
+            callback,
+            highlight,
+            expansion,
             hit_count: 0,
             regex,
         })
@@ -614,12 +625,19 @@ impl AliasConfig {
     ///
     /// If the regex pattern can't be compiled.
     #[new]
-    pub fn new(pattern: &str, name: String) -> Result<Self, Error> {
+    #[pyo3(signature = (pattern, name, *, callback=None, expansion=None))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        pattern: &str,
+        name: String,
+        callback: Option<Py<PyAny>>,
+        expansion: Option<String>,
+    ) -> Result<Self, Error> {
         let regex = Regex::new(pattern).map_err(AliasError::Pattern)?;
         Ok(Self {
             name,
-            callback: None,
-            expansion: None,
+            callback,
+            expansion,
             hit_count: 0,
             regex,
         })

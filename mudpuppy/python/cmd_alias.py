@@ -86,8 +86,9 @@ class AliasCmd(Command):
     async def add(self, sesh_id: SessionId, args: Namespace):
         if args.pattern is None:
             return
-        new_alias = AliasConfig(args.pattern, args.name)
-        new_alias.expansion = " ".join(args.command)
+        new_alias = AliasConfig(
+            args.pattern, args.name, expansion=" ".join(args.command)
+        )
         alias_id = mudpuppy_core.new_alias(sesh_id, new_alias, __name__)
         await mudpuppy_core.add_output(
             sesh_id,

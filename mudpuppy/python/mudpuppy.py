@@ -238,9 +238,9 @@ def alias(
 
         __ensure_async(handler)
 
-        alias_config = AliasConfig(pattern, alias_name)
-        alias_config.expansion = expansion
-        alias_config.callback = handler
+        alias_config = AliasConfig(
+            pattern, alias_name, expansion=expansion, callback=handler
+        )
 
         if mud_name:
 
@@ -299,12 +299,15 @@ def trigger(
 
         __ensure_async(handler)
 
-        trigger_config = TriggerConfig(pattern, trigger_name)
-        trigger_config.gag = gag
-        trigger_config.prompt = prompt
-        trigger_config.strip_ansi = strip_ansi
-        trigger_config.expansion = expansion
-        trigger_config.callback = handler
+        trigger_config = TriggerConfig(
+            pattern,
+            trigger_name,
+            gag=gag,
+            prompt=prompt,
+            strip_ansi=strip_ansi,
+            expansion=expansion,
+            callback=handler,
+        )
 
         if mud_name:
 
@@ -359,9 +362,9 @@ def highlight(
         if pattern.strip() == "" or highlight_name.strip() == "":
             raise ValueError("pattern and name must be non-empty")
 
-        trigger_config = TriggerConfig(pattern, highlight_name)
-        trigger_config.strip_ansi = strip_ansi
-        trigger_config.highlight = handler
+        trigger_config = TriggerConfig(
+            pattern, highlight_name, strip_ansi=strip_ansi, highlight=handler
+        )
 
         if mud_name:
 
