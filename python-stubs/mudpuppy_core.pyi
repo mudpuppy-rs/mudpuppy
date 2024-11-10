@@ -1082,7 +1082,7 @@ class LayoutNode:
     Each layout node describes a section in the layout tree.
     """
 
-    def __init__(self, name: str) -> "LayoutNode":
+    def __init__(self, name: str):
         """
         Creates a new `LayoutNode` with the given `name`.
         """
@@ -1153,7 +1153,7 @@ class LayoutNode:
         """
         ...
 
-    def find_section(self, name: str) -> (Constraint, "LayoutNode"):
+    def find_section(self, name: str) -> tuple[Constraint, "LayoutNode"]:
         """
         Returns the `Constraint` and `LayoutNode` for the section with the given `name`.
 
@@ -1303,14 +1303,14 @@ class MudpuppyCore:
         ...
 
     @staticmethod
-    def name(self) -> str:
+    def name() -> str:
         """
         Returns the name of the program.
         """
         ...
 
     @staticmethod
-    def version(self) -> str:
+    def version() -> str:
         """
         Returns the version of the program.
         """
@@ -1841,13 +1841,13 @@ class MudpuppyCore:
         """
         ...
 
-    async def quit():
+    async def quit(self):
         """
         Quits the Mudpuppy client. **Terminates all sessions!**
         """
         ...
 
-    async def reload():
+    async def reload(self):
         """
         Reloads all Python scripts.
 
@@ -2502,7 +2502,7 @@ class Input:
         """
         ...
 
-    def insert(self, c: chr):
+    def insert(self, c: str):
         """
         Inserts a character at the cursor position.
         """

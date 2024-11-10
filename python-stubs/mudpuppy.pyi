@@ -308,7 +308,7 @@ def alias(
     pattern: str,
     name: str,
     expansion: Optional[str] = None,
-    mud_name: Optional[Union[str | list[str]]] = None,
+    mud_name: Optional[Union[str, list[str]]] = None,
     module: Optional[str] = None,
 ) -> Callable[[mudpuppy_core.AliasCallable], mudpuppy_core.AliasCallable]:
     """
