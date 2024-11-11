@@ -1469,7 +1469,7 @@ class MudpuppyCore:
         ...
 
     async def new_trigger(
-        self, session_id: SessionId, config: TriggerConfig, module: str
+        self, id: SessionId, config: TriggerConfig, module: str
     ) -> TriggerId:
         """
         Creates a new trigger for the given session for the given `TriggerConfig`.
@@ -1548,7 +1548,7 @@ class MudpuppyCore:
         ...
 
     async def new_alias(
-        self, session_id: SessionId, config: AliasConfig, module: str
+        self, id: SessionId, config: AliasConfig, module: str
     ) -> AliasId:
         """
         Creates a new `Alias` for the given session for the given `AliasConfig`.
