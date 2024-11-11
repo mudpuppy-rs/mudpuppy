@@ -288,7 +288,7 @@ TriggerCallable = Callable[[SessionId, TriggerId, str, Any], Awaitable[None]]
 def trigger(
     *,
     pattern: str,
-    name: Optional[str],
+    name: Optional[str] = None,
     gag: bool = False,
     strip_ansi: bool = True,
     prompt: bool = False,
