@@ -1542,10 +1542,17 @@ fn user_modules() -> Result<Vec<PyObject>, Error> {
 async fn run_timer(timer_id: TimerId, config: TimerConfig, mut stop_rx: watch::Receiver<bool>) {
     let mut interval = tokio::time::interval(config.duration);
     let mut ticks = 0;
+    let mut first_tick = true;
 
     loop {
         tokio::select! {
             _ = interval.tick() => {
+                // The interval is always immediately ready for the first tick - we prefer
+                // to skip that tick and run the callback only after the duration expired.
+                if first_tick {
+                    first_tick = false;
+                    continue;
+                }
                 let awaitable = Python::with_gil(|py|{
                     pyo3_async_runtimes::tokio::into_future(config.callback.bind(py).call1((timer_id, config.session_id,))?)
                 });
