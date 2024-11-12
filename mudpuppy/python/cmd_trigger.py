@@ -1,7 +1,6 @@
 import logging
 from argparse import Namespace
 
-from commands import Command, add_command
 from mudpuppy_core import (
     Event,
     OutputItem,
@@ -10,7 +9,8 @@ from mudpuppy_core import (
     TriggerId,
     mudpuppy_core,
 )
-
+from commands import Command, add_command
+from cformat import cformat
 from mudpuppy import on_new_session
 
 
@@ -156,10 +156,14 @@ class TriggerCmd(Command):
                 label = f"Action={repr(label)}"
             else:
                 label = f"Highlight={str(trigger.config.highlight)}"
-
+            prefix = "<green>"
+            if not trigger.enabled:
+                prefix = "<red>"
             output_items.append(
                 OutputItem.command_result(
-                    f"{trigger.id}: Hits={trigger.config.hit_count} Gag={trigger.config.gag} Prompt={trigger.config.prompt} Pattern={repr(trigger.config.pattern())} {label}",
+                    cformat(
+                        f"{prefix}{trigger.id}: Enabled={trigger.enabled} Hits={trigger.config.hit_count} Gag={trigger.config.gag} Prompt={trigger.config.prompt} Pattern={repr(trigger.config.pattern())} {label}<reset>"
+                    ),
                 )
             )
         await mudpuppy_core.add_outputs(sesh_id, output_items)

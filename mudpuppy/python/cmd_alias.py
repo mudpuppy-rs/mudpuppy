@@ -1,7 +1,6 @@
 import logging
 from argparse import Namespace
 
-from commands import Command, add_command
 from mudpuppy_core import (
     AliasConfig,
     AliasId,
@@ -10,8 +9,9 @@ from mudpuppy_core import (
     SessionId,
     mudpuppy_core,
 )
-
+from commands import Command, add_command
 from mudpuppy import on_new_session
+from cformat import cformat
 
 
 class AliasCmd(Command):
@@ -120,9 +120,14 @@ class AliasCmd(Command):
             label = alias.config.expansion
             if alias.config.callback is not None:
                 label = str(alias.config.callback)
+            prefix = "<green>"
+            if not alias.enabled:
+                prefix = "<red>"
             output_items.append(
                 OutputItem.command_result(
-                    f"{alias.id}: Hits={alias.config.hit_count} {repr(alias.config.pattern())} -> {repr(label)}",
+                    cformat(
+                        f"{prefix}{alias.id}: Enabled={alias.enabled} Hits={alias.config.hit_count} {repr(alias.config.pattern())} -> {repr(label)}<reset>"
+                    ),
                 )
             )
         await mudpuppy_core.add_outputs(sesh_id, output_items)
