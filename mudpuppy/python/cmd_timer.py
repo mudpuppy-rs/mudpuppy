@@ -2,7 +2,6 @@ import logging
 from argparse import Namespace
 from typing import Optional
 
-from commands import Command, add_command
 from mudpuppy_core import (
     Event,
     OutputItem,
@@ -11,7 +10,8 @@ from mudpuppy_core import (
     TimerId,
     mudpuppy_core,
 )
-
+from commands import Command, add_command
+from cformat import cformat
 from mudpuppy import on_new_session
 
 
@@ -117,9 +117,14 @@ class TimerCmd(Command):
         timers = await mudpuppy_core.timers()
         output_items = []
         for timer in sorted(timers, key=lambda a: a.id):
+            prefix = "<green>"
+            if not timer.running:
+                prefix = "<red>"
             output_items.append(
                 OutputItem.command_result(
-                    f"{timer.id}: Running={timer.running} {timer.config}",
+                    cformat(
+                        f"{prefix}{timer.id}: Running={timer.running} {timer.config}<reset>"
+                    ),
                 )
             )
         await mudpuppy_core.add_outputs(sesh_id, output_items)
