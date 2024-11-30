@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use futures::stream::FuturesUnordered;
 use pyo3::exceptions::PyTypeError;
+use pyo3::ffi::c_str;
 use pyo3::types::{
     PyAnyMethods, PyBool, PyBoolMethods, PyFunction, PyList, PyListMethods, PyModule,
     PyModuleMethods, PyStringMethods, PyTuple,
@@ -83,36 +84,39 @@ pub fn init(py_app: PyApp) -> Result<(Py<EventHandlers>, Vec<PyObject>), Error> 
     let event_handlers = Python::with_gil(move |py| {
         // Set the Python logging level
         // TODO(XXX): use config to determine level.
-        py.run_bound(
-            r"
+        py.run(
+            c_str!(
+                r#"
 import logging
 logging.getLogger().setLevel(0)
-        ",
+        "#
+            ),
             None,
             None,
         )?;
-        py.run_bound("", None, None)?;
 
         debug!("adding {:?} to Python import path", config_dir());
         let syspath = py
-            .import_bound("sys")?
+            .import("sys")?
             .getattr("path")?
             .downcast_into::<PyList>()
             .map_err(|_| Error::Internal("getting Python syspath".to_string()))?;
         syspath.insert(0, config_dir())?;
 
-        let module: Py<PyAny> = PyModule::import_bound(py, "mudpuppy_core")?.into();
+        let module: Py<PyAny> = PyModule::import(py, "mudpuppy_core")?.into();
         module.setattr(py, "mudpuppy_core", py_app)?;
         let event_handlers = Py::new(py, EventHandlers::new())?;
         module.setattr(py, "event_handlers", event_handlers.clone())?;
 
         // Override print() built-in with one that will send output to the active MUD buffer.
-        py.run_bound(
-            r"
+        py.run(
+            c_str!(
+                r"
 import builtins
 import mudpuppy_core
 builtins.print = mudpuppy_core.mudpuppy_core.print
-        ",
+        "
+            ),
             None,
             None,
         )?;
@@ -164,7 +168,7 @@ pub fn reload(user_modules: &[PyObject]) -> Result<()> {
         }
 
         for module in user_modules {
-            let importlib = PyModule::import_bound(py, "importlib")?;
+            let importlib = PyModule::import(py, "importlib")?;
             importlib.call_method1("reload", (module,))?;
         }
         Ok(())
@@ -236,7 +240,7 @@ impl PyApp {
     fn require_coroutine(py: Python<'_>, name: &str, callback: &Py<PyAny>) -> PyResult<()> {
         // TODO(XXX): possible optimization - cache ref to this fn?
         let iscoroutinefunction = py
-            .import_bound("inspect")?
+            .import("inspect")?
             .getattr("iscoroutinefunction")?
             .downcast_into::<PyFunction>()
             .map_err(|_| Error::Internal("getting inspect iscoroutinefunction".to_string()))?;
@@ -310,7 +314,7 @@ impl PyApp {
         let sep = sep.unwrap_or(" ");
         let end = end.unwrap_or("\n");
         let mut output = String::new();
-        for (i, arg) in args.iter()?.enumerate() {
+        for (i, arg) in args.try_iter()?.enumerate() {
             if i > 0 {
                 output.push_str(sep);
             }
@@ -1487,7 +1491,7 @@ impl EventHandlers {
         );
         self.handlers
             .entry(event_type)
-            .or_insert_with(|| PyList::empty_bound(py).into())
+            .or_insert_with(|| PyList::empty(py).into())
             .bind(py)
             .append((handler, module))
     }
@@ -1532,7 +1536,7 @@ fn user_modules() -> Result<Vec<PyObject>, Error> {
             }
 
             info!("loading user module {module_name}.py");
-            let module: Py<PyAny> = PyModule::import_bound(py, &*module_name)?.into();
+            let module: Py<PyAny> = PyModule::import(py, &*module_name)?.into();
             modules.push(module);
         }
         Ok(modules)
@@ -1618,11 +1622,11 @@ macro_rules! builtin_modules {
             $(
                 modules.push(Python::with_gil(|py| {
                     trace!(concat!("loading module ", $module, ".py"));
-                    let module: PyObject = PyModule::from_code_bound(
+                    let module: PyObject = PyModule::from_code(
                         py,
-                        include_str!(concat!("../python/", $module, ".py")),
-                        concat!($module, ".py"),
-                        $module,
+                        c_str!(include_str!(concat!("../python/", $module, ".py"))),
+                        c_str!(concat!($module, ".py")),
+                        c_str!($module),
                     )
                     .unwrap() // Safety: builtin modules must always compile!
                     .into();
