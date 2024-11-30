@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 
 use pyo3::types::{PyAnyMethods, PyDict, PyList, PyListMethods, PyTuple};
-use pyo3::{pyclass, pymethods, Bound, IntoPy, Py, PyRef, Python};
+use pyo3::{pyclass, pymethods, Bound, Py, PyRef, Python};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::widgets::{Borders, Clear};
 use ratatui::Frame;
@@ -117,7 +117,7 @@ impl LayoutNode {
             name: name.to_string(),
             direction: PyDirection::default(),
             margin: 0,
-            sections: Py::from(PyList::empty_bound(py)),
+            sections: Py::from(PyList::empty(py)),
         }
     }
 
@@ -130,9 +130,7 @@ impl LayoutNode {
         constraint: PyConstraint,
     ) -> Result<()> {
         let sections_list = self.sections.bind(py);
-        sections_list
-            .append((constraint.into_py(py), node.into_py(py)))
-            .map_err(Into::into)
+        sections_list.append((constraint, node)).map_err(Into::into)
     }
 
     /// # Errors
@@ -158,7 +156,7 @@ impl LayoutNode {
     /// # Errors
     /// If the layout contains invalid types, or duplicate section names.
     pub fn all_layouts<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>, Error> {
-        let result = PyDict::new_bound(py);
+        let result = PyDict::new(py);
         self.collect_all_layouts(py, &result)?;
         Ok(result)
     }

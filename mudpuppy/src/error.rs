@@ -77,7 +77,7 @@ impl From<PyErr> for Error {
     fn from(error: PyErr) -> Self {
         Python::with_gil(|py| {
             let traceback = error
-                .traceback_bound(py)
+                .traceback(py)
                 .and_then(|t| t.format().ok())
                 .unwrap_or_default();
             Error::Python { error, traceback }
