@@ -32,8 +32,8 @@ A terminal [MUD] client with a customizable interface and Python scripting.
 
 * **Responsive TUI** - Mudpuppy is a terminal client, but it tries to be more
   like a GUI app. It has a terminal user-interface (TUI) with built-in support
-  for panes, resizable sub-windows, and so on. The TUI scales and redraws
-  as your terminal changes size, making it great for use on mobile over SSH.
+  for panes and resizable sub-windows. The TUI scales and redraws as your
+  terminal changes size, making it great for use on mobile over SSH.
 
 * **Python** - the "py" in "Mudpup**py**" stands for Python :) Instead of Lua,
   or a custom scripting language, Mudpuppy uses Python for customization and
@@ -41,7 +41,7 @@ A terminal [MUD] client with a customizable interface and Python scripting.
 
 * **Async** - triggers, aliases, and other core client functions are
   asynchronous. Your scripts can benefit from the Python `asyncio` ecosystem,
-  making it easy to take complex actions like making HTTP requests without
+  making it easy to take complex actions like sending HTTP requests without
   blocking the client.
 
 * **Multi-Session** - Mudpuppy will let you connect to multiple MUDs with one
@@ -56,13 +56,10 @@ A terminal [MUD] client with a customizable interface and Python scripting.
 
 # Quick Start
 
-1. Download a release:
+1. Build the client from source.
 
-```bash
-# TODO...
-```
-
-Advanced users may want to build from source. TODO: link to instructions.
+Binary releases will be provided in the future, but for now you will need to
+be comfortable installing Rust and building Mudpuppy from source.
 
 2. Create a config file with details for your favourite MUD. The location of the
    file will differ based on your OS.
@@ -89,8 +86,6 @@ host = "dunemud.net"
 port = 6789
 tls = "Disabled"
 ```
-
-See this example config file for more information. TODO: link to config file.
 
 3. Run Mudpuppy from a terminal, and get to hacking'n'slashing:
 
