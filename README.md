@@ -28,6 +28,8 @@ A terminal [MUD] client with a customizable interface and Python scripting.
 >
 > Here be dragons^H^H^H^H^H^H^Hrabid saber-toothed mudpuppys.
 
+https://github.com/user-attachments/assets/d89ade8d-7a36-4f14-8e76-17598aaac9a2
+
 # Features
 
 * **Responsive TUI** - Mudpuppy is a terminal client, but it tries to be more
