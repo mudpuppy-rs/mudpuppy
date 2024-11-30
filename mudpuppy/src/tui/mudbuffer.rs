@@ -216,11 +216,11 @@ impl buffer::Item for output::Item {
             | Self::Prompt { prompt: text }
             | Self::HeldPrompt { prompt: text } => String::from_utf8_lossy(&text.raw)
                 .to_string()
-                .replace('\t', "    ")
+                .clean()
                 .into_text()?,
             Self::PreviousSession { line, .. } => String::from_utf8_lossy(&line.raw)
                 .to_string()
-                .replace('\t', "    ")
+                .clean()
                 .into_text()?
                 .style(Style::default().add_modifier(Modifier::DIM)),
             Self::Input { line, .. } => {
@@ -230,7 +230,7 @@ impl buffer::Item for output::Item {
                 vec![Line::from([self.icon().unwrap(), status.into()].concat())].into()
             }
             Self::Debug { line } => {
-                let mut content = line.replace('\t', "    ").into_text()?;
+                let mut content = line.clean().into_text()?;
                 for line in &mut content.lines {
                     line.style = Style::default().add_modifier(Modifier::DIM);
                     if let Some(spans) = self.icon() {
@@ -240,7 +240,7 @@ impl buffer::Item for output::Item {
                 content
             }
             Self::CommandResult { error, message } => {
-                let mut content = message.replace('\t', "    ").into_text()?;
+                let mut content = message.clean().into_text()?;
                 for line in &mut content.lines {
                     line.style = Style::default().fg(match error {
                         true => Color::LightRed,
@@ -253,6 +253,19 @@ impl buffer::Item for output::Item {
                 content
             }
         })
+    }
+}
+
+trait CleanText {
+    fn clean(&self) -> String;
+}
+
+impl CleanText for String {
+    fn clean(&self) -> String {
+        self.replace('\t', "    ")
+            .chars()
+            .filter(|c| !c.is_control() || *c == '\x1B')
+            .collect()
     }
 }
 
