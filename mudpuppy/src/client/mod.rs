@@ -176,6 +176,7 @@ impl Client {
                         None => self.transmit_input(s, futures),
                     }
                 }
+                None => self.transmit_input(String::default(), futures),
                 _ => Ok(()),
             };
         }
@@ -324,9 +325,6 @@ impl Client {
         match &mud.command_separator {
             Some(sep) => {
                 for fragment in line.sent.split(sep) {
-                    if fragment.trim() == "" {
-                        continue;
-                    }
                     let mut line = line.clone();
                     if line.sent != fragment {
                         line.original = Some(line.sent);
