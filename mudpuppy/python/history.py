@@ -68,7 +68,7 @@ class History:
         while self.cursor_pos < len(self.lines) - 1:
             self.cursor_pos += 1
             line = self.lines[self.cursor_pos]
-            skip = line.scripted and skip_scripted
+            skip = line.scripted and skip_scripted or line.sent.strip() == ""
             logging.debug(f"{self} pos updated - line={line}, skip={skip}")
             if skip:
                 continue
@@ -98,7 +98,7 @@ class History:
         while self.cursor_pos > 0:
             self.cursor_pos -= 1
             line = self.lines[self.cursor_pos]
-            skip = line.scripted and skip_scripted
+            skip = line.scripted and skip_scripted or line.sent.strip() == ""
             logging.debug(f"{self} pos updated - line={line}, skip={skip}")
             if skip:
                 continue
