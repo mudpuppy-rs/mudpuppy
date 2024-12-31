@@ -592,6 +592,7 @@ pub trait Tab: Debug + Send + Sync {
     fn draw(&mut self, state: &mut State, frame: &mut Frame<'_>, area: Rect) -> Result<()>;
 }
 
+// TODO(XXX): split into a simple enum for type, and a variant enum for state.
 #[derive(Debug)]
 pub enum TabKind {
     MudList {},
@@ -602,8 +603,8 @@ impl TabKind {
     #[must_use]
     pub fn config_key(&self) -> &'static str {
         match self {
-            Self::MudList {} => "MudList",
-            Self::Session { .. } => "Mud",
+            Self::MudList {} => "mudlist",
+            Self::Session { .. } => "mud",
         }
     }
 }
