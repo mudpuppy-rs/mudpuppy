@@ -12,7 +12,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio_rustls::rustls::pki_types;
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Value};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -311,10 +311,8 @@ impl Config {
 
         let builder = config::Config::builder()
             // Safety: `set_default()` is documented to only panic if string conversion of the key fails.
-            .set_default("_data_dir", data_dir().to_str().unwrap_or_default())
-            .unwrap()
-            .set_default("_config_dir", config_dir().to_str().unwrap_or_default())
-            .unwrap()
+            .set_default("_data_dir", data_dir().to_str().unwrap_or_default())?
+            .set_default("_config_dir", config_dir().to_str().unwrap_or_default())?
             .add_source(
                 config::File::from(config_file)
                     .format(config::FileFormat::Toml)
@@ -333,6 +331,29 @@ impl Config {
                 default_config.keybindings.0.len()
             );
             cfg.keybindings = default_config.keybindings;
+        } else {
+            if let Some(unknown_mode) = cfg
+                .keybindings
+                .0
+                .keys()
+                .find(|k| *k != "mudlist" && *k != "mud")
+            {
+                warn!("unknown keybinding mode {unknown_mode:?} found in config");
+            }
+            debug!("merging keybindings from config with defaults");
+            for (mode, bindings) in default_config.keybindings.0 {
+                let user_bindings = cfg.keybindings.0.entry(mode.to_lowercase()).or_default();
+                for (key_seq, shortcut) in bindings {
+                    user_bindings.entry(key_seq).or_insert(shortcut);
+                }
+            }
+        }
+
+        for (mode, bindings) in &cfg.keybindings.0 {
+            trace!("key bindings for mode: {mode}");
+            for (key_seq, shortcut) in bindings {
+                trace!("{}: {key_seq:?} -> {shortcut:?}", mode.to_lowercase());
+            }
         }
 
         cfg.validate()?;
@@ -392,7 +413,7 @@ impl<'de> Deserialize<'de> for KeyBindings {
                         )
                     })
                     .collect();
-                (input_mode, converted_inner_map)
+                (input_mode.to_lowercase(), converted_inner_map)
             })
             .collect();
 
