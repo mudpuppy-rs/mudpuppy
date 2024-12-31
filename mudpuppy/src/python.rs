@@ -1,3 +1,4 @@
+#![allow(clippy::useless_conversion)] // TODO(@xxx): debug root cause.
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};

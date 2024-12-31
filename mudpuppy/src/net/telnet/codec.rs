@@ -203,7 +203,7 @@ impl TryFrom<Command> for Item {
             Command::Do(opt) => Item::Negotiation(Negotiation::Do(opt)),
             Command::Dont(opt) => Item::Negotiation(Negotiation::Dont(opt)),
             Command::Other(cmd) => Item::IacCommand(cmd),
-            _ => return Err(Error::Internal("unexpected raw item: {raw:?}".into())),
+            _ => return Err(Error::Internal(format!("unexpected raw item: {raw:?}"))),
         })
     }
 }
