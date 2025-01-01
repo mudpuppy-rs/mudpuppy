@@ -23,8 +23,8 @@ use crate::config::GlobalConfig;
 use crate::error::Error;
 use crate::idmap::{IdMap, Identifiable};
 use crate::model::{
-    Alias, AliasConfig, AliasId, InputLine, MudLine, PromptMode, PromptSignal, SessionId,
-    SessionInfo, Trigger, TriggerConfig, TriggerId,
+    Alias, AliasConfig, AliasId, InputLine, KeyEvent as PyKeyEvent, MudLine, PromptMode,
+    PromptSignal, SessionId, SessionInfo, Trigger, TriggerConfig, TriggerId,
 };
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation};
 use crate::net::{connection, stream, telnet};
@@ -181,11 +181,12 @@ impl Client {
             };
         }
         self.input.handle_key_event(event);
-        self.event_tx.send(python::Event::KeyPress {
-            id: self.info.id,
-            // TODO(XXX): using json serialization as a quick hack. Unpack data we need instead.
-            json: serde_json::to_string(&event).unwrap_or_default(),
-        })?;
+        if let Ok(model_event) = PyKeyEvent::try_from(*event) {
+            self.event_tx.send(python::Event::KeyPress {
+                id: self.info.id,
+                key: model_event,
+            })?;
+        }
         Ok(())
     }
 

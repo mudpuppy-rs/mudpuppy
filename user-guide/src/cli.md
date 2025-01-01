@@ -23,9 +23,9 @@ By default `mudpuppy` opens to a MUD list screen where you can select which MUD 
 listed in your [Config]. However, if you know which MUD(s) you want to connect to at startup, you can use the
 `--connect` option to specify them. This option can be used multiple times to specify multiple MUDs. Mudpuppy 
 will open new tabs for each of the `--conect` arguments and immediately connect. The `<MUD_NAME>` argument must
-match the `name` field of a MUD in your [Config].
+match the `name` field of a MUD in your [MUD Config].
 
-[Config]: ./config.md
+[MUD Config]: ./config/muds.md
 
 ## Log Level
 

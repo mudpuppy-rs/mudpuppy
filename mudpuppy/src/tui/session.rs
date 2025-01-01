@@ -13,7 +13,7 @@ use crate::app::{State, Tab, TabAction, TabKind};
 use crate::client::output;
 use crate::config::{edit_mud, GlobalConfig};
 use crate::error::Error;
-use crate::model::{SessionInfo, Shortcut};
+use crate::model::{InputMode, SessionInfo, Shortcut};
 use crate::tui::input::{self, Input};
 use crate::tui::layout::{LayoutNode, PyConstraint};
 use crate::tui::mudbuffer::{self, MudBuffer};
@@ -49,6 +49,10 @@ impl Tab for Widget {
         TabKind::Session {
             session: self.session.clone(),
         }
+    }
+
+    fn input_mode(&self) -> InputMode {
+        InputMode::MudSession
     }
 
     // TODO(XXX): Text styling.
@@ -99,7 +103,7 @@ impl Tab for Widget {
             _ => {}
         }
 
-        self.scroll_window.handle_shortcut(&shortcut);
+        self.scroll_window.handle_shortcut(shortcut);
 
         state.event_tx.send(python::Event::Shortcut {
             id: self.session.id,

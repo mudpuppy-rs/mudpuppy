@@ -23,11 +23,12 @@ use tokio::sync::{watch, RwLock};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::app::{State, UiState};
-use crate::config::{config_dir, data_dir, GlobalConfig};
+use crate::config::{config_dir, data_dir, GlobalConfig, KeyBindings};
 use crate::error::Error;
 use crate::model::{
-    Alias, AliasConfig, AliasId, InputLine, Mud, MudLine, PromptMode, PromptSignal, SessionId,
-    SessionInfo, Shortcut, Timer, TimerConfig, TimerId, Tls, Trigger, TriggerConfig, TriggerId,
+    Alias, AliasConfig, AliasId, InputLine, KeyEvent, Mud, MudLine, PromptMode, PromptSignal,
+    SessionId, SessionInfo, Shortcut, Timer, TimerConfig, TimerId, Tls, Trigger, TriggerConfig,
+    TriggerId,
 };
 use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 
@@ -40,6 +41,8 @@ use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
     m.add_class::<GlobalConfig>()?;
+    m.add_class::<KeyEvent>()?;
+    m.add_class::<KeyBindings>()?;
     m.add_class::<Shortcut>()?;
     m.add_class::<SessionInfo>()?;
     m.add_class::<SessionId>()?;
@@ -141,6 +144,7 @@ builtins.print = mudpuppy_core.mudpuppy_core.print
         "cmd_alias",
         "cmd_trigger",
         "cmd_timer",
+        "cmd_bindings",
     );
     debug!("found {} built-in py modules", builtin_modules.len());
 
@@ -1193,8 +1197,7 @@ pub enum Event {
     },
     KeyPress {
         id: SessionId,
-        // TODO(XXX): avoid JSON marshal, just pull out the data we care about...
-        json: String,
+        key: KeyEvent,
     },
     GmcpEnabled {
         id: SessionId,
@@ -1331,8 +1334,8 @@ impl Display for Event {
                     "event: connection ID {id} triggered shortcut {shortcut:?}"
                 )
             }
-            Event::KeyPress { id, json } => {
-                write!(f, "event: connection ID {id} key press {json}")
+            Event::KeyPress { id, key } => {
+                write!(f, "event: connection ID {id} key press {key}")
             }
             Event::Python {
                 id, custom_type, ..

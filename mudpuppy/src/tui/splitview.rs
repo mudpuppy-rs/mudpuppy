@@ -60,8 +60,8 @@ impl ScrollWindow {
         // Render the scrollback content and the scrollbar inside a viewport offset within the
         // overall area.
         let viewport = area.inner(Margin {
-            vertical: self.mud.splitview_margin_horizontal,
-            horizontal: self.mud.splitview_margin_vertical,
+            vertical: self.mud.splitview_margin_vertical,
+            horizontal: self.mud.splitview_margin_horizontal,
         });
         // Make sure to clear the viewport first - we're drawing on top of the already rendered
         // normal buffer content.
@@ -81,7 +81,7 @@ impl ScrollWindow {
         )
     }
 
-    pub(super) fn handle_shortcut(&mut self, shortcut: &Shortcut) {
+    pub(super) fn handle_shortcut(&mut self, shortcut: Shortcut) {
         // TODO(XXX): look up scroll line config.
         let scroll_lines = default::SCROLL_LINES;
 

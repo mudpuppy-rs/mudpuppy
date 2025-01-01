@@ -18,8 +18,7 @@ better-panic = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 config = { workspace = true, features = ["toml"] }
 console-subscriber = { workspace = true, optional = true }
-# TODO(XXX): remove serde once KeyPress hack addressed.
-crossterm = { workspace = true, features = ["event-stream", "bracketed-paste", "serde"] }
+crossterm = { workspace = true, features = ["event-stream", "bracketed-paste"] }
 deref-derive = { workspace = true }
 directories = { workspace = true }
 futures = { workspace = true }
@@ -34,6 +33,7 @@ regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 socket2 = { workspace = true }
+strum = { workspace = true }
 strip-ansi-escapes = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }

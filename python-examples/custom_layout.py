@@ -152,44 +152,40 @@ async def layout_init(session: SessionInfo, layout_manager: LayoutManager):
 # TODO(XXX): read key bindings from config
 @on_event(EventType.KeyPress)
 async def on_key(event: Event):
-    import json
-
     assert isinstance(event, Event.KeyPress)
 
-    key_data = json.loads(event.json)
     layout = layouts.get(event.id)
     if layout is None:
         logging.warning(f"no custom layout found for {event.id}")
         return
 
-    # Windows will generate both key up and key down events.
-    if key_data.get("kind", "") != "Press":
-        logging.debug("ignoring non-press event")
-        return
-
-    if isinstance(key_data["code"], dict) and key_data["code"].get("F") == 5:
+    code = event.key.code()
+    modifiers = event.key.modifiers()
+    no_modifiers = len(modifiers) == 0
+    if no_modifiers and code == "f4":
         layout.toggle_channel_area()
         return
-    elif isinstance(key_data["code"], dict) and key_data["code"].get("F") == 4:
+    elif no_modifiers and code == "f5":
         layout.toggle_status_area()
+        return
 
-    if key_data["modifiers"] == "ALT":
-        if isinstance(key_data["code"], dict) and key_data["code"].get("Char") == "h":
+    if modifiers == ["alt"]:
+        if code == "h":
             layout.resize_status_area(5)
-        elif isinstance(key_data["code"], dict) and key_data["code"].get("Char") == "l":
+        elif code == "l":
             layout.resize_status_area(-5)
-        elif isinstance(key_data["code"], dict) and key_data["code"].get("Char") == "j":
+        elif code == "j":
             layout.resize_channel_area(5)
-        elif isinstance(key_data["code"], dict) and key_data["code"].get("Char") == "k":
+        elif code == "k":
             layout.resize_channel_area(-5)
-        elif key_data["code"] == "PageUp":
+        elif code == "pageup":
             layout.channel_buffer.scroll_max()
-        elif key_data["code"] == "PageDown":
+        elif code == "pagedown":
             layout.channel_buffer.scroll_bottom()
-    elif key_data["modifiers"] == "SHIFT":
-        if key_data["code"] == "PageUp":
+    elif modifiers == ["shift"]:
+        if code == "pageup":
             layout.channel_buffer.scroll_up(5)
-        elif key_data["code"] == "PageDown":
+        elif code == "pagedown":
             layout.channel_buffer.scroll_down(5)
 
 

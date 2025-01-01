@@ -11,10 +11,10 @@ use toml_edit::{ArrayOfTables, DocumentMut, Item, Value};
 use tracing::{debug, info, trace, warn};
 
 use super::keybindings::KeyBindings;
-use crate::app::TabKind;
 use crate::config::{config_dir, config_file, data_dir};
 use crate::error::{ConfigError, Error};
-use crate::model::{Mud, Shortcut, Tls};
+use crate::model::{self, InputMode, Mud, Shortcut, Tls};
+use crate::Result;
 
 /// A [`Config`] that is shared globally for the entire application.
 #[derive(Debug, Clone)]
@@ -29,7 +29,7 @@ impl GlobalConfig {
     ///
     /// Returns an error if loading config content from disk fails, for example
     /// because the [`config_file()`] is invalid.
-    pub fn new() -> crate::Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self(Arc::new(RwLock::new(Config::new()?))))
     }
 
@@ -38,7 +38,7 @@ impl GlobalConfig {
     /// # Errors
     ///
     /// Returns an error if the new configuration is invalid.
-    pub fn reload(&self) -> crate::Result<(), Error> {
+    pub fn reload(&self) -> Result<(), Error> {
         if let Ok(mut config) = self.0.write() {
             return config.load().map_err(Into::into);
         }
@@ -57,13 +57,10 @@ impl GlobalConfig {
     }
 
     #[must_use]
-    pub fn key_binding(&self, tab_kind: &TabKind, event: &KeyEvent) -> Option<Shortcut> {
+    pub fn key_binding(&self, input_mode: InputMode, event: &KeyEvent) -> Option<Shortcut> {
+        let key_event = model::KeyEvent::try_from(*event).ok()?;
         self.lookup(
-            |config| {
-                // TODO(XXX): Consider multi-key shortcuts. Requires buffering KeyEvents somewhere.
-                let tab_shortcuts = config.keybindings.0.get(tab_kind.config_key())?;
-                tab_shortcuts.get(&vec![*event]).cloned()
-            },
+            |config| config.keybindings.lookup(input_mode, &key_event),
             None,
         )
     }
@@ -82,9 +79,14 @@ impl GlobalConfig {
     /// # Errors
     ///
     /// Returns an error if the MUD can't be found in the configuration by the given name.
-    pub fn must_lookup_mud(&self, mud_name: &str) -> crate::Result<Mud> {
+    pub fn must_lookup_mud(&self, mud_name: &str) -> Result<Mud> {
         self.lookup_mud(mud_name)
             .ok_or(ConfigError::MissingMud(mud_name.to_string()).into())
+    }
+
+    #[must_use]
+    pub fn keybindings(&self) -> KeyBindings {
+        self.lookup(|config| config.keybindings.clone(), KeyBindings::default())
     }
 }
 
@@ -93,8 +95,7 @@ impl GlobalConfig {
 pub struct Config {
     #[serde(default)]
     pub muds: Vec<Mud>,
-
-    #[serde(default)]
+    #[serde(default, flatten)]
     pub keybindings: KeyBindings,
 }
 
@@ -106,14 +107,14 @@ impl Config {
     ///
     /// # Errors
     /// If the config content is not valid TOML an error will be returned.
-    pub fn new() -> crate::Result<Self> {
+    pub fn new() -> Result<Self> {
         let mut cfg = Self::default();
         cfg.load()?;
         Ok(cfg)
     }
 
     #[allow(clippy::missing_errors_doc)] // TODO(XXX): doc
-    pub fn load(&mut self) -> crate::Result<(), ConfigError> {
+    pub fn load(&mut self) -> Result<(), ConfigError> {
         let default_config: Config = toml::from_str(CONFIG)?;
         let config_file = config_file();
 
@@ -137,34 +138,18 @@ impl Config {
             cfg.muds = default_config.muds;
         }
 
-        if cfg.keybindings.0.is_empty() {
-            trace!(
-                "No keybindings found in config. Using defaults ({} mode bindings)",
-                default_config.keybindings.0.len()
-            );
+        if cfg.keybindings.is_empty() {
+            trace!("No keybindings found in config. Using defaults");
             cfg.keybindings = default_config.keybindings;
         } else {
-            if let Some(unknown_mode) = cfg
-                .keybindings
-                .0
-                .keys()
-                .find(|k| *k != "mudlist" && *k != "mud")
-            {
-                warn!("unknown keybinding mode {unknown_mode:?} found in config");
-            }
             debug!("merging keybindings from config with defaults");
-            for (mode, bindings) in default_config.keybindings.0 {
-                let user_bindings = cfg.keybindings.0.entry(mode.to_lowercase()).or_default();
-                for (key_seq, shortcut) in bindings {
-                    user_bindings.entry(key_seq).or_insert(shortcut);
-                }
-            }
+            cfg.keybindings.merge(default_config.keybindings);
         }
 
-        for (mode, bindings) in &cfg.keybindings.0 {
+        for mode in cfg.keybindings.modes() {
             trace!("key bindings for mode: {mode}");
-            for (key_seq, shortcut) in bindings {
-                trace!("{}: {key_seq:?} -> {shortcut:?}", mode.to_lowercase());
+            for (key_seq, shortcut) in cfg.keybindings.bindings(*mode) {
+                trace!("{key_seq} -> {shortcut}");
             }
         }
 
@@ -174,7 +159,7 @@ impl Config {
         Ok(())
     }
 
-    fn validate(&self) -> crate::Result<(), ConfigError> {
+    fn validate(&self) -> Result<(), ConfigError> {
         for mud in &self.muds {
             if mud.name.is_empty() {
                 return Err(ConfigError::InvalidMud("name is empty".to_string()));
@@ -207,7 +192,7 @@ impl Config {
 ///
 /// Returns an error if config file can't be opened, read, written to, or if it contains
 /// invalid TOML content.
-pub fn edit_mud(name: &str, key: &str, v: impl Into<Value> + Debug) -> crate::Result<()> {
+pub fn edit_mud(name: &str, key: &str, v: impl Into<Value> + Debug) -> Result<()> {
     let mut config_file = OpenOptions::new()
         .read(true)
         .write(true)

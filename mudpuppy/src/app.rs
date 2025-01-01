@@ -33,7 +33,7 @@ use crate::client::Client;
 use crate::config::{config_dir, config_file, GlobalConfig};
 use crate::error::Error;
 use crate::idmap::IdMap;
-use crate::model::{Mud, SessionId, SessionInfo, Shortcut, Timer, TimerId};
+use crate::model::{InputMode, Mud, SessionId, SessionInfo, Shortcut, Timer, TimerId};
 use crate::net::connection;
 use crate::python::{self, PyApp};
 use crate::tui::{mudlist, session};
@@ -316,7 +316,7 @@ impl App {
             }
         }
 
-        let Some(shortcut) = self.config.key_binding(&current_tab.kind(), key_event) else {
+        let Some(shortcut) = self.config.key_binding(current_tab.input_mode(), key_event) else {
             return current_tab.term_event(state, event_futures, event);
         };
 
@@ -542,6 +542,8 @@ fn config_reload_event(
 #[async_trait]
 pub trait Tab: Debug + Send + Sync {
     fn kind(&self) -> TabKind;
+
+    fn input_mode(&self) -> InputMode;
 
     fn title(&self) -> Line;
 

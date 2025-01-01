@@ -127,6 +127,22 @@ pub enum ConfigError {
 
     #[error("configuring logging: {0}")]
     Logging(String),
+
+    #[error("{0}")]
+    Keybinding(#[from] KeyBindingError),
+}
+
+#[derive(Debug, Error)]
+#[allow(clippy::module_name_repetitions)]
+pub enum KeyBindingError {
+    #[error("unknown input mode: {0:?}")]
+    UnknownMode(String),
+
+    #[error("unknown shortcut: {0:?}")]
+    UnknownShortcut(String),
+
+    #[error("invalid keybinding keys: {0}")]
+    InvalidKeys(String),
 }
 
 #[derive(Debug, Error)]
