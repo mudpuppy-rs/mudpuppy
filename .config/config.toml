@@ -15,58 +15,116 @@
 # port = 6789
 # tls = "Disabled"
 
-# Default key bindings for the MUD list.
-[keybindings.MudList.Up]
-MudListPrev = {}
-[keybindings.MudList.Down]
-MudListNext = {}
-[keybindings.MudList.Enter]
-MudListConnect = {}
-[keybindings.MudList."<Ctrl-p>"]
-TabPrev = {}
-[keybindings.MudList."<Ctrl-n>"]
-TabNext = {}
-[keybindings.MudList.q]
-Quit = {}
-[keybindings.MudList.x]
-Quit = {}
-[keybindings.MudList."<Ctrl-d>"]
-Quit = {}
-[keybindings.MudList."<Ctrl-c>"]
-Quit = {}
-[keybindings.MudList."<Ctrl-x>"]
-Quit = {}
+[[binding]]
+mode = "mudlist"
+keys = "up"
+action = "mudlistprev"
 
-# Default key bindings for MUD sessions.
-[keybindings.Mud."<Ctrl-p>"]
-TabPrev = {}
-[keybindings.Mud."<Ctrl-n>"]
-TabNext = {}
-[keybindings.Mud."<Alt-p>"]
-TabSwapLeft = {}
-[keybindings.Mud."<Alt-n>"]
-TabSwapRight = {}
-[keybindings.Mud."<Ctrl-d>"]
-Quit = {}
-[keybindings.Mud."<Ctrl-c>"]
-Quit = {}
-[keybindings.Mud."<Ctrl-q>"]
-Quit = {}
-[keybindings.Mud."<Ctrl-x>"]
-TabClose = {}
-[keybindings.Mud."F2"]
-ToggleInputEcho = {}
-[keybindings.Mud."F3"]
-ToggleLineWrap = {}
-[keybindings.Mud."Up"]
-HistoryPrevious = {}
-[keybindings.Mud."Down"]
-HistoryNext = {}
-[keybindings.Mud."PageUp"]
-ScrollUp = {}
-[keybindings.Mud."PageDown"]
-ScrollDown = {}
-[keybindings.Mud."<Shift-Home>"]
-ScrollTop = {}
-[keybindings.Mud."<Shift-End>"]
-ScrollBottom = {}
+[[binding]]
+mode = "mudlist"
+keys = "down"
+action = "mudlistnext"
+
+[[binding]]
+mode = "mudlist"
+keys = "enter"
+action = "mudlistconnect"
+
+[[binding]]
+mode = "mudlist"
+keys = "ctrl-p"
+action = "tabprev"
+
+[[binding]]
+mode = "mudlist"
+keys = "ctrl-n"
+action = "tabnext"
+
+[[binding]]
+mode = "mudlist"
+keys = "q"
+action = "quit"
+
+[[binding]]
+mode = "mudlist"
+keys = "x"
+action = "quit"
+
+[[binding]]
+mode = "mudlist"
+keys = "ctrl-d"
+action = "quit"
+
+[[binding]]
+mode = "mudlist"
+keys = "ctrl-c"
+action = "quit"
+
+[[binding]]
+mode = "mudlist"
+keys = "ctrl-x"
+action = "quit"
+
+[[binding]]
+keys = "ctrl-p"
+action = "tabprev"
+
+[[binding]]
+keys = "ctrl-n"
+action = "tabnext"
+
+[[binding]]
+keys = "alt-p"
+action = "tabswapleft"
+
+[[binding]]
+keys = "alt-n"
+action = "tabswapright"
+
+[[binding]]
+keys = "ctrl-d"
+action = "quit"
+
+[[binding]]
+keys = "ctrl-c"
+action = "quit"
+
+[[binding]]
+keys = "ctrl-q"
+action = "quit"
+
+[[binding]]
+keys = "ctrl-x"
+action = "tabclose"
+
+[[binding]]
+keys = "f2"
+action = "toggleinputecho"
+
+[[binding]]
+keys = "f3"
+action = "togglelinewrap"
+
+[[binding]]
+keys = "up"
+action = "historyprevious"
+
+[[binding]]
+keys = "down"
+action = "historynext"
+
+[[binding]]
+keys = "pageup"
+action = "scrollup"
+
+[[binding]]
+keys = "pagedown"
+action = "scrolldown"
+
+[[binding]]
+keys = "shift-home"
+action = "scrolltop"
+
+[[binding]]
+keys = "shift-end"
+action = "scrollbottom"

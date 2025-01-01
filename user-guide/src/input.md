@@ -7,9 +7,9 @@ situation Mudpuppy supports input that's split into multiple commands based on
 a special command splitting delimiter. 
 
 By default this delimiter is `;;` but it can be adjusted by setting the
-`command_separator` field of a MUD config in your [Config] file.
+`command_separator` field of a MUD config in your [MUD Config].
 
-[Config]: config.md
+[MUD Config]: config/muds.md
 
 ### Example
 

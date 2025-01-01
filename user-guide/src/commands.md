@@ -37,6 +37,16 @@ def __reload__():
 These commands allow creating simple aliases/triggers/timers that last only for
 the duration of the session. To create durable versions pref Python scripting.
 
+## `/bindings`
+
+View the configured key bindings. You can show only bindings for a specific
+input mode by providing `--mode` to the list sub command, e.g.:
+
+```
+/bindings list --mode=mudsession
+```
+
+See [Key Bindings](config/keybindings.md) for more information.
 
 ## `/py`
 

@@ -101,7 +101,7 @@ class TriggerCmd(Command):
         if hasattr(args, "func"):
             await args.func(sesh_id, args)
         else:
-            self.display_help(sesh_id)
+            await self.display_help(sesh_id)
 
     async def add(self, sesh_id: SessionId, args: Namespace):
         if args.pattern is None:

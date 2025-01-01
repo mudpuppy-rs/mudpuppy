@@ -10,7 +10,7 @@ use tracing::{info, instrument, Level};
 use crate::app::{State, Tab, TabAction, TabKind};
 use crate::config::{config_file, GlobalConfig};
 use crate::error::Error;
-use crate::model::{Mud, Shortcut};
+use crate::model::{InputMode, Mud, Shortcut};
 use crate::Result;
 
 #[derive(Debug)]
@@ -81,6 +81,10 @@ impl Widget {
 impl Tab for Widget {
     fn kind(&self) -> TabKind {
         TabKind::MudList {}
+    }
+
+    fn input_mode(&self) -> InputMode {
+        InputMode::MudList
     }
 
     // TODO(XXX): Text styling.

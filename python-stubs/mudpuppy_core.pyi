@@ -12,6 +12,8 @@ __all__ = [
     "SessionId",
     "Mud",
     "Tls",
+    "KeyEvent",
+    "KeyBindings",
     "MudLine",
     "InputLine",
     "Event",
@@ -52,6 +54,211 @@ from typing import Optional, Any, Callable, Awaitable, Tuple
 from enum import StrEnum, auto
 import datetime
 
+class Tls(StrEnum):
+    """
+    Describes whether/how TLS should be used when connecting to a `Mud`.
+    """
+
+    Disabled = auto()
+    """
+    TLS is not used. Plain (insecure) Telnet should be used.
+    """
+
+    Enabled = auto()
+    """
+    TLS should be used and the server certificate chain verified.
+    """
+
+    VerifySkipped = auto()
+    """
+    TLS should be used, but certificate errors should be ignored.
+
+    This is generally unsafe but may be required if the server is misconfigured
+    or if you're using self-signed test certificates.
+    """
+
+class Mud:
+    """
+    Information about a MUD and its configuration.
+    """
+
+    name: str
+    """
+    Name of the MUD.
+
+    Used as the label for the session tab, and for listing the MUD on the connection
+    screen.
+
+    This is the identifier you will use with decorators like `mudpuppy.trigger` for the
+    `mud_name` parameter.
+    """
+
+    host: str
+    """
+    Host address of the MUD.
+
+    This is typically a domain name like `"dunemud.net"` or an IP address like `8.8.8.8` or
+    `2607:f8b0:400b:803::200e`.
+
+    The `port` number is specified separately and not included here.
+    """
+
+    port: int
+    """
+    Port number of the MUD.
+
+    This varies by game, and may change based on whether you're using TLS or not.
+    """
+
+    tls: Tls
+    """
+    Describes the TLS configuration for the MUD.
+    """
+
+    command_separator: Optional[str]
+    """
+    An optional command separator to use when sending multiple commands in a single line.
+    """
+
+
+class KeyEvent:
+    """
+    A key press event.
+    """
+    def code(self) -> str:
+        """
+        Returns the key code for the event.
+
+        Example: "a", "q", "f10"
+        """
+
+    def modifiers(self) -> list[str]:
+        """
+        Return a list of key modifiers active for the key code.
+
+        Example: "ctrl", "shift", "alt"
+        """
+
+class Shortcut(StrEnum):
+    """
+    A recognized keyboard shortcut.
+    """
+
+    Quit = auto()
+    """
+    A shortcut to quit the client
+    """
+
+    TabNext = auto()
+    """
+    A shortcut to change to the next tab.
+    """
+
+    TabPrev = auto()
+    """
+    A shortcut to change to the previous tab.
+    """
+
+    TabClose = auto()
+    """
+    A shortcut to close the current tab.
+    """
+
+    TabSwapLeft = auto()
+    """
+    A shortcut to swap the current tab with the tab to the left.
+    """
+
+    TabSwapRight = auto()
+    """
+    A shortcut to swap the current tab with the tab to the right.
+    """
+
+    MudListNext = auto()
+    """
+    A shortcut to select the next MUD from the MUD list.
+    """
+
+    MudListPrev = auto()
+    """
+    A shortcut to select the previous MUD from the MUD list.
+    """
+
+    MudListConnect = auto()
+    """
+    A shortcut to connect to the selected MUD from the MUD list.
+    """
+
+    ToggleLineWrap = auto()
+    """
+    A shortcut to toggle line wrapping in the output area.
+    """
+
+    ToggleInputEcho = auto()
+    """
+    A shortcut to toggle whether `InputLine`s are displayed in the output buffer.
+    """
+
+    HistoryNext = auto()
+    """
+    A shortcut to navigate to the next line in the input history.
+    """
+
+    HistoryPrevious = auto()
+    """
+    A shortcut to navigate to the previous line in the input history.
+    """
+
+    ScrollUp = auto()
+    """
+    A shortcut to scroll the output buffer up.
+    """
+
+    ScrollDown = auto()
+    """
+    A shortcut to scroll the output buffer down.
+    """
+
+    ScrollTop = auto()
+    """
+    A shortcut to scroll the output buffer to the top.
+    """
+
+    ScrollBottom = auto()
+    """
+    A shortcut to scroll the output buffer to the bottom.
+    """
+
+class KeyBindings:
+    """
+    Read-only Key binding configuration.
+    See `Config` for more information.
+    """
+
+    def modes(self) -> list[str]:
+        """
+        Returns a list of all the key binding input modes.
+        """
+
+    def bindings(self, mode: Optional[str]) -> list[tuple[KeyEvent, Shortcut]]:
+        """
+        Returns a dictionary of all the key bindings for the given mode. If no mode
+        is specified a default of "mudsession" is used.
+
+        Raises an exception if mode is not a known input mode.
+        Use `modes` for a list of all available modes.
+        """
+
+    def shortcut(self, event: KeyEvent, mode: Optional[str]) -> Optional[Shortcut]:
+        """
+        Returns the `Shortcut` for the given `KeyEvent` in the given mode, or `None`
+        if no binding exists in the mode for the `KeyEvent`. If no mode is specified
+        a default of "mudsession" is used.
+
+        Raises an exception if mode is not a known input mode.
+        Use `modes` for a list of all available modes.
+        """
+
 class Config:
     """
     Read-only access to the Mudpuppy config.
@@ -59,7 +266,23 @@ class Config:
     Accessed by calling `MudpuppyCore.config()`.
     """
 
-    ...
+    def lookup_mud(self, mud_name: str) -> Optional[Mud]:
+        """
+        Return the `Mud` configuration for the given `mud_name`, or `None` if no
+        configuration exists for the given `mud_name`.
+        """
+
+    def must_lookup_mud(self, mud_name: str) -> Mud:
+        """
+        Return the `Mud` configuration for the given `mud_name`, or raise an
+        exception if no configuration exists for the given `mud_name`.
+        """
+
+    def keybindings(self) -> KeyBindings:
+        """
+        Return the `KeyBindings` configuration.
+        """
+
 
 type SessionId = int
 """
@@ -234,72 +457,6 @@ class Status:
         This will be a `StreamInfo.Tcp` or `StreamInfo.Tls` instance depending
         on the `Mud` that was used to create the stream.
         """
-
-class Tls(StrEnum):
-    """
-    Describes whether/how TLS should be used when connecting to a `Mud`.
-    """
-
-    Disabled = auto()
-    """
-    TLS is not used. Plain (insecure) Telnet should be used.
-    """
-
-    Enabled = auto()
-    """
-    TLS should be used and the server certificate chain verified.
-    """
-
-    VerifySkipped = auto()
-    """
-    TLS should be used, but certificate errors should be ignored.
-
-    This is generally unsafe but may be required if the server is misconfigured
-    or if you're using self-signed test certificates.
-    """
-
-class Mud:
-    """
-    Information about a MUD and its configuration.
-    """
-
-    name: str
-    """
-    Name of the MUD.
-
-    Used as the label for the session tab, and for listing the MUD on the connection
-    screen.
-
-    This is the identifier you will use with decorators like `mudpuppy.trigger` for the
-    `mud_name` parameter.
-    """
-
-    host: str
-    """
-    Host address of the MUD.
-
-    This is typically a domain name like `"dunemud.net"` or an IP address like `8.8.8.8` or
-    `2607:f8b0:400b:803::200e`.
-
-    The `port` number is specified separately and not included here.
-    """
-
-    port: int
-    """
-    Port number of the MUD.
-
-    This varies by game, and may change based on whether you're using TLS or not.
-    """
-
-    tls: Tls
-    """
-    Describes the TLS configuration for the MUD.
-    """
-
-    command_separator: Optional[str]
-    """
-    An optional command separator to use when sending multiple commands in a single line.
-    """
 
 class MudLine:
     """
@@ -1883,96 +2040,6 @@ class MudpuppyCore:
         """
         ...
 
-class Shortcut(StrEnum):
-    """
-    A recognized keyboard shortcut.
-    """
-
-    Quit = auto()
-    """
-    A shortcut to quit the client
-    """
-
-    TabNext = auto()
-    """
-    A shortcut to change to the next tab.
-    """
-
-    TabPrev = auto()
-    """
-    A shortcut to change to the previous tab.
-    """
-
-    TabClose = auto()
-    """
-    A shortcut to close the current tab.
-    """
-
-    TabSwapLeft = auto()
-    """
-    A shortcut to swap the current tab with the tab to the left.
-    """
-
-    TabSwapRight = auto()
-    """
-    A shortcut to swap the current tab with the tab to the right.
-    """
-
-    MudListNext = auto()
-    """
-    A shortcut to select the next MUD from the MUD list.
-    """
-
-    MudListPrev = auto()
-    """
-    A shortcut to select the previous MUD from the MUD list.
-    """
-
-    MudListConnect = auto()
-    """
-    A shortcut to connect to the selected MUD from the MUD list.
-    """
-
-    ToggleLineWrap = auto()
-    """
-    A shortcut to toggle line wrapping in the output area.
-    """
-
-    ToggleInputEcho = auto()
-    """
-    A shortcut to toggle whether `InputLine`s are displayed in the output buffer.
-    """
-
-    HistoryNext = auto()
-    """
-    A shortcut to navigate to the next line in the input history.
-    """
-
-    HistoryPrevious = auto()
-    """
-    A shortcut to navigate to the previous line in the input history.
-    """
-
-    ScrollUp = auto()
-    """
-    A shortcut to scroll the output buffer up.
-    """
-
-    ScrollDown = auto()
-    """
-    A shortcut to scroll the output buffer down.
-    """
-
-    ScrollTop = auto()
-    """
-    A shortcut to scroll the output buffer to the top.
-    """
-
-    ScrollBottom = auto()
-    """
-    A shortcut to scroll the output buffer to the bottom.
-    """
-
 class EventType(StrEnum):
     """
     An enum describing possible `Event` types.
@@ -2300,13 +2367,9 @@ class Event:
         The `SessionId` that received the key press.
         """
 
-        json: str
+        key: KeyEvent
         """
-        A JSON serialization of the key press information.
-
-        This is a temporary hack. Sorry! In the future a proper Python class will be used.
-
-        You probably want to `json.loads()` this string value.
+        The `KeyEvent` describing the key that was pressed.
         """
 
     class GmcpEnabled:

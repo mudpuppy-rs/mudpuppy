@@ -5,11 +5,12 @@ use std::time::Duration;
 use pyo3::{pyclass, pymethods, Py, PyAny, PyObject, PyRef, Python};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use strum::{Display, EnumString};
 use tokio::sync::watch;
 use tokio_util::bytes::Bytes;
 
 use crate::client::input::EchoState;
-use crate::error::{AliasError, Error, TriggerError};
+use crate::error::{AliasError, Error, KeyBindingError, TriggerError};
 use crate::idmap::{self, numeric_id};
 use crate::net::telnet;
 
@@ -134,10 +135,231 @@ pub enum Tls {
     InsecureSkipVerify,
 }
 
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, EnumString, Display,
+)]
+#[strum(ascii_case_insensitive)]
+pub enum InputMode {
+    MudList,
+    #[default]
+    MudSession,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[pyclass]
+pub struct KeyEvent {
+    pub(crate) code: KeyCode,
+    pub(crate) modifiers: KeyModifiers,
+}
+
+impl KeyEvent {
+    #[must_use]
+    pub fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
+        Self { code, modifiers }
+    }
+}
+
+#[pymethods]
+#[allow(clippy::trivially_copy_pass_by_ref)] // Can't move `self` for __str__ and __repr__.
+impl KeyEvent {
+    #[pyo3(name = "code")]
+    fn get_code(&self) -> String {
+        self.code.to_string()
+    }
+
+    #[pyo3(name = "modifiers")]
+    fn get_modifiers(&self) -> Vec<String> {
+        self.modifiers.modifiers()
+    }
+
+    fn __str__(&self) -> String {
+        format!("{self}")
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl Display for KeyEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.modifiers
+                .modifiers()
+                .iter()
+                .fold(String::new(), |mut output, m| {
+                    output.push_str(m);
+                    output.push('-');
+                    output
+                }),
+            self.code
+        )
+    }
+}
+
+impl TryFrom<&str> for KeyEvent {
+    type Error = KeyBindingError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let mut parts = s.split('-');
+        let mut modifiers = KeyModifiers::NONE;
+        let mut final_part = None;
+
+        for part in parts.by_ref() {
+            if let Some(modifier) = KeyModifiers::from_string(part) {
+                modifiers.insert(modifier);
+            } else {
+                final_part = Some(part.to_lowercase());
+                break;
+            }
+        }
+
+        let code = KeyCode::try_from(final_part.as_deref().unwrap_or_default())
+            .map_err(KeyBindingError::InvalidKeys)?;
+
+        Ok(Self::new(code, modifiers))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct KeyModifiers(u8);
+
+impl KeyModifiers {
+    pub const NONE: Self = KeyModifiers(0);
+    pub const SHIFT: Self = KeyModifiers(1);
+    pub const CONTROL: Self = KeyModifiers(2);
+    pub const ALT: Self = KeyModifiers(4);
+
+    #[must_use]
+    pub fn bits(&self) -> u8 {
+        self.0
+    }
+
+    #[must_use]
+    pub fn contains(&self, other: KeyModifiers) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    pub fn insert(&mut self, other: KeyModifiers) {
+        self.0 |= other.0;
+    }
+
+    #[must_use]
+    pub fn modifiers(&self) -> Vec<String> {
+        let mut modifiers = Vec::new();
+
+        if self.contains(Self::CONTROL) {
+            modifiers.push("ctrl".to_string());
+        }
+        if self.contains(Self::SHIFT) {
+            modifiers.push("shift".to_string());
+        }
+        if self.contains(Self::ALT) {
+            modifiers.push("alt".to_string());
+        }
+
+        modifiers
+    }
+
+    #[must_use]
+    pub fn from_string(str: &str) -> Option<KeyModifiers> {
+        Some(match str.to_lowercase().as_str() {
+            "ctrl" => KeyModifiers::CONTROL,
+            "shift" => KeyModifiers::SHIFT,
+            "alt" => KeyModifiers::ALT,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum KeyCode {
+    Char(char),
+    F(u8),
+    Backspace,
+    Enter,
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Tab,
+    Delete,
+    Insert,
+    Esc,
+}
+
+impl TryFrom<&str> for KeyCode {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            v if v.starts_with('f') => {
+                let num = v[1..]
+                    .parse::<u8>()
+                    .map_err(|_| format!("invalid F-key: {v}"))?;
+                if (1..=12).contains(&num) {
+                    Self::F(num)
+                } else {
+                    return Err(format!("invalid F-key: {v}"));
+                }
+            }
+            "backspace" => Self::Backspace,
+            "enter" => Self::Enter,
+            "left" => Self::Left,
+            "right" => Self::Right,
+            "up" => Self::Up,
+            "down" => Self::Down,
+            "home" => Self::Home,
+            "end" => Self::End,
+            "pageup" => Self::PageUp,
+            "pagedown" => Self::PageDown,
+            "tab" => Self::Tab,
+            "delete" => Self::Delete,
+            "insert" => Self::Insert,
+            "esc" => Self::Esc,
+            c if c.len() == 1 => Self::Char(c.chars().next().unwrap()),
+            _ => return Err(format!("unknown key code: {value:?}")),
+        })
+    }
+}
+
+impl Display for KeyCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                KeyCode::Char(c) => c.to_string(),
+                KeyCode::F(n) => format!("f{n}"),
+                KeyCode::Backspace => "backspace".to_string(),
+                KeyCode::Enter => "enter".to_string(),
+                KeyCode::Left => "left".to_string(),
+                KeyCode::Right => "right".to_string(),
+                KeyCode::Up => "up".to_string(),
+                KeyCode::Down => "down".to_string(),
+                KeyCode::Home => "home".to_string(),
+                KeyCode::End => "end".to_string(),
+                KeyCode::PageUp => "pageup".to_string(),
+                KeyCode::PageDown => "pagedown".to_string(),
+                KeyCode::Tab => "tab".to_string(),
+                KeyCode::Delete => "delete".to_string(),
+                KeyCode::Insert => "insert".to_string(),
+                KeyCode::Esc => "esc".to_string(),
+            }
+        )
+    }
+}
+
 #[pyclass(eq, eq_int)]
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
+#[strum(ascii_case_insensitive)]
 pub enum Shortcut {
     Quit,
 
@@ -161,6 +383,18 @@ pub enum Shortcut {
     ScrollDown,
     ScrollTop,
     ScrollBottom,
+}
+
+#[pymethods]
+#[allow(clippy::trivially_copy_pass_by_ref)] // Can't move `self` for __str__ and __repr__.
+impl Shortcut {
+    fn __str__(&self) -> String {
+        format!("{self}")
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
 }
 
 #[pyclass]
@@ -791,11 +1025,11 @@ mod default {
     }
 
     pub(super) fn splitview_margin_horizontal() -> u16 {
-        0
+        6
     }
 
     pub(super) fn splitview_margin_vertical() -> u16 {
-        6
+        0
     }
 
     pub(super) fn no_tcp_keepalive() -> bool {

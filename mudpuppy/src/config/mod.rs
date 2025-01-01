@@ -3,6 +3,7 @@ mod keybindings;
 mod logging;
 
 pub use config_file::*;
+pub use keybindings::*;
 pub use logging::*;
 
 use std::env;

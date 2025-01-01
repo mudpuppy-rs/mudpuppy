@@ -5,7 +5,9 @@
 # User Guide
 
 - [Command line](cli.md)
-- [Config](config.md)
+- [Config](config/README.md)
+     - [MUDs](config/muds.md)
+     - [Keybindings](config/keybindings.md)
 - [Input](input.md)
 - [Commands](commands.md)
 - [Logging](logging.md)
