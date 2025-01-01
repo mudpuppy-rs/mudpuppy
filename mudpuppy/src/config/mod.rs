@@ -639,4 +639,4 @@ pub fn edit_mud(name: &str, key: &str, v: impl Into<Value> + Debug) -> Result<()
     Ok(())
 }
 
-const CONFIG: &str = include_str!("../../.config/config.toml");
+const CONFIG: &str = include_str!("../../../.config/config.toml");
