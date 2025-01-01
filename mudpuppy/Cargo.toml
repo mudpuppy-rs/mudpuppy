@@ -55,7 +55,7 @@ pretty_assertions = { workspace = true }
 workspace = true
 
 [package.metadata.deb]
-copyright = "2024, Daniel McCarney <daniel@binaryparadox.net>"
+copyright = "2025, Daniel McCarney <daniel@binaryparadox.net>"
 depends = "python3"
 assets = [
     ["target/release/mudpuppy", "usr/bin/", "755"],
