@@ -277,7 +277,7 @@ impl Client {
                     ) {
                         trace!("stopping old prompt flusher");
                         flusher.stop();
-                    };
+                    }
                 }
 
                 self.request_enable_option(telnet::option::GMCP)?;
