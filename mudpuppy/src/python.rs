@@ -35,7 +35,6 @@ use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 ///
 /// For more convenient interfaces, prefer `mudpuppy` over `mudpuppy_core`.
 // TODO(XXX): switch to declarative module reg.
-#[allow(clippy::missing_errors_doc)]
 #[pymodule]
 pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
