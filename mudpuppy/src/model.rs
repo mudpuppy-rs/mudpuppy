@@ -493,6 +493,37 @@ impl InputLine {
         }
     }
 
+    pub(crate) fn empty(&self) -> bool {
+        self.sent.trim().is_empty()
+    }
+
+    pub(crate) fn split(&self, sep: &str) -> Vec<Self> {
+        self.sent
+            .split(sep)
+            .filter_map(|fragment| {
+                if fragment.trim().is_empty() {
+                    return None;
+                }
+                Some(Self {
+                    sent: fragment.to_string(),
+                    original: None,
+                    echo: self.echo,
+                    scripted: self.scripted,
+                })
+            })
+            .collect()
+    }
+
+    // Clones the InputLine, but replaces sent with original.
+    fn clone_with_original(&self) -> Self {
+        Self {
+            sent: self.original.clone().unwrap_or_default(),
+            original: Some(self.sent.clone()),
+            echo: self.echo,
+            scripted: self.scripted,
+        }
+    }
+
     fn __str__(&self) -> String {
         format!("{self}")
     }

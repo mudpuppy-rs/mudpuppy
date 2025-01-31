@@ -5,6 +5,7 @@ use ratatui::Frame;
 use std::collections::HashMap;
 
 use crate::client::input as client_input;
+use crate::client::input::EchoState;
 use crate::error::Error;
 use crate::Result;
 
@@ -21,14 +22,19 @@ impl Input {
             .get(INPUT_SECTION_NAME)
             .ok_or(Error::LayoutMissing(INPUT_SECTION_NAME.to_string()))?;
 
-        let value = match input.echo() {
-            client_input::EchoState::Enabled => input.value().to_string(),
-            client_input::EchoState::Password => "*".repeat(input.value().len()),
-        };
+        let content = input.value();
+        let mut content_str = content.sent;
+        if content_str.is_empty() && content.original.is_some() {
+            content_str = content.original.unwrap();
+        }
+
+        if content.echo == EchoState::Password {
+            content_str = "*".repeat(content_str.len());
+        }
 
         let width = area.width.max(3) - 3;
         let scroll = input.visual_scroll(width as usize);
-        let input_text = Paragraph::new(value)
+        let input_text = Paragraph::new(content_str.as_str())
             .block(
                 Block::default()
                     .borders(Borders::ALL)

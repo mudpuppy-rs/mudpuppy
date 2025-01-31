@@ -906,8 +906,17 @@ impl PyApp {
                 .client_for_id(id)
                 .ok_or(Error::from(id))?
                 .input
-                .value()
-                .to_string())
+                .value())
+        })
+    }
+
+    fn get_input_echo<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+        with_state!(self, py, |state| {
+            Ok(state
+                .client_for_id(id)
+                .ok_or(Error::from(id))?
+                .input
+                .telnet_echo())
         })
     }
 
@@ -915,14 +924,25 @@ impl PyApp {
         &self,
         py: Python<'py>,
         id: SessionId,
-        input: String,
+        input: InputLine,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
                 .client_for_id_mut(id)
                 .ok_or(Error::from(id))?
                 .input
-                .set_value(&input);
+                .set_value(input);
+            Ok(())
+        })
+    }
+
+    fn clear_input<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+        with_state!(self, py, |mut state| {
+            state
+                .client_for_id_mut(id)
+                .ok_or(Error::from(id))?
+                .input
+                .reset();
             Ok(())
         })
     }
