@@ -1,5 +1,3 @@
-#![allow(clippy::useless_conversion)] // TODO(XXX): ??? PyResult causing this? ??
-
 use crossterm::event::{
     KeyCode as CrosstermKeyCode, KeyEvent as CrosstermKeyEvent,
     KeyModifiers as CrosstermKeyModifiers,
