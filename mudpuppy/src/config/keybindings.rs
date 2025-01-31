@@ -82,7 +82,6 @@ impl KeyBindings {
 }
 
 #[pymethods]
-#[allow(clippy::missing_errors_doc)] // Python APIs documented in stubs.
 impl KeyBindings {
     #[pyo3(name = "modes")]
     pub fn py_modes(&self) -> Vec<String> {
