@@ -1,11 +1,13 @@
 use std::fmt::{Display, Formatter};
-use std::iter;
+use std::{iter, mem};
 
 use pyo3::{pyclass, pymethods};
 use ratatui::crossterm::event::KeyCode::{Backspace, Char, Delete, End, Home, Left, Right};
 use ratatui::crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers};
 use tracing::info;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+use crate::model::InputLine;
 
 // Adapted from tui-input crate. Mainly this version:
 //  * Tidies a few small style issues.
@@ -14,12 +16,18 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 //  * Removes the InputResponse - callers can handle this themselves if needed.
 //  * Removes unsafe block in favour of a Result unwrap.
 //  * Uses pyo3's pyclass macros to be FFI friendly with python.
+//  * Adapts state to InputLine.
+//  * Maintains a separate EchoState.
+//
+// We want to track EchoState both per-line and at the telnet level so that
+// items can be masked when loaded from history when we're back in normal
+// echo mode.
 #[derive(Debug, Default, Clone)]
 #[pyclass]
 pub struct Input {
-    line: String,
+    line: InputLine,
+    telnet_echo: EchoState,
     cursor: usize,
-    echo: EchoState,
 }
 
 impl Input {
@@ -77,7 +85,7 @@ impl Input {
     }
 
     fn chars(&self) -> std::str::Chars {
-        self.line.chars()
+        self.line.sent.chars()
     }
 }
 
@@ -90,8 +98,8 @@ impl Input {
     }
 
     #[must_use]
-    pub fn value(&self) -> &str {
-        &self.line
+    pub fn value(&self) -> InputLine {
+        self.line.clone()
     }
 
     #[must_use]
@@ -105,17 +113,16 @@ impl Input {
             return 0;
         }
 
+        let s = &self.line.sent;
+
         // Unwrap safe because the end index will always be within bounds
         UnicodeWidthStr::width(
-            self.line
-                .get(
-                    0..self
-                        .line
-                        .char_indices()
-                        .nth(self.cursor)
-                        .map_or_else(|| self.line.len(), |(index, _)| index),
-                )
-                .unwrap(),
+            s.get(
+                0..s.char_indices()
+                    .nth(self.cursor)
+                    .map_or_else(|| s.len(), |(index, _)| index),
+            )
+            .unwrap(),
         )
     }
 
@@ -134,36 +141,44 @@ impl Input {
     }
 
     #[must_use]
-    pub fn echo(&self) -> EchoState {
-        self.echo
+    pub fn telnet_echo(&self) -> EchoState {
+        self.telnet_echo
     }
 
     pub fn reset(&mut self) {
-        self.line.clear();
+        self.line.sent.clear();
+        self.line.original = None;
+        self.line.echo = EchoState::default();
         self.cursor = 0;
-        self.echo = EchoState::default();
     }
 
-    pub fn pop(&mut self) -> Option<String> {
-        match self.line.is_empty() {
-            false => {
-                let line = self.line.clone();
-                self.line.clear();
-                self.cursor = 0;
-                Some(line)
-            }
-            true => None,
+    pub fn pop(&mut self) -> Option<InputLine> {
+        if self.line.sent.is_empty() {
+            return None;
         }
+
+        self.cursor = 0;
+
+        Some(InputLine {
+            sent: mem::take(&mut self.line.sent),
+            // Reset the current echo state back to the telnet-level state.
+            echo: mem::replace(&mut self.line.echo, self.telnet_echo),
+            original: None,
+            scripted: false,
+        })
     }
 
-    pub fn set_value(&mut self, value: &str) {
-        self.line = value.to_string();
-        self.cursor = self.chars().count();
+    pub fn set_value(&mut self, value: InputLine) {
+        self.line = value;
+        self.cursor = self.line.sent.chars().count();
     }
 
-    pub fn set_echo(&mut self, echo: EchoState) {
+    pub fn set_telnet_echo(&mut self, echo: EchoState) {
         info!("set {echo}");
-        self.echo = echo;
+        // Save the telnet echo state.
+        self.telnet_echo = echo;
+        // and update the in-progress line to match.
+        self.line.echo = echo;
     }
 
     pub fn set_cursor(&mut self, pos: usize) {
@@ -172,9 +187,9 @@ impl Input {
 
     pub fn insert(&mut self, c: char) {
         if self.cursor == self.chars().count() {
-            self.line.push(c);
+            self.line.sent.push(c);
         } else {
-            self.line = self
+            self.line.sent = self
                 .chars()
                 .take(self.cursor)
                 .chain(iter::once(c).chain(self.chars().skip(self.cursor)))
@@ -204,7 +219,7 @@ impl Input {
         }
         let rev = self.words_left().collect::<Vec<_>>();
         let rev_len = rev.len();
-        self.line = rev
+        self.line.sent = rev
             .into_iter()
             .rev()
             .chain(self.chars().skip(self.cursor))
@@ -216,7 +231,7 @@ impl Input {
         if self.cursor == self.chars().count() {
             return;
         }
-        self.line = self
+        self.line.sent = self
             .chars()
             .take(self.cursor)
             .chain(
@@ -229,7 +244,7 @@ impl Input {
     }
 
     pub fn delete_to_end(&mut self) {
-        self.line = self.chars().take(self.cursor).collect();
+        self.line.sent = self.chars().take(self.cursor).collect();
     }
 
     pub fn cursor_left(&mut self) {
@@ -275,7 +290,7 @@ impl Input {
     }
 
     fn drop_index(&mut self, index: usize) {
-        self.line = self
+        self.line.sent = self
             .chars()
             .enumerate()
             .filter(|(i, _)| *i != index)
@@ -286,28 +301,7 @@ impl Input {
 
 impl Display for Input {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.line)
-    }
-}
-
-impl From<String> for Input {
-    fn from(value: String) -> Self {
-        let cursor = value.chars().count();
-        Self {
-            line: value,
-            cursor,
-            echo: EchoState::default(),
-        }
-    }
-}
-
-impl From<&str> for Input {
-    fn from(value: &str) -> Self {
-        Self {
-            line: value.to_string(),
-            cursor: value.chars().count(),
-            echo: EchoState::default(),
-        }
+        f.write_str(&self.line.sent)
     }
 }
 
@@ -343,16 +337,19 @@ mod tests {
 
     #[test]
     fn format() {
-        let input: Input = TEXT.into();
+        let mut input = Input::default();
+        input.set_value(InputLine::new(TEXT.to_owned(), true, false));
         println!("{input}");
     }
 
     #[test]
     fn set_cursor() {
-        let mut input: Input = TEXT.into();
+        let line = InputLine::new(TEXT.to_owned(), true, false);
+        let mut input = Input::default();
+        input.set_value(line.clone());
 
         input.set_cursor(3);
-        assert_eq!(input.value(), "first second, third.");
+        assert_eq!(input.value(), line);
         assert_eq!(input.cursor(), 3);
 
         input.set_cursor(30);
@@ -364,76 +361,85 @@ mod tests {
 
     #[test]
     fn insert_char() {
-        let mut input: Input = TEXT.into();
+        let line = InputLine::new(TEXT.to_owned(), true, false);
+        let mut input = Input::default();
+        input.set_value(line);
 
         input.insert('x');
-        assert_eq!(input.value(), "first second, third.x");
+        assert_eq!(input.value().sent, "first second, third.x");
         assert_eq!(input.cursor(), TEXT.chars().count() + 1);
         input.insert('x');
-        assert_eq!(input.value(), "first second, third.xx");
+        assert_eq!(input.value().sent, "first second, third.xx");
         assert_eq!(input.cursor(), TEXT.chars().count() + 2);
 
         input.set_cursor(3);
         input.insert('x');
-        assert_eq!(input.value(), "firxst second, third.xx");
+        assert_eq!(input.value().sent, "firxst second, third.xx");
         assert_eq!(input.cursor(), 4);
 
         input.insert('x');
-        assert_eq!(input.value(), "firxxst second, third.xx");
+        assert_eq!(input.value().sent, "firxxst second, third.xx");
         assert_eq!(input.cursor(), 5);
     }
 
     #[test]
     fn go_to_prev_char() {
-        let mut input: Input = TEXT.into();
+        let line = InputLine::new(TEXT.to_owned(), true, false);
+        let mut input = Input::default();
+        input.set_value(line);
 
         input.cursor_left();
-        assert_eq!(input.value(), "first second, third.");
         assert_eq!(input.cursor(), TEXT.chars().count() - 1);
 
         input.set_cursor(3);
         input.cursor_left();
-        assert_eq!(input.value(), "first second, third.");
         assert_eq!(input.cursor(), 2);
 
         input.cursor_left();
-        assert_eq!(input.value(), "first second, third.");
         assert_eq!(input.cursor(), 1);
     }
 
     #[test]
     fn remove_unicode_chars() {
-        let mut input: Input = "¡test¡".into();
+        let line = InputLine::new("¡test¡".to_owned(), true, false);
+        let mut input = Input::default();
+        input.set_value(line);
 
         input.delete_prev();
-        assert_eq!(input.value(), "¡test");
+        assert_eq!(input.value().sent, "¡test");
         assert_eq!(input.cursor(), 5);
 
         input.cursor_start();
         input.delete_next();
-        assert_eq!(input.value(), "test");
+        assert_eq!(input.value().sent, "test");
         assert_eq!(input.cursor(), 0);
     }
 
     #[test]
     fn insert_unicode_chars() {
-        let mut input = Input::from("¡test¡");
+        let line = InputLine::new("¡test¡".to_owned(), true, false);
+        let mut input = Input::default();
+        input.set_value(line);
+
         input.set_cursor(5);
 
         input.insert('☆');
-        assert_eq!(input.value(), "¡test☆¡");
+        assert_eq!(input.value().sent, "¡test☆¡");
         assert_eq!(input.cursor(), 6);
 
         input.cursor_start();
         input.cursor_right();
         input.insert('☆');
-        assert_eq!(input.value(), "¡☆test☆¡");
+        assert_eq!(input.value().sent, "¡☆test☆¡");
         assert_eq!(input.cursor(), 2);
     }
 
     #[test]
     fn multispace_characters() {
-        let input: Input = "Ｈｅｌｌｏ, ｗｏｒｌｄ!".into();
+        let line = InputLine::new("Ｈｅｌｌｏ, ｗｏｒｌｄ!".to_owned(), true, false);
+        let mut input = Input::default();
+        input.set_value(line);
+
         assert_eq!(input.cursor(), 13);
         assert_eq!(input.visual_cursor(), 23);
         assert_eq!(input.visual_scroll(6), 18);

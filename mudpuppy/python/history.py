@@ -9,6 +9,7 @@ from mudpuppy_core import (
     Shortcut,
     mudpuppy_core,
     OutputItem,
+    EchoState,
 )
 
 from mudpuppy import on_event, on_new_session
@@ -19,9 +20,6 @@ class History:
     lines: list[InputLine]
     max_lines: int
     cursor_pos: Optional[int] = None
-    # When input matched an alias, should the history be populated with the _input_ to the alias (default) or what
-    # was sent to the game when the alias was expanded?
-    use_alias_expanded: bool = False
 
     def __init__(self, session: SessionInfo, max_lines: int = 1000):
         self.session = session
@@ -50,7 +48,7 @@ class History:
 
         self.lines.append(line)
         logging.debug(
-            f"{self} added line: {line} (original={line.original} scripted={line.scripted})"
+            f"{self} added line: {line} (original={line.original} scripted={line.scripted} echo={line.echo})"
         )
         while len(self.lines) >= self.max_lines:
             removed = self.lines.pop(0)
@@ -68,8 +66,12 @@ class History:
         while self.cursor_pos < len(self.lines) - 1:
             self.cursor_pos += 1
             line = self.lines[self.cursor_pos]
-            skip = line.scripted and skip_scripted or line.sent.strip() == ""
-            logging.debug(f"{self} pos updated - line={line}, skip={skip}")
+            skip = (line.scripted and skip_scripted) or (
+                line.sent == "" and line.original is None
+            )
+            logging.debug(
+                f"{self} pos updated - line={line}, original={line.original}, echo={line.echo}, skip={skip}"
+            )
             if skip:
                 continue
             return line
@@ -98,8 +100,12 @@ class History:
         while self.cursor_pos > 0:
             self.cursor_pos -= 1
             line = self.lines[self.cursor_pos]
-            skip = line.scripted and skip_scripted or line.sent.strip() == ""
-            logging.debug(f"{self} pos updated - line={line}, skip={skip}")
+            skip = (line.scripted and skip_scripted) or (
+                line.sent == "" and line.original is None
+            )
+            logging.debug(
+                f"{self} pos updated - line={line}, original={line.original}, echo={line.echo}, skip={skip}"
+            )
             if skip:
                 continue
             return line
@@ -145,17 +151,22 @@ async def shortcut(event: Event):
     else:
         return
 
+    if await mudpuppy_core.get_input_echo(event.id) == EchoState.Password:
+        logging.debug("history: ignoring history navigation in password echo state")
+        return
+
     if line is None:
-        await mudpuppy_core.set_input(event.id, "")
+        await mudpuppy_core.clear_input(event.id)
     else:
         logging.info(
-            f"history: populating {event.id} input with: {line} (original={line.original} scripted={line.scripted})"
+            f"history: populating {event.id} input with: {line} (original={line.original} scripted={line.scripted} echo={line.echo})"
         )
-        value = line.sent
-        if line.original is not None and not h.use_alias_expanded:
-            value = line.original
-
-        await mudpuppy_core.set_input(event.id, value)
+        # When items are added to history its after processing for aliases, etc.
+        # We want to reconstitute the InputLine the user produced pre-processing for display in the
+        # input area. E.g. we replace sent with original if there is an original value.
+        if line.original is not None:
+            line = line.clone_with_original()
+        await mudpuppy_core.set_input(event.id, line)
 
 
 @on_new_session()

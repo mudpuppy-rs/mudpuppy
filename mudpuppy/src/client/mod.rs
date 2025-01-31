@@ -153,33 +153,17 @@ impl Client {
         futures: &mut FuturesUnordered<python::PyFuture>,
         event: &KeyEvent,
     ) -> Result<(), Error> {
-        // TODO(XXX): pull out the send handling.
+        // If the key event was Enter being pressed, send the queued input.
         if let &KeyEvent {
             code: KeyCode::Enter,
             kind: KeyEventKind::Press,
             ..
         } = event
         {
-            return match self.input.pop().map(|s| s.trim().to_string()) {
-                Some(s) if !s.is_empty() => {
-                    let mud = self.config.must_lookup_mud(&self.info.mud_name)?;
-                    match mud.command_separator {
-                        Some(sep) => {
-                            for fragment in s.split(&sep).filter_map(|f| match f.trim() {
-                                "" => None,
-                                trimmed => Some(trimmed),
-                            }) {
-                                self.transmit_input(fragment.to_string(), futures)?;
-                            }
-                            Ok(())
-                        }
-                        None => self.transmit_input(s, futures),
-                    }
-                }
-                None => self.transmit_input(String::default(), futures),
-                _ => Ok(()),
-            };
+            return self.transmit_queued_input(futures);
         }
+
+        // Otherwise, handle the input key event.
         self.input.handle_key_event(event);
         if let Ok(model_event) = PyKeyEvent::try_from(*event) {
             self.event_tx.send(python::Event::KeyPress {
@@ -190,57 +174,80 @@ impl Client {
         Ok(())
     }
 
-    fn transmit_input(
+    fn transmit_queued_input(
         &mut self,
-        orig_input: String,
         futures: &mut FuturesUnordered<python::PyFuture>,
     ) -> Result<(), Error> {
-        let mut input = Some(orig_input.clone());
-        let session_id = self.info.id;
-
-        // Run the line through each enabled alias to see if any match. A mutable ref to the input
-        // is passed to allow changing it, or  replacing it with None.
-        for alias in self.aliases.values_mut().filter(|alias| alias.enabled) {
-            Self::evaluate_alias(session_id, alias, &mut input, futures)?;
-        }
-
-        // If the alias replaced input with none we want to skip transmitting a line to the MUD
-        // but still want to record the input event.
-        let skip_transmit = input.is_none();
-
-        let mut input_line = InputLine {
-            sent: orig_input.clone(),
-            original: None,
-            scripted: false,
-            echo: self.input.echo(),
+        // Pull the to-be-sent input. If it's None, transmit an empty line.
+        let Some(queued_input) = self.input.pop() else {
+            return self.transmit_input(InputLine::default(), futures);
         };
 
-        // If the alias expanded the input (or replaced it with None) then we change what is sent
-        // and preserve the original input as such.
-        if input != Some(orig_input) {
-            trace!("input was mutated by alias");
-            input_line.original = Some(input_line.sent);
-            input_line.sent = input.unwrap_or_default();
+        let cmd_separator = self
+            .config
+            .must_lookup_mud(&self.info.mud_name)?
+            .command_separator;
+
+        // If the queued input is itself empty after trim, or there's no command
+        // separator configured for the MUD, we can blast it out as-is.
+        if queued_input.empty() || cmd_separator.is_none() {
+            return self.transmit_input(queued_input, futures);
+        }
+
+        // Otherwise, dice up the input into multiple transmits. Don't bother with
+        // empty fragments.
+        for fragment in queued_input.split(&cmd_separator.unwrap_or_default()) {
+            self.transmit_input(fragment, futures)?;
+        }
+        Ok(())
+    }
+
+    fn transmit_input(
+        &mut self,
+        mut input: InputLine,
+        futures: &mut FuturesUnordered<python::PyFuture>,
+    ) -> Result<(), Error> {
+        let session_id = self.info.id;
+
+        let empty_transmit = input.sent.is_empty();
+        let mut skip_transmit = false;
+
+        // Empty lines can't match aliases.
+        if !empty_transmit {
+            // Run the input line through each enabled alias to see if any match. A mutable ref to
+            // input is passed to allow changing it when an alias matches.
+            for alias in self.aliases.values_mut().filter(|alias| alias.enabled) {
+                Self::evaluate_alias(session_id, alias, &mut input, futures)?;
+
+                // If an alias replaced the to-be-sent text that we know wasn't empty originally
+                // with empty text, then we take that as an indicator that the alias "ate" the
+                // input (e.g. to call a callback) and we skip transmitting anything. We also
+                // don't bother evaluating any other aliases.
+                if input.sent.is_empty() {
+                    skip_transmit = true;
+                    break;
+                }
+            }
         }
 
         // If we're not transmitting anything, send an event and add the input to the output
-        // buffer as if it were sent.
+        // buffer as if it were sent, but never send any content to the MUD.
         if skip_transmit {
-            trace!("pushing non-transmitted line: {input_line:?}");
+            trace!("pushing non-transmitted line: {input:?}");
             self.output.push(output::Item::Input {
-                line: input_line.clone(),
+                line: input.clone(),
             });
             self.event_tx.send(python::Event::InputLine {
                 id: self.info.id,
-                input: input_line,
+                input,
             })?;
             return Ok(());
         }
 
         // If there's a line to send, send it. The internal send line machinery will add it
         // to our output and emit the event.
-        trace!("transmitting line: {input_line:?}");
-        self.send_line(input_line.clone())
+        trace!("transmitting line: {input:?}");
+        self.send_line(input)
     }
 
     /// Connect the client to the MUD server.
@@ -557,7 +564,7 @@ impl Client {
                         .send(connection::Action::Send(reply.into()))?;
 
                     match opt {
-                        telnet::option::ECHO => self.input.set_echo(EchoState::Password),
+                        telnet::option::ECHO => self.input.set_telnet_echo(EchoState::Password),
                         telnet::option::EOR => self.set_prompt_mode(PromptMode::Signalled {
                             signal: PromptSignal::EndOfRecord,
                         }),
@@ -581,7 +588,7 @@ impl Client {
                         .send(connection::Action::Send(reply.into()))?;
 
                     match opt {
-                        telnet::option::ECHO => self.input.set_echo(EchoState::Enabled),
+                        telnet::option::ECHO => self.input.set_telnet_echo(EchoState::Enabled),
                         // TODO(XXX): config for timeout?
                         telnet::option::EOR => self.set_prompt_mode(PromptMode::Unsignalled {
                             timeout: Duration::from_millis(200),
@@ -677,22 +684,17 @@ impl Client {
     fn evaluate_alias(
         session_id: SessionId,
         alias: &mut Alias,
-        input: &mut Option<String>,
+        input: &mut InputLine,
         futures: &mut FuturesUnordered<python::PyFuture>,
     ) -> Result<(), Error> {
         Python::with_gil(|py| {
-            let Some(input_str) = input else {
-                return Ok::<_, Error>(());
-            };
-
             let mut alias_config: PyRefMut<'_, AliasConfig> = alias.config.extract(py)?;
-
-            let (matched, groups) = alias_config.matches(input_str);
+            let (matched, groups) = alias_config.matches(&input.sent);
             if !matched {
-                return Ok::<_, Error>(());
+                return Ok(());
             }
-            alias_config.hit_count += 1;
 
+            alias_config.hit_count += 1;
             debug!("alias {} matched line", alias.id());
 
             if let Some(callback) = &alias_config.callback {
@@ -704,7 +706,10 @@ impl Client {
                 )?));
             }
 
-            input.clone_from(&alias_config.expansion);
+            // Preserve the original input, and replace what will be sent with the alias expansion
+            // or "" if there is no expansion.
+            input.original = Some(input.sent.clone());
+            input.sent = alias_config.expansion.clone().unwrap_or_default();
             Ok(())
         })
     }
