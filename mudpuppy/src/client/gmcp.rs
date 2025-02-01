@@ -1,7 +1,7 @@
 use pyo3::pyclass;
 use serde::Serialize;
 use serde_json;
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::client::output;
 use crate::error::GmcpError;
@@ -24,10 +24,12 @@ impl Gmcp {
     }
 
     pub fn register(&self, module: &str) -> Result<TelnetItem> {
+        debug!("Core.Supports.Add [{module} 1]");
         self.encode("Core.Supports.Add", [format!("{module} 1")])
     }
 
     pub fn unregister(&self, module: &str) -> Result<TelnetItem> {
+        debug!("Core.Supports.Remove [{module} 1]");
         self.encode("Core.Supports.Remove", [format!("{module} 1")])
     }
 
