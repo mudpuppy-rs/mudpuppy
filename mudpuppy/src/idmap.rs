@@ -188,6 +188,14 @@ macro_rules! numeric_id {
             fn __ge__(&self, other: &Self) -> bool {
                 self.0 >= other.0
             }
+
+            fn __int__(&self) -> $ty {
+                self.0
+            }
+
+            fn __index__(&self) -> $ty {
+                self.0
+            }
         }
 
         impl std::fmt::Display for $name {
