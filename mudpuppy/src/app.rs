@@ -515,7 +515,7 @@ fn config_reload_event(
     // TODO(XXX): Consider reloading python stuff automatically?
     // TODO(XXX): Consider debouncing created->data_changed events.
     if !event.paths.contains(&config_file()) || !(created || data_changed) {
-        trace!("skipping unrelated config dir event: {event:?}");
+        //trace!("skipping unrelated config dir event: {event:?}");
         return;
     }
     info!(
