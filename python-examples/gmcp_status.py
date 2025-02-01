@@ -1,5 +1,7 @@
 import logging
+import json
 from typing import Any, Dict
+from pathlib import Path
 
 from custom_layout import CUSTOM_LAYOUT_READY, layouts
 from mudpuppy_core import (
@@ -13,24 +15,56 @@ from mudpuppy_core import (
 
 from mudpuppy import on_event, on_gmcp, unload_handlers
 
+STATE_FILE = Path(mudpuppy_core.data_dir()) / "status_state.json"
+
 
 class StatusArea:
-    session_id: int
+    session_id: SessionId
 
-    hp: int = 0
-    max_hp: int = 0
-    sp: int = 0
-    max_sp: int = 0
-    char_name: str = "Unknown"
-    full_name: str = "Unknown"
-    guild: str = "Unknown"
-    money: int = 0
-    bank_money: int = 0
-    exp: int = 0
-    level: int = 0
-
-    def __init__(self, session_id: int):
+    def __init__(self, session_id: SessionId):
         self.session_id = session_id
+        self.hp: int = 0
+        self.max_hp: int = 0
+        self.sp: int = 0
+        self.max_sp: int = 0
+        self.char_name: str = "Unknown"
+        self.full_name: str = "Unknown"
+        self.guild: str = "Unknown"
+        self.money: int = 0
+        self.bank_money: int = 0
+        self.exp: int = 0
+        self.level: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            "hp": self.hp,
+            "max_hp": self.max_hp,
+            "sp": self.sp,
+            "max_sp": self.max_sp,
+            "char_name": self.char_name,
+            "full_name": self.full_name,
+            "guild": self.guild,
+            "money": self.money,
+            "bank_money": self.bank_money,
+            "exp": self.exp,
+            "level": self.level,
+        }
+
+    @classmethod
+    def from_dict(cls, session_id: int, data: dict) -> "StatusArea":
+        status = cls(session_id)
+        status.hp = data.get("hp", 0)
+        status.max_hp = data.get("max_hp", 0)
+        status.sp = data.get("sp", 0)
+        status.max_sp = data.get("max_sp", 0)
+        status.char_name = data.get("char_name", "Unknown")
+        status.full_name = data.get("full_name", "Unknown")
+        status.guild = data.get("guild", "Unknown")
+        status.money = data.get("money", 0)
+        status.bank_money = data.get("bank_money", 0)
+        status.exp = data.get("exp", 0)
+        status.level = data.get("level", 0)
+        return status
 
     async def vitals(self, data: Any):
         self.hp = data.get("hp", self.hp)
@@ -80,6 +114,33 @@ class StatusArea:
         )
 
 
+def save_state():
+    logging.info(f"trying to save to {STATE_FILE}")
+    state = {}
+    for session_id, status in status_areas.items():
+        state[int(session_id)] = status.to_dict()
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except OSError as e:
+        logging.error(f"failed to save state: {e}")
+
+
+def load_state() -> Dict[int, dict]:
+    logging.info(f"trying to load from {STATE_FILE}")
+    if not STATE_FILE.exists():
+        return {}
+
+    try:
+        with open(STATE_FILE) as f:
+            state = json.load(f)
+        STATE_FILE.unlink()
+        return state
+    except (OSError, json.JSONDecodeError) as e:
+        logging.warning(f"no pre-existing state to load: {e}")
+        return {}
+
+
 @on_event(EventType.GmcpEnabled)
 async def gmcp_enabled(event: Event):
     assert isinstance(event, Event.GmcpEnabled)
@@ -119,13 +180,22 @@ def status_area(session_id: SessionId) -> StatusArea:
         logging.debug(f"constructing status area for {session_id}")
         status_area = StatusArea(session_id)
         status_areas[session_id] = status_area
+
     return status_area
 
 
-status_areas: Dict[int, StatusArea] = {}
+status_areas: Dict[SessionId, StatusArea] = {}
 logging.debug("status_buf plugin loaded")
+
+prev_data = load_state()
+if len(prev_data) > 0:
+    for session_id_raw, data in prev_data.items():
+        logging.debug("restoring session {session_id} data from prior reload")
+        sesh_id = SessionId(int(session_id_raw))  # type: ignore
+        status_areas[sesh_id] = StatusArea.from_dict(sesh_id, data)
 
 
 def __reload__():
-    logging.debug("\n\n\n\nUser Python About To Reload!\n\n\n\n")
+    logging.debug("Saving status areas before reload")
+    save_state()
     unload_handlers(__name__)
