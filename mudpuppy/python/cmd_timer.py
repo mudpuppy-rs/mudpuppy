@@ -5,9 +5,7 @@ from typing import Optional
 from mudpuppy_core import (
     Event,
     OutputItem,
-    SessionId,
     TimerConfig,
-    TimerId,
     mudpuppy_core,
 )
 from commands import Command, add_command
@@ -16,7 +14,7 @@ from mudpuppy import on_new_session
 
 
 class TimerCmd(Command):
-    def __init__(self, session_id: SessionId):
+    def __init__(self, session_id: int):
         super().__init__("timer", session_id, self.run, "Manage timers")
         subparsers = self.parser.add_subparsers(
             required=True,
@@ -86,34 +84,34 @@ class TimerCmd(Command):
         remove_parser.set_defaults(func=self.remove)
         remove_parser.error = Command.on_error
 
-    async def run(self, sesh_id: SessionId, args: Namespace):
+    async def run(self, sesh_id: int, args: Namespace):
         logging.debug(f"args: {args}")
         if hasattr(args, "func"):
             await args.func(sesh_id, args)
         else:
             self.display_help(sesh_id)
 
-    async def stop(self, sesh_id: SessionId, args: Namespace):
+    async def stop(self, sesh_id: int, args: Namespace):
         # TODO(XXX): check if already stopped, provide output if so.
-        await mudpuppy_core.stop_timer(TimerId(args.timer_id))
+        await mudpuppy_core.stop_timer(args.timer_id)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Stopped timer {args.timer_id}")
         )
 
-    async def start(self, sesh_id: SessionId, args: Namespace):
+    async def start(self, sesh_id: int, args: Namespace):
         # TODO(XXX): check if already running, provide output if so.
-        await mudpuppy_core.start_timer(TimerId(args.timer_id))
+        await mudpuppy_core.start_timer(args.timer_id)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Started timer {args.timer_id}")
         )
 
-    async def remove(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.remove_timer(TimerId(args.timer_id))
+    async def remove(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.remove_timer(args.timer_id)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Removed timer {args.timer_id}")
         )
 
-    async def list(self, sesh_id: SessionId, _args: Namespace):
+    async def list(self, sesh_id: int, _args: Namespace):
         timers = await mudpuppy_core.timers()
         output_items = []
         for timer in sorted(timers, key=lambda a: a.id):
@@ -129,8 +127,8 @@ class TimerCmd(Command):
             )
         await mudpuppy_core.add_outputs(sesh_id, output_items)
 
-    async def add(self, sesh_id: SessionId, args: Namespace):
-        async def callback(_timer_id: TimerId, session_id: Optional[SessionId]):
+    async def add(self, sesh_id: int, args: Namespace):
+        async def callback(_timer_id: int, session_id: Optional[int]):
             assert session_id is not None
             await mudpuppy_core.send_line(session_id, " ".join(args.command))
 

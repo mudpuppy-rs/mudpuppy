@@ -11,7 +11,6 @@ use tracing::trace;
 
 use crate::client::output::Output;
 use crate::error::Error;
-use crate::idmap::numeric_id;
 use crate::tui::buffer;
 use crate::tui::buffer::DrawScrollbar;
 use crate::{idmap, Result};
@@ -361,7 +360,7 @@ impl PyConstraint {
 #[pyclass]
 pub struct ExtraBuffer {
     #[pyo3(get)]
-    pub id: BufferId,
+    pub id: u32,
 
     #[pyo3(get)]
     pub config: Py<BufferConfig>,
@@ -418,8 +417,8 @@ impl Display for ExtraBuffer {
     }
 }
 
-impl idmap::Identifiable<BufferId> for ExtraBuffer {
-    fn id(&self) -> BufferId {
+impl idmap::Identifiable for ExtraBuffer {
+    fn id(&self) -> u32 {
         self.id
     }
 }
@@ -630,5 +629,3 @@ impl Display for BufferDirection {
         }
     }
 }
-
-numeric_id!(BufferId, u32);

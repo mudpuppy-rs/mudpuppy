@@ -8,8 +8,6 @@ use pyo3::{PyErr, Python};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
-use crate::model::{AliasId, SessionId, TimerId, TriggerId};
-
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("not connected")]
@@ -59,7 +57,7 @@ pub enum Error {
     },
 
     #[error("unknown session: {0}")]
-    UnknownSession(SessionId),
+    UnknownSession(u32),
 }
 
 impl Error {
@@ -95,12 +93,6 @@ impl From<Error> for PyErr {
 impl<T> From<SendError<T>> for Error {
     fn from(value: SendError<T>) -> Self {
         Self::Internal(format!("sending message: {value}"))
-    }
-}
-
-impl From<SessionId> for Error {
-    fn from(id: SessionId) -> Self {
-        Error::UnknownSession(id)
     }
 }
 
@@ -152,13 +144,7 @@ pub enum TriggerError {
     Pattern(#[from] regex::Error),
 
     #[error("unknown trigger ID: {0}")]
-    UnknownId(TriggerId),
-}
-
-impl From<TriggerId> for TriggerError {
-    fn from(id: TriggerId) -> Self {
-        TriggerError::UnknownId(id)
-    }
+    UnknownId(u32),
 }
 
 #[derive(Debug, Error)]
@@ -168,26 +154,14 @@ pub enum AliasError {
     Pattern(#[from] regex::Error),
 
     #[error("unknown alias ID: {0}")]
-    UnknownId(AliasId),
-}
-
-impl From<AliasId> for AliasError {
-    fn from(id: AliasId) -> Self {
-        AliasError::UnknownId(id)
-    }
+    UnknownId(u32),
 }
 
 #[derive(Debug, Error)]
 #[allow(clippy::module_name_repetitions)]
 pub enum TimerError {
     #[error("unknown timer ID: {0}")]
-    UnknownId(TimerId),
-}
-
-impl From<TimerId> for TimerError {
-    fn from(id: TimerId) -> Self {
-        TimerError::UnknownId(id)
-    }
+    UnknownId(u32),
 }
 
 #[derive(Debug, Error)]

@@ -36,13 +36,13 @@ __all__ = [
 from typing import Callable, Awaitable, Union, Optional, Any
 import mudpuppy_core
 
-type GmcpHandler = Callable[[mudpuppy_core.SessionId, Any], Awaitable[None]]
+type GmcpHandler = Callable[[int, Any], Awaitable[None]]
 """
-An async function that receives a `mudpuppy_core.SessionId` and GMCP data as its arguments.
+An async function that receives an `int` session ID and GMCP data as its arguments.
 
 Example:
 ```python
-async def my_gmcp_handler(session_id: mudpuppy_core.SessionId, data: Any):
+async def my_gmcp_handler(session_id: int, data: Any):
     print(f"my_gmcp_handler session {session_id} got GMCP data {data}")
 ```
 """
@@ -112,7 +112,7 @@ def on_gmcp(
     `mudpuppy_core.EventType.GmcpEnabled`
     event.
 
-    The decorated function will be called with the `mudpuppy_core.SessionId` and the
+    The decorated function will be called with a `int` session ID and the
     GMCP message data whenever a `mudpuppy_core.EventType.GmcpMessage` event for the
     specified package is received.
 
@@ -129,7 +129,7 @@ def on_gmcp(
 
     # Handle the "Char.Vitals" GMCP message
     @on_gmcp("Char.Vitals")
-    async def gmcp_vitals(session_id: mudpuppy_core.SessionId, data: Any):
+    async def gmcp_vitals(session_id: int, data: Any):
         hp = data.get("hp", 0)
         printf(f"gmcp_vitals: session {session_id} character has {hp} hp")
     ```
@@ -322,8 +322,8 @@ def alias(
     the decorated function is used as the alias name.
 
     When input is provided matching the compiled regexp `pattern` the decorated function
-    will be invoked with the `mudpuppy_core.SessionId` of the session that received the
-    input, the `mudpuppy_core.AliasId` of the `mudpuppy_core.Alias` that matched, the
+    will be invoked with the `int` session ID of the session that received the
+    input, the `int` alias ID of the `mudpuppy_core.Alias` that matched, the
     input line that matched, and a list of captured groups from the pattern (if any).
 
     The `pattern` must be a valid regular expression. You can read more about the allowed
@@ -350,17 +350,17 @@ def alias(
 
     If you want more control over the alias creation process (for example, because
     you want to add an alias sometime after session creation or wish to store the
-    `mudpuppy_core.AliasId` of the created alias) you should prefer to instantiate
+    `int` alias ID of the created alias) you should prefer to instantiate
     your own `mudpuppy_core.AliasConfig` to use with
     `mudpuppy_core.MudpuppyCore.new_alias()`.
 
     Example:
     ```python
     import asyncio
-    from mudpuppy_core import mudpuppy_core, SessionId, AliasId
+    from mudpuppy_core import mudpuppy_core
 
     @alias(mud_name="Test (TLS)", pattern="^kill (.*)$")
-    async def start_combat(session_id: SessionId, _alias_id: AliasId, _line: str, groups: list[str]):
+    async def start_combat(session_id: int, _alias_id: int, _line: str, groups: list[str]):
         assert len(groups) == 1
         target = groups[0]
         await mudpuppy_core.send(session_id, f"backstab {target}")
@@ -389,8 +389,8 @@ def trigger(
     the decorated function is used as the trigger name.
 
     When output is received matching the compiled regexp `pattern` the decorated function
-    will be invoked with the `mudpuppy_core.SessionId` of the session that received the
-    output, the `mudpuppy_core.TriggerId` of the `mudpuppy_core.Trigger` that matched, the
+    will be invoked with the `int` session ID of the session that received the
+    output, the `int` trigger ID of the `mudpuppy_core.Trigger` that matched, the
     output line that matched, and a list of captured groups from the pattern (if any).
 
     The `pattern` must be a valid regular expression. You can read more about the allowed
@@ -435,18 +435,18 @@ def trigger(
 
     If you want more control over the trigger creation process (for example, because
     you want to add a trigger sometime after session creation or wish to store the
-    `mudpuppy_core.TriggerId` of the created trigger) you should prefer to instantiate
+    `int` trigger ID of the created trigger) you should prefer to instantiate
     your own `mudpuppy_core.TriggerConfig` to use with
     `mudpuppy_core.MudpuppyCore.new_trigger()`.
 
     Example:
     ```python
-    from mudpuppy_core import mudpuppy_core, SessionId, TriggerId
+    from mudpuppy_core import mudpuppy_core
     from mudpuppy import trigger
 
     @trigger(pattern="^You wear (.*)$")
     async def auto_keep(
-        session_id: SessionId, _trigger_id: TriggerId, _line: str, groups: list[str]
+        session_id: int, _trigger_id: int, _line: str, groups: list[str]
     ):
         await mudpuppy_core.send_line(session_id, f"keep {groups[0]}")
     ```
@@ -495,7 +495,7 @@ def highlight(
 
     If you want more control over the trigger creation process (for example, because
     you want to add a trigger sometime after session creation or wish to store the
-    `mudpuppy_core.TriggerId` of the created trigger) you should prefer to instantiate
+    `int` trigger ID of the created trigger) you should prefer to instantiate
     your own `mudpuppy_core.TriggerConfig` to use with
     `mudpuppy_core.MudpuppyCore.add_trigger()`.
 
@@ -518,24 +518,22 @@ def highlight(
     """
     ...
 
-type TimerCallable = Callable[
-    [mudpuppy_core.TimerId, Optional[mudpuppy_core.SessionId]], Awaitable[None]
-]
+type TimerCallable = Callable[[int, Optional[int]], Awaitable[None]]
 """
 An async function that is called when a timer expires. See `mudpuppy.timer()` for the
 associated `@timer()` decorator.
 
 The handler is called with:
 
-* the `mudpuppy_core.TimerId` of the timer that expired.
-* either `None`, or `mudpuppy_core.SessionId` if the `mudpuppy_core.Timer` was created
-  for a specific `mudpuppy_core.SessionId`.
+* the `int` timer ID of the timer that expired.
+* either `None`, or a `int` session ID if the `mudpuppy_core.Timer` was created
+  for a specific session.
 
 Example:
 ```python
 from mudpuppy_core import mudpuppy_core
 
-async def my_timer_handler(timer_id: mudpuppy_core.TimerId, sesh: Optional[mudpuppy_core.SessionId]):
+async def my_timer_handler(timer_id: int, sesh: Optional[int]):
     timer: mudpuppy_core.Timer = await mudpuppy_core.get_timer(sesh, timer_id)
     print(f"trigger {timer.config.name} has fired")
     if randint(1, 3) == 1:
@@ -576,18 +574,18 @@ def timer(
 
     If you want more control over the timer creation process (for example, because
     you want to add a timer sometime after session creation or wish to store the
-    `mudpuppy_core.TimerId` of the created timer) you should prefer to instantiate
+    `int` timer ID of the created timer) you should prefer to instantiate
     your own `mudpuppy_core.TimerConfig` to use with
     `mudpuppy_core.MudpuppyCore.new_timer()`.
 
     Example:
     ```python
-    from mudpuppy_core import mudpuppy_core, SessionId, TimerId
+    from mudpuppy_core import mudpuppy_core
     from mudpuppy import timer
 
     @timer(minutes=10, seconds=30)
     async def auto_save(
-        _timer_id: TimerId, session_id: Optional[SessionId]
+        _timer_id: int, session_id: Optional[int]
     ):
         assert session_id is not None
         await mudpuppy_core.send_line(session_id, "save")
@@ -606,7 +604,7 @@ def trigger_max_hits(
     from mudpuppy_core import mudpuppy_core, TriggerConfig
     from mudpuppy import trigger_max_hits
 
-    async def my_trigger_handler(_session_id: mudpuppy_core.SessionId, trigger_id: mudpuppy_core.TriggerId, line: str, _groups: list[str]):
+    async def my_trigger_handler(_session_id: int, trigger_id: int, line: str, _groups: list[str]):
         print(f"trigger {trigger_id} matched line: {line}")
 
     # Wrap the handler w/ mudpuppy.trigger_max_hits to limit to 3 hits
@@ -627,7 +625,7 @@ def alias_max_hits(
     from mudpuppy_core import mudpuppy_core, AliasConfig
     from mudpuppy import alias_max_hits
 
-    async def my_alias_handler(_session_id: mudpuppy_core.SessionId, alias_id: mudpuppy_core.AliasId, line: str, _groups: list[str]):
+    async def my_alias_handler(_session_id: int, alias_id: int, line: str, _groups: list[str]):
         print(f"alias {alias_id} matched line: {line}")
 
     # Wrap the handler w/ mudpuppy.alias_max_hits to limit to 3 hits

@@ -2,16 +2,16 @@ import logging
 from argparse import Namespace
 
 from commands import Command, add_command
-from mudpuppy_core import Event, OutputItem, SessionId, Status, mudpuppy_core
+from mudpuppy_core import Event, OutputItem, Status, mudpuppy_core
 
 from mudpuppy import on_new_session
 
 
 class ConnectCmd(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__("connect", session, self.connect, "Re-connect to the server")
 
-    async def connect(self, sesh_id: SessionId, _args: Namespace):
+    async def connect(self, sesh_id: int, _args: Namespace):
         status = await mudpuppy_core.status(sesh_id)
         if not isinstance(status, Status.Disconnected):
             await mudpuppy_core.add_output(
@@ -24,12 +24,12 @@ class ConnectCmd(Command):
 
 
 class DisconnectCmd(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__(
             "disconnect", session, self.disconnect, "Disconnect from the server"
         )
 
-    async def disconnect(self, sesh_id: SessionId, _args: Namespace):
+    async def disconnect(self, sesh_id: int, _args: Namespace):
         status = await mudpuppy_core.status(sesh_id)
         if not isinstance(status, Status.Connected):
             await mudpuppy_core.add_output(
@@ -42,18 +42,18 @@ class DisconnectCmd(Command):
 
 
 class QuitCmd(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__("quit", session, self.quit, "Quit Mudpuppy")
 
-    async def quit(self, _sesh_id: SessionId, _args: Namespace):
+    async def quit(self, _sesh_id: int, _args: Namespace):
         await mudpuppy_core.quit()
 
 
 class ReloadCmd(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__("reload", session, self.reload, "Reload Mudpuppy")
 
-    async def reload(self, _sesh_id: SessionId, _args: Namespace):
+    async def reload(self, _sesh_id: int, _args: Namespace):
         await mudpuppy_core.reload()
 
 

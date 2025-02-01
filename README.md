@@ -132,10 +132,10 @@ behaviours easy:
 import logging
 import asyncio
 from mudpuppy import alias
-from mudpuppy_core import mudpuppy_core, SessionId, AliasId
+from mudpuppy_core import mudpuppy_core
 
 @alias(mud_name="Dune", pattern="^kill (.*)$")
-async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, groups):
+async def kill_headbutt(session_id: int, _alias_id: int, line: str, groups):
     # Send through the original line so that we actually start combat in-game
     # with the 'kill' command.
     await mudpuppy_core.send_line(session_id, line)

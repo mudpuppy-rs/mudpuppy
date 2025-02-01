@@ -25,7 +25,7 @@ the currently focused active [SessionID] (if there is one!) as an argument:
 
 ```python
 @timer(seconds=10, minutes=2)
-async def party(timer_id: TimerId, session_id: Optional[SessionId]):
+async def party(timer_id: int, session_id: Optional[int]):
     logging.debug(f"2m10s timer fired: {timer_id}!")
     if session_id is not None:
         await mudpuppy_core.send_line(session_id, "say PARTY TIME!!!")
@@ -37,7 +37,6 @@ is used.
 
 [mudpuppy module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html
 [@timer]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html#timer
-[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
 
 ## Max ticks
 
@@ -47,7 +46,7 @@ run).
 
 ```python
 @timer(mud_name="Dune", seconds=10, max_ticks=3)
-async def heal_timer(_timer_id: TimerId, session_id: SessionId):
+async def heal_timer(_timer_id: int, session_id: int):
     await mudpuppy_core.send_line(session_id, "heal")
 ```
 

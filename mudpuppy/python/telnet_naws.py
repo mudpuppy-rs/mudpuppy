@@ -2,7 +2,7 @@ import logging
 import struct
 from typing import Tuple
 
-from mudpuppy_core import Event, EventType, SessionId, mudpuppy_core
+from mudpuppy_core import Event, EventType, mudpuppy_core
 
 from mudpuppy import on_connected, on_disconnected, on_event
 
@@ -20,21 +20,21 @@ class TelnetNawsHandler:
         self.state = {}
 
     @staticmethod
-    async def on_connect(session: SessionId):
+    async def on_connect(session: int):
         logging.debug(f"naws: enabling Telnet NAWS protocol for conn {session}")
         await mudpuppy_core.request_enable_option(session, NAWS_OPTION)
 
-    def on_enabled(self, session: SessionId):
+    def on_enabled(self, session: int):
         logging.debug(f"naws: enabled for conn {session}")
         self.state[session] = (80, 40)
 
-    def on_disabled(self, session: SessionId):
+    def on_disabled(self, session: int):
         if session not in self.state:
             return
         logging.debug(f"naws: disabled for conn {session}")
         del self.state[session]
 
-    async def resize(self, session: SessionId, columns: int, rows: int):
+    async def resize(self, session: int, columns: int, rows: int):
         logging.debug(f"naws: session {session} resized to {columns}x{rows}")
         self.state[session] = (columns, rows)
         await mudpuppy_core.send_subnegotiation(

@@ -9,7 +9,6 @@ __all__ = [
     "MudpuppyCore",
     "Config",
     "SessionInfo",
-    "SessionId",
     "Mud",
     "Tls",
     "KeyEvent",
@@ -23,15 +22,12 @@ __all__ = [
     "Alias",
     "AliasCallable",
     "AliasConfig",
-    "AliasId",
     "Trigger",
     "TriggerCallable",
     "HighlightCallable",
     "TriggerConfig",
-    "TriggerId",
     "TimerConfig",
     "Timer",
-    "TimerId",
     "Shortcut",
     "PromptSignal",
     "PromptMode",
@@ -46,7 +42,6 @@ __all__ = [
     "Direction",
     "BufferConfig",
     "BufferDirection",
-    "BufferId",
     "ExtraBuffer",
 ]
 
@@ -282,81 +277,17 @@ class Config:
         Return the `KeyBindings` configuration.
         """
 
-type SessionId = int
-"""
-A `SessionInfo` identifier.
-
-This are assigned when `EventType.NewSession` events occur. You will typically need a
-`SessionId` to use as argument whenever you need to interact with a specific session
-using `MudpuppyCore` methods.
-
-You can find the `SessionInfo` associated with a `SessionId` by calling
-`MudpuppyCore.session_info()`.
-"""
-
-class AliasId(int):
-    """
-    An `Alias` identifier.
-
-    These are assigned per-`SessionId` using `MudpuppyCore.new_alias()`.
-    """
-
-    def __init__(self, value: int):
-        """
-        Construct an `AliasId` for a specific ID.
-        """
-        ...
-
-class TriggerId(int):
-    """
-    A `Trigger` identifier.
-
-    These are assigned per-`SessionId` using `MudpuppyCore.new_trigger()`.
-    """
-
-    def __init__(self, value: int):
-        """
-        Construct a `TriggerId` for a specific ID.
-        """
-        ...
-
-class TimerId(int):
-    """
-    A `Timer` identifier.
-
-    These are assigned per-`SessionId` using `MudpuppyCore.new_timer()`.
-    """
-
-    def __init__(self, value: int):
-        """
-        Construct a `TimerId` for a specific ID.
-        """
-        ...
-
-class BufferId(int):
-    """
-    An `ExtraBuffer` identifier.
-
-    These are assigned per-`SessionId` using `MudpuppyCore.new_buffer()`.
-    """
-
-    def __init__(self, value: int):
-        """
-        Construct a `BufferId` for a specific ID.
-        """
-        ...
-
 class SessionInfo:
     """
     Information about a session.
 
-    Typically retrieved using `MudpuppyCore.session_info()` with a `SessionId`,
+    Typically retrieved using `MudpuppyCore.session_info()` with an `int` session ID,
     or for all sessions, `MudpuppyCore.sessions()`.
     """
 
-    id: SessionId
+    id: int
     """
-    The `SessionId` for this session.
+    The session ID identifier for this session.
     """
 
     mud_name: str
@@ -425,7 +356,7 @@ class Status:
     """
     Connection status information.
 
-    Typically retrieved using `MudpuppyCore.status()` with a `SessionId`.
+    Typically retrieved using `MudpuppyCore.status()` with an `int` session ID.
     """
 
     class Disconnected:
@@ -511,7 +442,7 @@ class MudLine:
         Sets the `MudLine`'s `raw` value to the UTF-8 bytes of the string `new`.
         """
 
-type TriggerCallable = Callable[[SessionId, TriggerId, str, list[str]], Awaitable[None]]
+type TriggerCallable = Callable[[int, int, str, list[str]], Awaitable[None]]
 """
 An async function that is called when output sent from a MUD matches a trigger pattern.
 Typically assigned to a `TriggerConfig`'s `callback` property, alternatively see
@@ -519,18 +450,18 @@ Typically assigned to a `TriggerConfig`'s `callback` property, alternatively see
 
 The handler is called with:
 
-* the `mudpuppy_core.SessionId` of the session that received the output
-* the `mudpuppy_core.TriggerId` of the `mudpuppy_core.Trigger` that matched.
+* the `int` session ID of the session that received the output
+* the `int` trigger ID of the `mudpuppy_core.Trigger` that matched.
 * the `str` output that matched the trigger pattern, and
 * a `list[str]` of captured groups from the trigger pattern (if any).
 
 Example:
 ```python
-from mudpuppy_core import mudpuppy_core, SessionId, TriggerId, Trigger
+from mudpuppy_core import mudpuppy_core
 
 async def my_trigger_handler(
-    session_id: SessionId,
-    trigger_id: TriggerId,
+    session_id: int,
+    trigger_id: int,
     line: str,
     _groups: list[str]
 ):
@@ -674,10 +605,10 @@ class TriggerConfig:
 
 class Trigger:
     """
-    A `TriggerConfig` associated with a `TriggerId` after being created with `MudpuppyCore.new_trigger()`
+    A `TriggerConfig` associated with a `int` trigger ID after being created with `MudpuppyCore.new_trigger()`
     """
 
-    id: TriggerId
+    id: int
     """
     The `Trigger`'s ID.
     """
@@ -701,7 +632,7 @@ class Trigger:
     The `TriggerConfig` for the `Trigger`.
     """
 
-type AliasCallable = Callable[[SessionId, AliasId, str, list[str]], Awaitable[None]]
+type AliasCallable = Callable[[int, int, str, list[str]], Awaitable[None]]
 """
 An async function that is called when input sent to a MUD matches an alias pattern.
 Typically you will assign an `AliasCallable` to the `callback` property of an `AliasConfig`.
@@ -709,16 +640,16 @@ Alternatively, see `mudpuppy.alias()` for a simple `@alias()` decorator.
 
 The handler is called with:
 
-* the `SessionId` of the session that received the input
-* the `AliasId` of the `Alias` that matched.
+* the `int` session ID of the session that received the input
+* the `int` alias ID of the `Alias` that matched.
 * the `str` input that matched the alias pattern, and
 * a `list[str]` of captured groups from the alias pattern (if any).
 
 Example:
 ```python
-from mudpuppy_core import mudpuppy_core, SessionId, AliasId, Alias
+from mudpuppy_core import mudpuppy_core, Alias
 
-async def my_alias_handler(session_id: SessionId, alias_id: AliasId, line: str, _groups: list[str]):
+async def my_alias_handler(session_id: int, alias_id: int, line: str, _groups: list[str]):
     alias: Alias = await mudpuppy_core.get_alias(session_id, alias_id)
     print(f"alias {alias.config.name} has matched input: {line}")
     print(f"this alias has matched input {alias.config.hits} times so far")
@@ -794,10 +725,10 @@ class AliasConfig:
 
 class Alias:
     """
-    A `AliasConfig` associated with a `AliasId` after being created with `MudpuppyCore.new_alias()`
+    A `AliasConfig` associated with a `int` alias ID after being created with `MudpuppyCore.new_alias()`
     """
 
-    id: AliasId
+    id: int
     """
     The `Alias`'s ID.
     """
@@ -821,14 +752,14 @@ class Alias:
     The `AliasConfig` for the `Alias`.
     """
 
-type TimerCallable = Callable[[TimerId, Optional[SessionId]], Awaitable[None]]
+type TimerCallable = Callable[[int, Optional[int]], Awaitable[None]]
 
 class TimerConfig:
     """
     Configuration for a `Timer`.
 
     You can create a new `TimerConfig` by specifying a `name`, a `duration_ms`, a `callback`
-    and optionally a `SessionId`:
+    and optionally an `int` session ID:
 
     ```python
     timer_config = TimerConfig("Test Timer", 1000, my_timer_callback, None)
@@ -848,12 +779,12 @@ class TimerConfig:
 
     callback: TimerCallable
     """
-    An **async** function that receives a `TimerId` and optionally a `SessionId` when the timer fires.
+    An **async** function that receives an `int` timer ID and optionally an `int` session ID when the timer fires.
 
     Your timer callback function should have a signature like:
 
     ```python
-    async def my_timer_callback(timer_id: TimerId, sesh: Optional[SessionId]):
+    async def my_timer_callback(timer_id: int, sesh: Optional[int]):
         ...
     ```
     """
@@ -863,26 +794,26 @@ class TimerConfig:
         name: str,
         duration_ms: int,
         callback: TimerCallable,
-        session: Optional[SessionId] = None,
+        session: Optional[int] = None,
     ):
         """
         Create a new `TimerConfig` with a `name` that will be run every `duration_ms`
         milliseconds, invoking `callback`. The timer may optionally be associated
-        with a `SessionId`.
+        with an `int` session ID.
         """
         ...
 
     @property
-    def session_id(self) -> Optional[SessionId]:
+    def session_id(self) -> Optional[int]:
         """
-        An optional `SessionId` that the timer is associated with. Can be both read and set.
+        An optional `int` session ID that the timer is associated with. Can be both read and set.
         """
         ...
 
     @session_id.setter
-    def session_id(self, id: Optional[SessionId]):
+    def session_id(self, id: Optional[int]):
         """
-        Set the `SessionId`
+        Set the `int` session ID.
         """
         ...
 
@@ -903,10 +834,10 @@ class TimerConfig:
 
 class Timer:
     """
-    A `TimerConfig` associated with a `TimerId` after being created with `MudpuppyCore.new_timer()`
+    A `TimerConfig` associated with an `int` timer ID after being created with `MudpuppyCore.new_timer()`
     """
 
-    id: TimerId
+    id: int
     """
     The `Timer`'s ID.
     """
@@ -1472,14 +1403,14 @@ class BufferConfig:
 
 class ExtraBuffer:
     """
-    A `BufferConfig` associated with a `BufferId` after being created with `MudpuppyCore.new_buffer()`
+    A `BufferConfig` associated with an `int` buffer ID after being created with `MudpuppyCore.new_buffer()`
 
     An extra buffer for displaying output. Typically created by and used by scripts.
     """
 
-    id: BufferId
+    id: int
     """
-    The `BufferId` assigned to the buffer.
+    The `int` buffer ID assigned to the buffer.
     """
 
     config: BufferConfig
@@ -1543,7 +1474,7 @@ class MudpuppyCore:
         For more control over output, use `MudpuppyCore.add_output()` instead.
         """
 
-    async def active_session_id(self) -> Optional[SessionId]:
+    async def active_session_id(self) -> Optional[int]:
         """
         Returns the ID of the currently active session, or `None` if no session
         is active.
@@ -1556,27 +1487,27 @@ class MudpuppyCore:
         """
         ...
 
-    async def session_info(self, session_id: SessionId) -> SessionInfo:
+    async def session_info(self, session_id: int) -> SessionInfo:
         """
-        Returns a `SessionInfo` instance for the given session.
-        """
-        ...
-
-    async def status(self, session_id: SessionId) -> Status:
-        """
-        Returns connection `Status` information for the given session.
+        Returns a `SessionInfo` instance for the given session ID.
         """
         ...
 
-    async def mud_config(self, session_id: SessionId) -> Optional[Mud]:
+    async def status(self, session_id: int) -> Status:
         """
-        Returns the `Mud` configuration for the given session, if it exists.
+        Returns connection `Status` information for the given session ID.
         """
         ...
 
-    async def send_line(self, session_id: SessionId, line: str):
+    async def mud_config(self, session_id: int) -> Optional[Mud]:
         """
-        Sends a line of text to the given session as if it were input sent by the user.
+        Returns the `Mud` configuration for the given session ID, if it exists.
+        """
+        ...
+
+    async def send_line(self, session_id: int, line: str):
+        """
+        Sends a line of text to the given session ID as if it were input sent by the user.
 
         The input will be marked as "scripted" to differentiate it from true user input
         typed at the keyboard.
@@ -1602,9 +1533,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def send_lines(self, session_id: SessionId, lines: list[str]):
+    async def send_lines(self, session_id: int, lines: list[str]):
         """
-        Sends a list of lines of text to the given session as if they were input sent by the user.
+        Sends a list of lines of text to the given session ID as if they were input sent by the user.
 
         The input will be marked as "scripted" to differentiate it from true user input
         typed at the keyboard.
@@ -1613,9 +1544,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def connect(self, session_id: SessionId):
+    async def connect(self, session_id: int):
         """
-        Connects the given session if it isn't already connected.
+        Connects the given session ID if it isn't already connected.
 
         You can use `MudpuppyCore.status()` to determine a session's connection `Status`
         before calling `connect()`.
@@ -1624,9 +1555,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def disconnect(self, session_id: SessionId):
+    async def disconnect(self, session_id: int):
         """
-        Disconnects the given session if it isn't already disconnected.
+        Disconnects the given session ID if it isn't already disconnected.
 
         You can use `MudpuppyCore.status()` to determine a session's connection `Status`
         before calling `connect()`.
@@ -1635,27 +1566,25 @@ class MudpuppyCore:
         """
         ...
 
-    async def request_enable_option(self, session_id: SessionId, option: int):
+    async def request_enable_option(self, session_id: int, option: int):
         """
-        Requests that the MUD server for the given session enable a telnet option.
+        Requests that the MUD server enable a telnet option for the given session ID.
 
         If the option is enabled by the server a `EventType.OptionEnabled` event will be
         emitted with the same session ID.
         """
         ...
 
-    async def request_disable_option(self, session_id: SessionId, option: int):
+    async def request_disable_option(self, session_id: int, option: int):
         """
-        Requests that the MUD server for the given session disable a telnet option.
+        Requests that the MUD server disable a telnet option for the given session ID.
 
         If the option is disabled by the server a `EventType.OptionDisabled` event will be
         emitted with the same session ID.
         """
         ...
 
-    async def send_subnegotiation(
-        self, session_id: SessionId, option: int, data: bytes
-    ):
+    async def send_subnegotiation(self, session_id: int, option: int, data: bytes):
         """
         Sends a telnet subnegotiation to the given session.
 
@@ -1665,12 +1594,12 @@ class MudpuppyCore:
         ...
 
     async def new_trigger(
-        self, id: SessionId, config: TriggerConfig, module: str
-    ) -> TriggerId:
+        self, session_id: int, config: TriggerConfig, module: str
+    ) -> int:
         """
-        Creates a new trigger for the given session for the given `TriggerConfig`.
+        Creates a new trigger for the given session ID for the given `TriggerConfig`.
 
-        Returns a `TriggerId` that can be used with `MudpuppyCore.get_trigger()`,
+        Returns an `int` trigger ID that can be used with `MudpuppyCore.get_trigger()`,
         `MudpuppyCore.disable_trigger()` and `MudpuppyCore.remove_trigger()`.
 
         The `module` str is used to associate the trigger with a specific Python module that created
@@ -1679,19 +1608,17 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_trigger(
-        self, session_id: SessionId, trigger_id: TriggerId
-    ) -> Optional[Trigger]:
+    async def get_trigger(self, session_id: int, trigger_id: int) -> Optional[Trigger]:
         """
-        Returns the `Trigger` for the given `TriggerId` if it exists for the provided session.
+        Returns the `Trigger` for the given trigger ID if it exists for the provided session ID.
 
         See `MudpuppyCore.new_trigger()` for creating triggers.
         """
         ...
 
-    async def disable_trigger(self, session_id: SessionId, trigger_id: TriggerId):
+    async def disable_trigger(self, session_id: int, trigger_id: int):
         """
-        Disables the trigger with the given `TriggerId` for the given session if it
+        Disables the trigger with the given trigger ID for the given session ID if it
         is currently enabled.
 
         The trigger will no longer be evaluated when new input is received, even
@@ -1703,9 +1630,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def enable_trigger(self, session_id: SessionId, trigger_id: TriggerId):
+    async def enable_trigger(self, session_id: int, trigger_id: int):
         """
-        Enables the trigger with the given `TriggerId` for the given session if it
+        Enables the trigger with the given trigger ID for the given session ID if it
         was previously disabled.
 
         You can use `MudpuppyCore.get_trigger()` to get a `Trigger` to determine if
@@ -1714,12 +1641,12 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_trigger(self, session_id: SessionId, trigger_id: TriggerId):
+    async def remove_trigger(self, session_id: int, trigger_id: int):
         """
-        Removes the trigger with the given `TriggerId` for the given session if it
+        Removes the trigger with the given trigger ID for the given session ID if it
         exists.
 
-        The trigger will be deleted and its `TriggerId` will no longer be valid. You
+        The trigger will be deleted and its trigger ID will no longer be valid. You
         will need to recreate it with `MudpuppyCore.new_trigger()` if you want to
         restore the `TriggerConfig`.
 
@@ -1728,28 +1655,26 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_module_triggers(self, session_id: SessionId, module: str):
+    async def remove_module_triggers(self, session_id: int, module: str):
         """
-        Removes all triggers created by the given module for the given session.
+        Removes all triggers created by the given module for the given session ID.
 
         This is useful when a module is reloaded and triggers need to be recreated
         to avoid duplicates.
         """
         ...
 
-    async def triggers(self, session_id: SessionId) -> list[Trigger]:
+    async def triggers(self, session_id: int) -> list[Trigger]:
         """
-        Returns a list of `Trigger` instances for the given session.
+        Returns a list of `Trigger` instances for the given session ID.
         """
         ...
 
-    async def new_alias(
-        self, id: SessionId, config: AliasConfig, module: str
-    ) -> AliasId:
+    async def new_alias(self, id: int, config: AliasConfig, module: str) -> int:
         """
-        Creates a new `Alias` for the given session for the given `AliasConfig`.
+        Creates a new `Alias` for the given session ID for the given `AliasConfig`.
 
-        Returns a `AliasId` that can be used with `MudpuppyCore.get_alias()`,
+        Returns an `int` alias ID that can be used with `MudpuppyCore.get_alias()`,
         `MudpuppyCore.disable_alias()` and `MudpuppyCore.remove_alias()`.
 
         The `module` str is used to associate the alias with a specific Python module that created
@@ -1758,19 +1683,17 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_alias(
-        self, session_id: SessionId, alias_id: AliasId
-    ) -> Optional[Alias]:
+    async def get_alias(self, session_id: int, alias_id: int) -> Optional[Alias]:
         """
-        Returns the `Alias` for the given `AliasId` if it exists for the provided session.
+        Returns the `Alias` for the given alias ID if it exists for the provided session ID.
 
         See `MudpuppyCore.new_alias()` for creating aliases.
         """
         ...
 
-    async def disable_alias(self, session_id: SessionId, alias_id: AliasId):
+    async def disable_alias(self, session_id: int, alias_id: int):
         """
-        Disables the alias with the given `AliasId` for the given session if it
+        Disables the alias with the given alias ID for the given session if it
         is currently enabled.
 
         The alias will no longer be evaluated when new input is received, even
@@ -1782,9 +1705,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def enable_alias(self, session_id: SessionId, alias_id: AliasId):
+    async def enable_alias(self, session_id: int, alias_id: int):
         """
-        Enables the alias with the given `AliasId` for the given session if it
+        Enables the alias with the given alias ID for the given session ID if it
         was previously disabled.
 
         You can use `MudpuppyCore.get_alias()` to get a `Alias` to determine if
@@ -1793,12 +1716,12 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_alias(self, session_id: SessionId, alias_id: AliasId):
+    async def remove_alias(self, session_id: int, alias_id: int):
         """
-        Removes the alias with the given `AliasId` for the given session if it
+        Removes the alias with the given alias ID for the given session ID if it
         exists.
 
-        The alias will be deleted and its `AliasId` will no longer be valid. You
+        The alias will be deleted and its alias ID will no longer be valid. You
         will need to recreate it with `MudpuppyCore.new_alias()` if you want to
         restore the `AliasConfig`.
 
@@ -1807,26 +1730,26 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_module_aliases(self, session_id: SessionId, module: str):
+    async def remove_module_aliases(self, session_id: int, module: str):
         """
-        Removes all aliases created by the given module for the given session.
+        Removes all aliases created by the given module for the given session ID.
 
         This is useful when a module is reloaded and aliases need to be recreated
         to avoid duplicates.
         """
         ...
 
-    async def aliases(self, session_id: SessionId) -> list[Alias]:
+    async def aliases(self, session_id: int) -> list[Alias]:
         """
-        Returns a list of `Alias` instances for the given session.
+        Returns a list of `Alias` instances for the given session ID.
         """
         ...
 
-    async def new_timer(self, config: TimerConfig, module: str) -> TimerId:
+    async def new_timer(self, config: TimerConfig, module: str) -> int:
         """
         Creates a new `Timer` configured with the given `TimerConfig`.
 
-        Returns a `TimerId` that can be used with `MudpuppyCore.get_timer()`,
+        Returns an `int` timer ID that can be used with `MudpuppyCore.get_timer()`,
         `MudpuppyCore.stop_timer()` and `MudpuppyCore.remove_timer()`.
 
         The `module` str is used to associate the timer with a specific Python module that created
@@ -1835,17 +1758,17 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_timer(self, timer_id: TimerId) -> Optional[Timer]:
+    async def get_timer(self, timer_id: int) -> Optional[Timer]:
         """
-        Returns the `Timer` for the given `TimerId` if it exists.
+        Returns the `Timer` for the given timer ID if it exists.
 
         See `MudpuppyCore.new_timer()` for creating timers.
         """
         ...
 
-    async def stop_timer(self, timer_id: TimerId):
+    async def stop_timer(self, timer_id: int):
         """
-        Disables the timer with the given `TimerId` if it is currently enabled.
+        Disables the timer with the given timer ID if it is currently enabled.
 
         The timer will no longer be evaluated when the timer interval elapses.
 
@@ -1855,9 +1778,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def start_timer(self, timer_id: TimerId):
+    async def start_timer(self, timer_id: int):
         """
-        Starts a timer with the given `TimerId` if it was previously stopped.
+        Starts a timer with the given timer ID if it was previously stopped.
 
         You can use `MudpuppyCore.get_timer()` to get a `Timer` to determine if
         it is currently enabled or disabled. Use `MudpuppyCore.disable_timer()` to
@@ -1865,11 +1788,11 @@ class MudpuppyCore:
         """
         ...
 
-    async def remove_timer(self, timer_id: TimerId):
+    async def remove_timer(self, timer_id: int):
         """
-        Removes the timer with the given `TimerId` if it exists.
+        Removes the timer with the given timer ID if it exists.
 
-        The timer will be deleted and its `TimerId` will no longer be valid. You
+        The timer will be deleted and its timer ID will no longer be valid. You
         will need to recreate it with `MudpuppyCore.new_timer()` if you want to
         restore the `TimerConfig`.
 
@@ -1893,9 +1816,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_input(self, session_id: SessionId) -> InputLine:
+    async def get_input(self, session_id: int) -> InputLine:
         """
-        Returns the current input line for the given session.
+        Returns the current input line for the given session ID.
 
         This is the data that has been typed in by the user into the input area,
         but not yet transmitted to the MUD.
@@ -1904,18 +1827,18 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_input_echo(self, session_id: SessionId) -> EchoState:
+    async def get_input_echo(self, session_id: int) -> EchoState:
         """
-        Returns the current telnet echo state for the given session.
+        Returns the current telnet echo state for the given session ID.
 
         This indicates whether the MUD told us to stop echoing input because
         sensitive data is being entered.
         """
         ...
 
-    async def set_input(self, session_id: SessionId, new_input: InputLine):
+    async def set_input(self, session_id: int, new_input: InputLine):
         """
-        Sets the current input line for the given session.
+        Sets the current input line for the given session ID.
 
         This is the data that has been typed in by the user into the input area,
         but not yet transmitted to the MUD.
@@ -1924,9 +1847,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def clear_input(self, session_id: SessionId):
+    async def clear_input(self, session_id: int):
         """
-        Clears the current input line for the given session.
+        Clears the current input line for the given session ID.
 
         This clears the data that has been typed in by the user into the input area,
         but not yet transmitted to the MUD.
@@ -1936,9 +1859,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def add_output(self, session_id: SessionId, output: OutputItem):
+    async def add_output(self, session_id: int, output: OutputItem):
         """
-        Adds an `OutputItem` to the main output buffer for the given session.
+        Adds an `OutputItem` to the main output buffer for the given session ID.
 
         This is the primary mechanism of displaying data to the user.
 
@@ -1946,17 +1869,17 @@ class MudpuppyCore:
         """
         ...
 
-    async def add_outputs(self, session_id: SessionId, outputs: list[OutputItem]):
+    async def add_outputs(self, session_id: int, outputs: list[OutputItem]):
         """
-        Adds a list of `OutputItem` instances to the main output buffer for the given session.
+        Adds a list of `OutputItem` instances to the main output buffer for the given session ID.
 
         USe `MudpuppyCore.add_output()` if you only have one `OutputItem` to add.
         """
         ...
 
-    async def dimensions(self, session_id: SessionId) -> tuple[int, int]:
+    async def dimensions(self, session_id: int) -> tuple[int, int]:
         """
-        Returns the width and height of the output area for the given session.
+        Returns the width and height of the output area for the given session ID.
 
         Note that this is not the overall width/height of the window, but just the
         area just to display output from the MUD. These dimensions match the
@@ -1967,9 +1890,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def layout(self, session_id: SessionId) -> LayoutNode:
+    async def layout(self, session_id: int) -> LayoutNode:
         """
-        Returns the root `LayoutNode` for the given session.
+        Returns the root `LayoutNode` for the given session ID.
 
         The layout tree describes how the output area is divided into regions
         and how each region is filled with content.
@@ -1978,11 +1901,11 @@ class MudpuppyCore:
         """
         ...
 
-    async def new_buffer(self, session_id: SessionId, config: BufferConfig) -> BufferId:
+    async def new_buffer(self, session_id: int, config: BufferConfig) -> int:
         """
-        Creates a new `ExtraBuffer` for the given session with the given `BufferConfig`.
+        Creates a new `ExtraBuffer` for the given session ID with the given `BufferConfig`.
 
-        Returns a `BufferId` that can be used with `MudpuppyCore.get_buffer()`,
+        Returns an `int` buffer ID that can be used with `MudpuppyCore.get_buffer()`,
         `MudpuppyCore.remove_buffer()`.
 
         Once retrieving the `ExtraBuffer` with `MudpuppyCore.get_buffer()`, you can
@@ -1991,42 +1914,42 @@ class MudpuppyCore:
         ...
 
     async def get_buffer(
-        self, session_id: SessionId, buffer_id: BufferId
+        self, session_id: int, buffer_id: int
     ) -> Optional[ExtraBuffer]:
         """
-        Returns the `ExtraBuffer` for the given `BufferId` if it exists for the provided session.
+        Returns the `ExtraBuffer` for the given buffer ID  if it exists for the provided session ID.
 
         See `MudpuppyCore.new_buffer()` for creating buffers.
         """
         ...
 
-    async def buffers(self, session_id: SessionId) -> list[ExtraBuffer]:
+    async def buffers(self, session_id: int) -> list[ExtraBuffer]:
         """
-        Returns a list of `ExtraBuffer` instances for the given session.
+        Returns a list of `ExtraBuffer` instances for the given session ID.
         """
         ...
 
-    async def remove_buffer(self, session_id: SessionId, buffer_id: BufferId):
+    async def remove_buffer(self, session_id: int, buffer_id: int):
         """
-        Removes the buffer with the given `BufferId` for the given session if it
+        Removes the buffer with the given buffer ID for the given session ID if it
         exists.
 
-        The buffer will be deleted and its `BufferId` will no longer be valid. You
+        The buffer will be deleted and its buffer ID will no longer be valid. You
         will need to recreate it with `MudpuppyCore.new_buffer()` if you want to
         restore the `BufferConfig`.
         """
         ...
 
-    async def gmcp_enabled(self, session_id: SessionId) -> bool:
+    async def gmcp_enabled(self, session_id: int) -> bool:
         """
         Returns `True` if negotiation has completed and GMCP is enabled for the given
-        session, `False` otherwise.
+        session ID, `False` otherwise.
         """
         ...
 
-    async def gmcp_send(self, session_id: SessionId, module: str, json_data: str):
+    async def gmcp_send(self, session_id: int, module: str, json_data: str):
         """
-        Sends a GMCP package to the MUD for the given session.
+        Sends a GMCP package to the MUD for the given session ID.
 
         The `module` is the GMCP module name and the `json` is the JSON-encoded
         data to send. You must `json.dumps()` your data to create the `json_data`
@@ -2039,9 +1962,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def gmcp_register(self, session_id: SessionId, package: str):
+    async def gmcp_register(self, session_id: int, package: str):
         """
-        Registers the given GMCP `package` with the MUD for the given session.
+        Registers the given GMCP `package` with the MUD for the given session ID.
 
         This lets the MUD know you support GMCP messages for the `package`.
 
@@ -2053,9 +1976,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def gmcp_unregister(self, session_id: SessionId, package: str):
+    async def gmcp_unregister(self, session_id: int, package: str):
         """
-        Unregisters the given GMCP `package` with the MUD for the given session.
+        Unregisters the given GMCP `package` with the MUD for the given session ID.
 
         This lets the MUD know you no longer want GMCP messages for the `package`.
 
@@ -2067,9 +1990,9 @@ class MudpuppyCore:
         """
         ...
 
-    async def emit_event(self, custom_type: str, data: Any, id: Optional[SessionId]):
+    async def emit_event(self, custom_type: str, data: Any, id: Optional[int]):
         """
-        Emits a custom event with the given `custom_type` and `data` for the given session.
+        Emits a custom event with the given `custom_type` and `data` for the given session ID.
         If `id` is `None`, the event is emitted for all sessions.
 
         The event will be produced as an `EventType.Python` event.
@@ -2110,12 +2033,12 @@ class EventType(StrEnum):
 
     NewSession = auto()
     """
-    An event emitted when a new `SessionId` is created after connecting to a `Mud`.
+    An event emitted when a new session ID is created after connecting to a `Mud`.
     """
 
     Connection = auto()
     """
-    An event emitted when the connection for a `SessionId` changes `Status`.
+    An event emitted when the connection for a session ID changes `Status`.
     """
 
     Prompt = auto()
@@ -2210,7 +2133,7 @@ class EventType(StrEnum):
 
     ResumeSession = auto()
     """
-    An event emitted for each `SessionId` after a `PythonReloaded` event.
+    An event emitted for each session ID after a `PythonReloaded` event.
     """
 
 class Event:
@@ -2224,9 +2147,9 @@ class Event:
     argument.
     """
 
-    def session_id(self) -> Optional[SessionId]:
+    def session_id(self) -> Optional[int]:
         """
-        Returns the `SessionId` associated with the event, if any.
+        Returns the session ID associated with the event, if any.
 
         Returns `None` for global events.
         """
@@ -2235,19 +2158,18 @@ class Event:
     class NewSession:
         """
         A `EventType.NewSession` event. This is produced when the user
-        selects a MUD from the MUD list and an initial `SessionId` is
+        selects a MUD from the MUD list and an initial session ID is
         assigned.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that was assigned for the new session.
+        The session ID that was assigned for the new session.
         """
 
         info: SessionInfo
         """
-        The `SessionInfo` describing the session. This is largely
-        redundant with `id` and `mud`.
+        The `SessionInfo` describing the session.
         """
 
         mud: Mud
@@ -2261,9 +2183,9 @@ class Event:
         `Status` of the session's connection changes.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that changed connection `Status`.
+        The session ID that changed connection `Status`.
         """
 
         status: Status
@@ -2277,9 +2199,9 @@ class Event:
         is received from the MUD.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that received the prompt.
+        The session ID that received the prompt.
         """
 
         prompt: MudLine
@@ -2296,9 +2218,9 @@ class Event:
         option is received.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that received the IAC option.
+        The session ID that received the IAC option.
         """
 
         command: int
@@ -2313,9 +2235,9 @@ class Event:
         `MudpuppyCore.request_enable_option()` call.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that enabled the option.
+        The session ID that enabled the option.
         """
 
         option: int
@@ -2330,9 +2252,9 @@ class Event:
         `MudpuppyCore.request_disable_option()` call.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that disabled the option.
+        The session ID that disabled the option.
         """
 
         option: int
@@ -2346,9 +2268,9 @@ class Event:
         Telnet subnegotiation is received.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that received the subnegotiation.
+        The session ID that received the subnegotiation.
         """
 
         option: int
@@ -2374,9 +2296,9 @@ class Event:
         MUD output is displayed).
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that had its buffer resized.
+        The session ID that had its buffer resized.
         """
 
         dimensions: tuple[int, int]
@@ -2390,9 +2312,9 @@ class Event:
         is sent to the MUD.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that sent the input line.
+        The session ID that sent the input line.
         """
 
         input: InputLine
@@ -2406,9 +2328,9 @@ class Event:
         keyboard shortcut is input.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that received the shortcut.
+        The session ID that received the shortcut.
         """
 
         shortcut: Shortcut
@@ -2422,9 +2344,9 @@ class Event:
         is pressed.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that received the key press.
+        The session ID that received the key press.
         """
 
         key: KeyEvent
@@ -2438,9 +2360,9 @@ class Event:
         after successfully negotiating the telnet option with the MUD server.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that had GMCP enabled.
+        The session ID that had GMCP enabled.
         """
 
     class GmcpDisabled:
@@ -2448,9 +2370,9 @@ class Event:
         An `EventType.GmcpDisabled` event. This is produced when GMCP is disabled for a session.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that had GMCP disabled.
+        The session ID that had GMCP disabled.
         """
 
     class GmcpMessage:
@@ -2462,9 +2384,9 @@ class Event:
         `MudpuppyCore.gmcp_unregister()`.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that received the GMCP message.
+        The session ID that received the GMCP message.
         """
 
         package: str
@@ -2483,9 +2405,9 @@ class Event:
         with `MudpuppyCore.emit_event()`.
         """
 
-        id: Optional[SessionId]
+        id: Optional[int]
         """
-        The `SessionId` that emitted the custom event, or `None` if the event was emitted
+        The session ID that emitted the custom event, or `None` if the event was emitted
         for all sessions.
         """
 
@@ -2519,13 +2441,13 @@ class Event:
 
     class ResumeSession:
         """
-        An `EventType.ResumeSession` event. This is produced for each `SessionId` after a
+        An `EventType.ResumeSession` event. This is produced for each session ID after a
         `PythonReloaded` event.
         """
 
-        id: SessionId
+        id: int
         """
-        The `SessionId` that is being resumed.
+        The session ID that is being resumed.
         """
 
 class PromptSignal(StrEnum):

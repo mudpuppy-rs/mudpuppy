@@ -66,7 +66,7 @@ defined `async`, and you will need to `await` most operations on the
     mud_name="Dune",
     pattern="^Soldier died.$",
 )
-async def bloodgod(session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
+async def bloodgod(session_id: int, _trigger_id: int, _line: str, _groups):
     await mudpuppy_core.send(session_id, "say blood for the blood god!")
 ```
 
@@ -79,10 +79,9 @@ to forget to `await` async APIs like `mudpuppy_core.send()`:
     mud_name="Dune",
     pattern="^Soldier died.$",
 )
-def bloodgod(session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
+def bloodgod(session_id: int, _trigger_id: int, _line: str, _groups):
     mudpuppy_core.send(session_id, "say blood for the blood god!")
 ```
 
 Mudpuppy will do its best to catch these errors for you, but it's helpful to
 keep in mind.
-

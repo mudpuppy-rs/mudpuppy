@@ -36,7 +36,7 @@ You can also use `print()` from `/py` but you must carefully escape the input:
 
 Other kinds of output can be added using
 [mudpuppy_core.add_output()][add_output()] and
-providing both the [SessionId] to add the output to, and an [OutputItem] to add.
+providing both the session ID to add the output to, and an [OutputItem] to add.
 Remember this is an async operation so you'll need to `await`!
 
 ```python
@@ -46,8 +46,6 @@ await mudpuppy_core.add_output(
     sesh_id, OutputItem.command_result("This was a test")
 )
 ```
-
-[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
 
 ## Output Item Types
 

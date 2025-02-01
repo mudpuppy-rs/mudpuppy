@@ -14,9 +14,7 @@ import argparse
 import mudpuppy_core
 from typing import Callable, Awaitable, Optional
 
-type CommandCallable = Callable[
-    [mudpuppy_core.SessionId, argparse.Namespace], Awaitable[None]
-]
+type CommandCallable = Callable[[int, argparse.Namespace], Awaitable[None]]
 """
 An async function that is called when input sent to a MUD matches the command prefix
 and name of a command. Typically you will assign a `CommandCallable` to the `handler`
@@ -24,7 +22,7 @@ property of a `Command`.
 
 The handler is called with:
 
-* the `mudpuppy_core.SessionId` of the session that received the input.
+* the `int` session ID of the session that received the input.
 * an [`argparse.Namespace`](https://docs.python.org/3/library/argparse.html#argparse.Namespace)
   with parsed arguments.
 
@@ -48,7 +46,7 @@ class Command:
     def __init__(
         self,
         name: str,
-        session: mudpuppy_core.SessionId,
+        session: int,
         handler: CommandCallable,
         description: Optional[str] = None,
         aliases: Optional[list[str]] = None,
@@ -68,7 +66,7 @@ class Command:
         """
         ...
 
-    def display_help(self, sesh_id: mudpuppy_core.SessionId):
+    def display_help(self, sesh_id: int):
         """
         Called when the user requests help for this command.
         """
@@ -78,22 +76,22 @@ class Command:
         """Called by the arg parser when an error occurs"""
         ...
 
-    async def invoke(self, sesh_id: mudpuppy_core.SessionId, args: str):
+    async def invoke(self, sesh_id: int, args: str):
         """
-        Invoke the command for the provided `mudpuppy_core.SessionId` by parsing `args` with the `Command`'s
+        Invoke the command for the provided `sesh_id` by parsing `args` with the `Command`'s
         parser.
         """
         ...
 
-def add_command(sesh_id: mudpuppy_core.SessionId, command: Command):
+def add_command(sesh_id: int, command: Command):
     """
-    Register the given `Command` as usable by the given `mudpuppy_core.SessionId`.
+    Register the given `Command` as usable by the given `sesh_id`.
     """
     ...
 
-def all_commands(sesh_id: mudpuppy_core.SessionId) -> list[Command]:
+def all_commands(sesh_id: int) -> list[Command]:
     """
-    Returns a list of all `Command`s that have been registered for the given `mudpuppy_core.SessionId`
+    Returns a list of all `Command`s that have been registered for the given `sesh_id`
     with `add_command()`.
     """
     ...

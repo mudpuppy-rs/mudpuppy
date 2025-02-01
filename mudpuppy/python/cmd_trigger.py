@@ -4,9 +4,7 @@ from argparse import Namespace
 from mudpuppy_core import (
     Event,
     OutputItem,
-    SessionId,
     TriggerConfig,
-    TriggerId,
     mudpuppy_core,
 )
 from commands import Command, add_command
@@ -15,7 +13,7 @@ from mudpuppy import on_new_session
 
 
 class TriggerCmd(Command):
-    def __init__(self, sesh_id: SessionId):
+    def __init__(self, sesh_id: int):
         super().__init__("trigger", sesh_id, self.run, "Manage triggers")
         subparsers = self.parser.add_subparsers(
             required=True,
@@ -96,14 +94,14 @@ class TriggerCmd(Command):
         enable_parser.set_defaults(func=self.enable)
         enable_parser.error = Command.on_error
 
-    async def run(self, sesh_id: SessionId, args: Namespace):
+    async def run(self, sesh_id: int, args: Namespace):
         logging.debug(f"args: {args}")
         if hasattr(args, "func"):
             await args.func(sesh_id, args)
         else:
             await self.display_help(sesh_id)
 
-    async def add(self, sesh_id: SessionId, args: Namespace):
+    async def add(self, sesh_id: int, args: Namespace):
         if args.pattern is None:
             return
         new_trigger = TriggerConfig(
@@ -121,28 +119,28 @@ class TriggerCmd(Command):
             sesh_id, OutputItem.command_result(f"Created trigger {trig_id}")
         )
 
-    async def remove(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.remove_trigger(sesh_id, TriggerId(args.trigger_id))
+    async def remove(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.remove_trigger(sesh_id, args.trigger_id)
         await mudpuppy_core.add_output(
             sesh_id,
             OutputItem.command_result(f"Removed trigger {args.trigger_id}"),
         )
 
-    async def disable(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.disable_trigger(sesh_id, TriggerId(args.trigger_id))
+    async def disable(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.disable_trigger(sesh_id, args.trigger_id)
         await mudpuppy_core.add_output(
             sesh_id,
             OutputItem.command_result(f"Disabled trigger {args.trigger_id}"),
         )
 
-    async def enable(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.enable_trigger(sesh_id, TriggerId(args.trigger_id))
+    async def enable(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.enable_trigger(sesh_id, args.trigger_id)
         await mudpuppy_core.add_output(
             sesh_id,
             OutputItem.command_result(f"Enabled trigger {args.trigger_id}"),
         )
 
-    async def list(self, sesh_id: SessionId, args: Namespace):
+    async def list(self, sesh_id: int, args: Namespace):
         triggers = await mudpuppy_core.triggers(sesh_id)
         output_items = []
         for trigger in sorted(triggers, key=lambda t: t.id):

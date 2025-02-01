@@ -28,7 +28,7 @@ Here's a simple command that when `/simple` is run, will [log] a message.
 
 ```python
 import logging
-from mudpuppy_core import SessionId, Event
+from mudpuppy_core import Event
 from commands import Command, add_command
 
 @on_new_session()
@@ -37,10 +37,10 @@ async def setup(event: Event):
 
 
 class SimpleCmd(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__("simple", session, self.simple, "A simple command example")
 
-    async def simple(self, sesh_id: SessionId, _args: Namespace):
+    async def simple(self, session: int, _args: Namespace):
         logging.debug("Hello world!")
 
 ```

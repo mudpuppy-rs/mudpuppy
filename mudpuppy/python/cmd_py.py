@@ -5,13 +5,13 @@ import contextlib
 import io
 
 from commands import Command, add_command
-from mudpuppy_core import Event, OutputItem, SessionId, mudpuppy_core
+from mudpuppy_core import Event, OutputItem, mudpuppy_core
 
 from mudpuppy import on_new_session
 
 
 class Python(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__(
             "python", session, self.run, "Run Python code", aliases=["py", "eval"]
         )
@@ -37,12 +37,12 @@ class Python(Command):
             }
         )
 
-    async def invoke(self, sesh_id: SessionId, args: str):
+    async def invoke(self, sesh_id: int, args: str):
         processed_args = args.replace(r'"', r"\"")
         processed_args = processed_args.replace(r"'", r"\'")
         await super().invoke(sesh_id, processed_args)
 
-    async def run(self, sesh_id: SessionId, args: Namespace):
+    async def run(self, sesh_id: int, args: Namespace):
         code = " ".join(args.code) if args.code else ""
         logging.debug(
             f"pycmd: eval: {code}",
