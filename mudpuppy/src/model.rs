@@ -11,14 +11,14 @@ use tokio_util::bytes::Bytes;
 
 use crate::client::input::EchoState;
 use crate::error::{AliasError, Error, KeyBindingError, TriggerError};
-use crate::idmap::{self, numeric_id};
+use crate::idmap::{self};
 use crate::net::telnet;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[pyclass]
 pub struct SessionInfo {
     #[pyo3(get)]
-    pub id: SessionId,
+    pub id: u32,
     #[pyo3(get)]
     pub mud_name: String,
 }
@@ -36,13 +36,11 @@ impl Display for SessionInfo {
     }
 }
 
-impl idmap::Identifiable<SessionId> for SessionInfo {
-    fn id(&self) -> SessionId {
+impl idmap::Identifiable for SessionInfo {
+    fn id(&self) -> u32 {
         self.id
     }
 }
-
-numeric_id!(SessionId, u32);
 
 /// MUD configuration.
 ///
@@ -640,7 +638,7 @@ impl Display for PromptSignal {
 #[pyclass]
 pub struct Trigger {
     #[pyo3(get)]
-    pub id: TriggerId,
+    pub id: u32,
 
     #[pyo3(get)]
     pub enabled: bool,
@@ -673,8 +671,8 @@ impl Display for Trigger {
     }
 }
 
-impl idmap::Identifiable<TriggerId> for Trigger {
-    fn id(&self) -> TriggerId {
+impl idmap::Identifiable for Trigger {
+    fn id(&self) -> u32 {
         self.id
     }
 }
@@ -796,13 +794,11 @@ impl Display for TriggerConfig {
     }
 }
 
-numeric_id!(TriggerId, u32);
-
 #[derive(Debug, Clone)]
 #[pyclass]
 pub struct Alias {
     #[pyo3(get)]
-    pub id: AliasId,
+    pub id: u32,
 
     #[pyo3(get)]
     pub enabled: bool,
@@ -835,8 +831,8 @@ impl Display for Alias {
     }
 }
 
-impl idmap::Identifiable<AliasId> for Alias {
-    fn id(&self) -> AliasId {
+impl idmap::Identifiable for Alias {
+    fn id(&self) -> u32 {
         self.id
     }
 }
@@ -928,13 +924,11 @@ impl Display for AliasConfig {
     }
 }
 
-numeric_id!(AliasId, u32);
-
 #[derive(Debug, Clone)]
 #[pyclass]
 pub struct Timer {
     #[pyo3(get)]
-    pub id: TimerId,
+    pub id: u32,
 
     #[pyo3(get)]
     pub running: bool,
@@ -966,8 +960,8 @@ impl Display for Timer {
     }
 }
 
-impl idmap::Identifiable<TimerId> for Timer {
-    fn id(&self) -> TimerId {
+impl idmap::Identifiable for Timer {
+    fn id(&self) -> u32 {
         self.id
     }
 }
@@ -979,7 +973,7 @@ pub struct TimerConfig {
     pub name: String,
 
     #[pyo3(get, set)]
-    pub session_id: Option<SessionId>,
+    pub session_id: Option<u32>,
 
     #[pyo3(get)]
     pub duration: Duration,
@@ -1004,7 +998,7 @@ impl TimerConfig {
         name: String,
         duration_ms: u64,
         callback: PyObject,
-        session_id: Option<SessionId>,
+        session_id: Option<u32>,
     ) -> Result<Self, Error> {
         let duration = Duration::from_millis(duration_ms);
         Ok(Self {
@@ -1030,8 +1024,6 @@ impl Display for TimerConfig {
         write!(f, "{}: {:?}", self.name, self.duration)
     }
 }
-
-numeric_id!(TimerId, u32);
 
 // 🤷 https://github.com/serde-rs/serde/issues/368
 mod default {

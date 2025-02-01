@@ -50,7 +50,7 @@ class LayoutManager:
         ...
 
     def get_constraint(
-        self, sesh_id: mudpuppy_core.SessionId, section_name: str
+        self, sesh_id: int, section_name: str
     ) -> mudpuppy_core.Constraint:
         """
         Return the `mudpuppy_core.Constraint` for the given section name in the layout for the session,
@@ -60,7 +60,7 @@ class LayoutManager:
         """
         ...
 
-    def hide_section(self, sesh_id: mudpuppy_core.SessionId, section_name: str):
+    def hide_section(self, sesh_id: int, section_name: str):
         """
         Hide the section with the given name in the layout for the session, or raise an exception if the
         section name doesn't exist.
@@ -73,7 +73,7 @@ class LayoutManager:
 
     def show_section(
         self,
-        sesh_id: mudpuppy_core.SessionId,
+        sesh_id: int,
         section_name: str,
         constraint: mudpuppy_core.Constraint,
     ):
@@ -87,7 +87,7 @@ class LayoutManager:
 
     async def extend_section(
         self,
-        sesh_id: mudpuppy_core.SessionId,
+        sesh_id: int,
         *,
         section_name: str,
         new_section_name: str,
@@ -95,7 +95,7 @@ class LayoutManager:
         direction: mudpuppy_core.Direction = mudpuppy_core.Direction.Vertical,
         margin: int = 0,
         buffer_config: Optional[mudpuppy_core.BufferConfig] = None,
-    ) -> Optional[mudpuppy_core.BufferId]:
+    ) -> Optional[int]:
         """
         Extend the `section_name` section in the `direction` specified by adding a
         `new_section_name`, with size described by `constraint`. Pre-existing subsections
@@ -108,13 +108,13 @@ class LayoutManager:
         If `buffer_config` is provided, a new `mudpuppy_core.ExtraBuffer` will be created
         with the provided `mudpuppy_core.BufferConfig` and assigned to the `new_section_name`
         by setting `mudpuppy_core.BufferConfig.layout_name` to `new_section_name`.
-        The created `mudpuppy_core.BufferId` is returned to the caller.
+        The created buffer ID is returned to the caller.
         """
         ...
 
     async def split_section(
         self,
-        sesh_id: mudpuppy_core.SessionId,
+        sesh_id: int,
         *,
         section_name: str,
         constraint: mudpuppy_core.Constraint,
@@ -124,7 +124,7 @@ class LayoutManager:
         direction: mudpuppy_core.Direction = mudpuppy_core.Direction.Vertical,
         margin: int = 0,
         buffer_config: Optional[mudpuppy_core.BufferConfig] = None,
-    ) -> Optional[mudpuppy_core.BufferId]:
+    ) -> Optional[int]:
         """
         Split the existing `section_name` section in the `direction` specified.
         A section containing both the pre-existing and new sections named
@@ -146,7 +146,7 @@ class LayoutManager:
         If `buffer_config` is provided, a new `mudpuppy_core.ExtraBuffer` will be created
         with the provided `mudpuppy_core.BufferConfig` and assigned to the `new_section_name`
         by setting `mudpuppy_core.BufferConfig.layout_name` to `new_section_name`.
-        The created `mudpuppy_core.BufferId` is returned to the caller.
+        The created buffer ID is returned to the caller.
         """
         ...
 

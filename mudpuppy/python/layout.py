@@ -3,13 +3,11 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from mudpuppy_core import (
     BufferConfig,
-    BufferId,
     Constraint,
     Direction,
     Event,
     EventType,
     LayoutNode,
-    SessionId,
     SessionInfo,
     mudpuppy_core,
 )
@@ -26,7 +24,7 @@ LayoutHandler = Callable[[SessionInfo, Any], Awaitable[None]]
 class LayoutManager:
     def __init__(self):
         self.callbacks: List[LayoutHandler] = []
-        self.layouts: Dict[SessionId, LayoutNode] = {}
+        self.layouts: Dict[int, LayoutNode] = {}
 
     def add_callback(self, callback: LayoutHandler):
         logging.debug(f"adding layout callback: {callback}")
@@ -50,24 +48,22 @@ class LayoutManager:
             logging.debug(f"awaiting {callback}")
             await callback(sesh_info, self)
 
-    def get_constraint(self, sesh_id: SessionId, section_name: str) -> Constraint:
+    def get_constraint(self, sesh_id: int, section_name: str) -> Constraint:
         layout = self.layouts.get(sesh_id)
         if layout is None:
             raise ValueError("no layout found for session")
         (constraint, _) = layout.find_section(section_name)
         return constraint
 
-    def hide_section(self, sesh_id: SessionId, section_name: str):
+    def hide_section(self, sesh_id: int, section_name: str):
         self.get_constraint(sesh_id, section_name).set_max(0)
 
-    def show_section(
-        self, sesh_id: SessionId, section_name: str, constraint: Constraint
-    ):
+    def show_section(self, sesh_id: int, section_name: str, constraint: Constraint):
         self.get_constraint(sesh_id, section_name).set_from(constraint)
 
     async def extend_section(
         self,
-        sesh_id: SessionId,
+        sesh_id: int,
         *,
         section_name: str,
         new_section_name: str,
@@ -75,7 +71,7 @@ class LayoutManager:
         direction: Direction = Direction.Vertical,
         margin: int = 0,
         buffer_config: Optional[BufferConfig] = None,
-    ) -> Optional[BufferId]:
+    ) -> Optional[int]:
         if section_name == "" or new_section_name == "":
             raise ValueError("section names must not be empty")
 
@@ -109,7 +105,7 @@ class LayoutManager:
 
     async def split_section(
         self,
-        sesh_id: SessionId,
+        sesh_id: int,
         *,
         section_name: str,
         constraint: Constraint,
@@ -119,7 +115,7 @@ class LayoutManager:
         direction: Direction = Direction.Vertical,
         margin: int = 0,
         buffer_config: Optional[BufferConfig] = None,
-    ) -> Optional[BufferId]:
+    ) -> Optional[int]:
         if section_name == "" or new_section_name == "":
             raise ValueError("section names must not be empty")
 

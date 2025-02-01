@@ -5,12 +5,10 @@ from layout import LayoutManager, manager
 from mudpuppy_core import (
     BufferConfig,
     BufferDirection,
-    BufferId,
     Constraint,
     Direction,
     Event,
     EventType,
-    SessionId,
     SessionInfo,
     mudpuppy_core,
 )
@@ -23,16 +21,16 @@ CUSTOM_LAYOUT_READY = "custom_layout_ready"
 
 
 class TestCustomLayout:
-    session_id: SessionId
+    session_id: int
     channel_buffer: BufferConfig
     channel_buffer_constraint: Constraint
-    channel_buffer_id: Optional[BufferId] = None
+    channel_buffer_id: Optional[int] = None
     status_buffer: BufferConfig
-    status_buffer_id: Optional[BufferId] = None
+    status_buffer_id: Optional[int] = None
     status_on_left: bool = False
 
     # TODO(XXX): expose status_on_left setting?
-    def __init__(self, sesh_id: SessionId):
+    def __init__(self, sesh_id: int):
         self.session_id = sesh_id
 
         self.channel_buffer = BufferConfig(CHANNEL_CAPTURE_SECTION)
@@ -195,5 +193,5 @@ def __reload__():
     unload_handlers(__name__)
 
 
-layouts: Dict[SessionId, Any] = {}
+layouts: Dict[int, Any] = {}
 manager.add_callback(layout_init)

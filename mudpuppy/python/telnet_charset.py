@@ -1,6 +1,6 @@
 import logging
 
-from mudpuppy_core import Event, EventType, SessionId, mudpuppy_core
+from mudpuppy_core import Event, EventType, mudpuppy_core
 
 from mudpuppy import on_connected, on_event
 
@@ -18,14 +18,14 @@ class TelnetCharsetHandler:
     """
 
     @staticmethod
-    async def on_connect(session: SessionId):
+    async def on_connect(session: int):
         logging.debug(
             f"charset: negotiating Telnet charset protocol for conn {session}"
         )
         await mudpuppy_core.request_enable_option(session, CHARSET_OPTION)
 
     @staticmethod
-    async def raw_receive(session: SessionId, data: bytes):
+    async def raw_receive(session: int, data: bytes):
         logging.debug(f"charset: received data for conn {session}: {data}")
         if len(data) < 2 or data[0] != REQUEST:
             logging.debug(

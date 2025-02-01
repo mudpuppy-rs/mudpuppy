@@ -7,21 +7,18 @@ from typing import Any, Awaitable, Callable, List, Optional, Union
 from mudpuppy_core import (
     AliasConfig,
     OutputItem,
-    AliasId,
     Event,
     EventType,
     MudLine,
-    SessionId,
     Status,
     TimerConfig,
     TriggerConfig,
-    TriggerId,
     event_handlers,
     mudpuppy_core,
 )
 
 EventHandler = Callable[[Event], Awaitable[None]]
-GmcpHandler = Callable[[SessionId, Any], Awaitable[None]]
+GmcpHandler = Callable[[int, Any], Awaitable[None]]
 
 logging.debug(f"Mudpuppy Python module loaded: {mudpuppy_core}")
 
@@ -220,7 +217,7 @@ def on_mud_disconnected(mud_name: Union[str, List[str]], module=None):
     return on_mud_disconnected_decorator
 
 
-AliasCallable = Callable[[SessionId, AliasId, str, Any], Awaitable[None]]
+AliasCallable = Callable[[int, int, str, Any], Awaitable[None]]
 
 
 def alias(
@@ -282,7 +279,7 @@ def alias(
     return alias_decorator
 
 
-TriggerCallable = Callable[[SessionId, TriggerId, str, Any], Awaitable[None]]
+TriggerCallable = Callable[[int, int, str, Any], Awaitable[None]]
 
 
 def trigger(
@@ -513,7 +510,7 @@ def trigger_max_hits(*, handler: TriggerCallable, max_hits: int = 1) -> TriggerC
     __ensure_async(handler)
 
     async def trigger_max_hits_wrapper(
-        session_id: SessionId, trigger_id: TriggerId, line: str, groups: list[str]
+        session_id: int, trigger_id: int, line: str, groups: list[str]
     ):
         # Call the wrapped handler.
         await handler(session_id, trigger_id, line, groups)
@@ -536,7 +533,7 @@ def alias_max_hits(*, handler: AliasCallable, max_hits: int = 1) -> AliasCallabl
     __ensure_async(handler)
 
     async def alias_max_hits_wrapper(
-        session_id: SessionId, alias_id: AliasId, line: str, groups: list[str]
+        session_id: int, alias_id: int, line: str, groups: list[str]
     ):
         # Call the wrapped handler.
         await handler(session_id, alias_id, line, groups)

@@ -20,12 +20,12 @@ To write a handler that fires for every prompt line for any MUD, use the
 [mudpuppy][mudpuppy-module] module's [@on_event] decorator:
 
 ```python
-from mudpuppy_core import EventType, Event, SessionId, MudLine
+from mudpuppy_core import EventType, Event, MudLine
 from mudpuppy import on_event
 
 @on_event(EventType.Prompt)
 async def prompt_handler(event: Event):
-    session_id: SessionId = event.id
+    session_id: int = event.id
     prompt_line: MudLine = event.prompt
     logging.debug(f"session {session_id} got prompt line {prompt_line}")
 ```
@@ -36,7 +36,7 @@ a handler that only fires for prompt events for specifically named MUDs.
 ```python
 @on_event(EventType.Prompt)
 async def prompt_handler(event: Event):
-    session_id: SessionId = event.id
+    session_id: int = event.id
     prompt_line: MudLine = event.prompt
     logging.debug(f"session {session_id} got prompt line {prompt_line}")
 ```

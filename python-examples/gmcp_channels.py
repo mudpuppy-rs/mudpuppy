@@ -11,7 +11,6 @@ from mudpuppy_core import (
     EventType,
     MudLine,
     OutputItem,
-    SessionId,
     SessionInfo,
     mudpuppy_core,
 )
@@ -92,7 +91,7 @@ async def gmcp_ready(event: Event):
 
 
 @on_gmcp("Comm.Channel.Text")
-async def channel_text(session_id: SessionId, data: Any):
+async def channel_text(session_id: int, data: Any):
     logger = loggers.get(session_id)
     if logger is None:
         return

@@ -9,7 +9,6 @@ from mudpuppy_core import (
     EventType,
     MudLine,
     OutputItem,
-    SessionId,
     mudpuppy_core,
 )
 
@@ -19,9 +18,9 @@ STATE_FILE = Path(mudpuppy_core.data_dir()) / "status_state.json"
 
 
 class StatusArea:
-    session_id: SessionId
+    session_id: int
 
-    def __init__(self, session_id: SessionId):
+    def __init__(self, session_id: int):
         self.session_id = session_id
         self.hp: int = 0
         self.max_hp: int = 0
@@ -149,17 +148,17 @@ async def gmcp_enabled(event: Event):
 
 
 @on_gmcp("Char.Vitals")
-async def gmcp_vitals(session_id: SessionId, data: Any):
+async def gmcp_vitals(session_id: int, data: Any):
     await status_area(session_id).vitals(data)
 
 
 @on_gmcp("Char.Name")
-async def gmcp_name(session_id: SessionId, data: Any):
+async def gmcp_name(session_id: int, data: Any):
     await status_area(session_id).name(data)
 
 
 @on_gmcp("Char.Status")
-async def gmcp_status(session_id: SessionId, data: Any):
+async def gmcp_status(session_id: int, data: Any):
     await status_area(session_id).status(data)
 
 
@@ -174,7 +173,7 @@ async def py_event(event: Event):
         status_area(event.id)._layout_ready()
 
 
-def status_area(session_id: SessionId) -> StatusArea:
+def status_area(session_id: int) -> StatusArea:
     status_area = status_areas.get(session_id)
     if status_area is None:
         logging.debug(f"constructing status area for {session_id}")
@@ -184,14 +183,14 @@ def status_area(session_id: SessionId) -> StatusArea:
     return status_area
 
 
-status_areas: Dict[SessionId, StatusArea] = {}
+status_areas: Dict[int, StatusArea] = {}
 logging.debug("status_buf plugin loaded")
 
 prev_data = load_state()
 if len(prev_data) > 0:
     for session_id_raw, data in prev_data.items():
         logging.debug("restoring session {session_id} data from prior reload")
-        sesh_id = SessionId(int(session_id_raw))  # type: ignore
+        sesh_id = int(session_id_raw)
         status_areas[sesh_id] = StatusArea.from_dict(sesh_id, data)
 
 

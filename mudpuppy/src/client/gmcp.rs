@@ -5,7 +5,6 @@ use tracing::{debug, trace};
 
 use crate::client::output;
 use crate::error::GmcpError;
-use crate::model::SessionId;
 use crate::net::telnet;
 use crate::net::telnet::codec::Item as TelnetItem;
 use crate::{python, Result, CRATE_NAME, GIT_COMMIT_HASH};
@@ -14,13 +13,16 @@ use crate::{python, Result, CRATE_NAME, GIT_COMMIT_HASH};
 #[pyclass]
 pub struct Gmcp {
     pub ready: bool,
-    id: SessionId,
+    session_id: u32,
 }
 
 impl Gmcp {
     #[must_use]
-    pub fn new(id: SessionId) -> Self {
-        Self { ready: false, id }
+    pub fn new(session_id: u32) -> Self {
+        Self {
+            ready: false,
+            session_id,
+        }
     }
 
     pub fn register(&self, module: &str) -> Result<TelnetItem> {
@@ -61,12 +63,19 @@ impl Gmcp {
                 self.ready = true;
                 (
                     Some(self.hello()),
-                    Some(python::Event::GmcpEnabled { id: self.id }),
+                    Some(python::Event::GmcpEnabled {
+                        id: self.session_id,
+                    }),
                 )
             }
             telnet::codec::Negotiation::Wont(telnet::option::GMCP) => {
                 self.ready = false;
-                (None, Some(python::Event::GmcpDisabled { id: self.id }))
+                (
+                    None,
+                    Some(python::Event::GmcpDisabled {
+                        id: self.session_id,
+                    }),
+                )
             }
             _ => (None, None),
         }
@@ -80,7 +89,7 @@ impl Gmcp {
             .ok_or_else(|| GmcpError::BadData("malformed subnegotiation".to_string()))?;
 
         Ok(Some(Message {
-            session_id: self.id,
+            session_id: self.session_id,
             package: package.to_string(),
             json: json_data.to_string(),
         }))
@@ -101,7 +110,7 @@ impl Gmcp {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Message {
-    pub session_id: SessionId,
+    pub session_id: u32,
     pub package: String,
     pub json: String,
 }

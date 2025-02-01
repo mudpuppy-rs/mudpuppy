@@ -12,7 +12,7 @@ a database when you see it on the ground.
 name, or so that they're available for all MUDs you connect to.
 
 * The line that matched the trigger, as well as any regexp groups in the pattern are
-provided to the trigger callback function alongside the [SessionId] of the MUD.
+provided to the trigger callback function alongside the session ID of the MUD.
 
 <div class="warning">
 Note that all triggers are matched a line at a time. Multi-line triggers are not
@@ -21,10 +21,8 @@ yet supported.
 
 Search the [API documentation] for [Trigger][trigger-search] to learn more.
 
-[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
 [API documentation]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/index.html
 [trigger-search]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html?search=Trigger
-[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
 
 ## Basic global trigger
 
@@ -37,7 +35,7 @@ decorator.
     pattern=r"^Your ship has landed\.$"
     expansion="enter ship",
 )
-async def quick_ship(_session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
+async def quick_ship(_session_id: int, _trigger_id: int, _line: str, _groups):
     pass
 ```
 
@@ -53,7 +51,7 @@ equivalent to awaiting [send_line()] directly:
 @trigger(
     pattern=r"^Your ship has landed\.$"
 )
-async def quick_ship(session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
+async def quick_ship(session_id: int, _trigger_id: int, _line: str, _groups):
     await mudpuppy_core.send_line(session_id, "enter ship")
 ```
 
@@ -73,7 +71,7 @@ providing a `mud_name` string, or list of strings as an argument to the
     pattern=r"^Your ship has landed\.$",
     expansion="enter ship",
 )
-async def quick_ship(_session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
+async def quick_ship(_session_id: int, _trigger_id: int, _line: str, _groups):
     pass
 )
 ```
@@ -89,7 +87,7 @@ decorator:
     pattern=r"^(?:Autosave)|(?:Your character has been saved safely)\.$",
     gag=True
 )
-async def quiet_saves(_session_id: SessionId, _trigger_id: TriggerId, _line: str, _groups):
+async def quiet_saves(_session_id: int, _trigger_id: int, _line: str, _groups):
     pass
 )
 ```
@@ -110,7 +108,7 @@ import logging
     gag=True,
     pattern=r"(?:Enter your username: )|(?:Password: )"
 )
-async def gag_login(_session_id: SessionId, _trigger_id: TriggerId, line: str, _groups: Any):
+async def gag_login(_session_id: int, _trigger_id: int, line: str, _groups: Any):
     logging.debug(f"gagged login prompt: {line}")
 ```
 
@@ -131,7 +129,7 @@ import logging
     strip_ansi=False,
     pattern=r"\033\[[\d]+;1m(.*)\033\[0m",
 )
-async def quiet_saves(_session_id: SessionId, trigger_id: TriggerId, _line: str, groups):
+async def quiet_saves(_session_id: int, trigger_id: int, _line: str, groups):
     logging.info(f"quiet_saves({trigger_id}) matched bold text: {groups[0]}")
 )
 ```

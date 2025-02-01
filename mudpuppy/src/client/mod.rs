@@ -23,13 +23,13 @@ use crate::config::GlobalConfig;
 use crate::error::Error;
 use crate::idmap::{IdMap, Identifiable};
 use crate::model::{
-    Alias, AliasConfig, AliasId, InputLine, KeyEvent as PyKeyEvent, MudLine, PromptMode,
-    PromptSignal, SessionId, SessionInfo, Trigger, TriggerConfig, TriggerId,
+    Alias, AliasConfig, InputLine, KeyEvent as PyKeyEvent, MudLine, PromptMode, PromptSignal,
+    SessionInfo, Trigger, TriggerConfig,
 };
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation};
 use crate::net::{connection, stream, telnet};
 use crate::python;
-use crate::tui::layout::{BufferId, ExtraBuffer, LayoutNode};
+use crate::tui::layout::{ExtraBuffer, LayoutNode};
 use crate::tui::session;
 
 /// A telnet MUD client.
@@ -40,11 +40,11 @@ pub struct Client {
     pub input: Input,
     pub output: Output,
     pub prompt: Option<MudLine>,
-    pub triggers: IdMap<TriggerId, Trigger>,
-    pub aliases: IdMap<AliasId, Alias>,
+    pub triggers: IdMap<Trigger>,
+    pub aliases: IdMap<Alias>,
     pub buffer_dimensions: (u16, u16),
     pub layout: Py<LayoutNode>,
-    pub extra_buffers: IdMap<BufferId, ExtraBuffer>,
+    pub extra_buffers: IdMap<ExtraBuffer>,
     pub gmcp: Gmcp,
     config: GlobalConfig,
     event_tx: UnboundedSender<python::Event>,
@@ -632,7 +632,7 @@ impl Client {
         fields(trigger_id = %trigger.id()))
     ]
     fn evaluate_trigger(
-        session_id: SessionId,
+        session_id: u32,
         trigger: &mut Trigger,
         line: &mut MudLine,
         futures: &mut FuturesUnordered<python::PyFuture>,
@@ -682,7 +682,7 @@ impl Client {
         fields(alias_id = %alias.id()))
     ]
     fn evaluate_alias(
-        session_id: SessionId,
+        session_id: u32,
         alias: &mut Alias,
         input: &mut InputLine,
         futures: &mut FuturesUnordered<python::PyFuture>,
@@ -781,8 +781,8 @@ impl Display for Client {
     }
 }
 
-impl Identifiable<SessionId> for Client {
-    fn id(&self) -> SessionId {
+impl Identifiable for Client {
+    fn id(&self) -> u32 {
         self.info.id
     }
 }

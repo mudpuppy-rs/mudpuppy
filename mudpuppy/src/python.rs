@@ -23,11 +23,10 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::app::{State, UiState};
 use crate::config::{config_dir, data_dir, GlobalConfig, KeyBindings};
-use crate::error::Error;
+use crate::error::{AliasError, Error, TimerError, TriggerError};
 use crate::model::{
-    Alias, AliasConfig, AliasId, InputLine, KeyEvent, Mud, MudLine, PromptMode, PromptSignal,
-    SessionId, SessionInfo, Shortcut, Timer, TimerConfig, TimerId, Tls, Trigger, TriggerConfig,
-    TriggerId,
+    Alias, AliasConfig, InputLine, KeyEvent, Mud, MudLine, PromptMode, PromptSignal, SessionInfo,
+    Shortcut, Timer, TimerConfig, Tls, Trigger, TriggerConfig,
 };
 use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 
@@ -43,7 +42,6 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<KeyBindings>()?;
     m.add_class::<Shortcut>()?;
     m.add_class::<SessionInfo>()?;
-    m.add_class::<SessionId>()?;
     m.add_class::<Mud>()?;
     m.add_class::<Tls>()?;
     m.add_class::<MudLine>()?;
@@ -53,13 +51,10 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<EventHandlers>()?;
     m.add_class::<Trigger>()?;
     m.add_class::<TriggerConfig>()?;
-    m.add_class::<TriggerId>()?;
     m.add_class::<Alias>()?;
     m.add_class::<AliasConfig>()?;
-    m.add_class::<AliasId>()?;
     m.add_class::<TimerConfig>()?;
     m.add_class::<Timer>()?;
-    m.add_class::<TimerId>()?;
     m.add_class::<PromptSignal>()?;
     m.add_class::<PromptMode>()?;
     m.add_class::<client::Status>()?;
@@ -73,7 +68,6 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<tui::layout::PyDirection>()?;
     m.add_class::<tui::layout::BufferConfig>()?;
     m.add_class::<tui::layout::BufferDirection>()?;
-    m.add_class::<tui::layout::BufferId>()?;
     m.add_class::<tui::layout::ExtraBuffer>()?;
     Ok(())
 }
@@ -194,15 +188,15 @@ impl PyApp {
     fn toggle_trigger<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        trig_id: TriggerId,
+        session_id: u32,
+        trig_id: u32,
         enabled: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        debug!("setting trigger {id} enabled: {enabled}");
+        debug!("setting trigger {session_id} enabled: {enabled}");
         with_state!(self, py, |mut state| {
             match state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .triggers
                 .get_mut(trig_id)
             {
@@ -210,7 +204,7 @@ impl PyApp {
                     trigger.enabled = enabled;
                     Ok(trigger.enabled)
                 }
-                None => Err(Error::Trigger(trig_id.into()).into()),
+                None => Err(Error::Trigger(TriggerError::UnknownId(trig_id)).into()),
             }
         })
     }
@@ -218,15 +212,15 @@ impl PyApp {
     fn toggle_alias<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        alias_id: AliasId,
+        session_id: u32,
+        alias_id: u32,
         enabled: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        debug!("setting alias {id} enabled: {enabled}");
+        debug!("setting alias {session_id} enabled: {enabled}");
         with_state!(self, py, |mut state| {
             match state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .aliases
                 .get_mut(alias_id)
             {
@@ -234,7 +228,7 @@ impl PyApp {
                     alias.enabled = enabled;
                     Ok(alias.enabled)
                 }
-                None => Err(Error::Alias(alias_id.into()).into()),
+                None => Err(Error::Alias(AliasError::UnknownId(alias_id)).into()),
             }
         })
     }
@@ -359,12 +353,12 @@ impl PyApp {
         with_state!(self, py, |state| Ok(state.all_client_info()))
     }
 
-    fn session_info<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn session_info<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .info
                     .as_ref()
                     .clone())
@@ -372,9 +366,12 @@ impl PyApp {
         })
     }
 
-    fn status<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn status<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
-            Ok(state.client_for_id(id).ok_or(Error::from(id))?.status())
+            Ok(state
+                .client_for_id(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .status())
         })
     }
 
@@ -385,13 +382,13 @@ impl PyApp {
     fn send_line<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         line: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .send_line(InputLine::new(line, true, true))
                 .map_err(Into::into)
         })
@@ -400,36 +397,36 @@ impl PyApp {
     fn send_lines<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         lines: Vec<String>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             for line in lines {
                 state
-                    .client_for_id_mut(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id_mut(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .send_line(InputLine::new(line, true, true))?;
             }
             Ok(())
         })
     }
 
-    fn connect<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn connect<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .connect()
                 .await
                 .map_err(Into::into)
         })
     }
 
-    fn disconnect<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn disconnect<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .disconnect()
                 .await
                 .map_err(Into::into)
@@ -439,13 +436,13 @@ impl PyApp {
     fn request_enable_option<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         option: u8,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .request_enable_option(option)
                 .map_err(Into::into)
         })
@@ -454,13 +451,13 @@ impl PyApp {
     fn request_disable_option<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         option: u8,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .request_disable_option(option)
                 .map_err(Into::into)
         })
@@ -469,14 +466,14 @@ impl PyApp {
     fn send_subnegotiation<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         option: u8,
         data: Vec<u8>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
+                .client_for_id(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .send_subnegotiation(option, data)
                 .map_err(Into::into)
         })
@@ -485,12 +482,15 @@ impl PyApp {
     fn new_trigger<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         config: Py<TriggerConfig>,
         module: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            let triggers = &mut state.client_for_id_mut(id).ok_or(Error::from(id))?.triggers;
+            let triggers = &mut state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .triggers;
 
             Python::with_gil(|pyy| {
                 let new_config: PyRef<'_, TriggerConfig> = config.extract(pyy)?;
@@ -523,14 +523,14 @@ impl PyApp {
     fn get_trigger<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        trig_id: TriggerId,
+        session_id: u32,
+        trig_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .triggers
                     .get(trig_id)
                     .cloned())
@@ -541,31 +541,31 @@ impl PyApp {
     fn disable_trigger<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        trig_id: TriggerId,
+        session_id: u32,
+        trig_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.toggle_trigger(py, id, trig_id, false)
+        self.toggle_trigger(py, session_id, trig_id, false)
     }
 
     fn enable_trigger<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        trig_id: TriggerId,
+        session_id: u32,
+        trig_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.toggle_trigger(py, id, trig_id, true)
+        self.toggle_trigger(py, session_id, trig_id, true)
     }
 
     fn remove_trigger<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        trig_id: TriggerId,
+        session_id: u32,
+        trig_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .triggers
                 .remove(trig_id);
             Ok(())
@@ -575,11 +575,14 @@ impl PyApp {
     fn remove_module_triggers<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         module: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            let triggers = &mut state.client_for_id_mut(id).ok_or(Error::from(id))?.triggers;
+            let triggers = &mut state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .triggers;
             let triggers_to_remove = triggers
                 .iter()
                 .filter_map(|(id, trigger)| {
@@ -603,12 +606,12 @@ impl PyApp {
         })
     }
 
-    fn triggers<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn triggers<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .triggers
                     .iter()
                     .map(|(_, a)| a.clone())
@@ -620,12 +623,15 @@ impl PyApp {
     fn new_alias<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         config: Py<AliasConfig>,
         module: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            let aliases = &mut state.client_for_id_mut(id).ok_or(Error::from(id))?.aliases;
+            let aliases = &mut state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .aliases;
 
             Python::with_gil(|pyy| {
                 let new_config: PyRef<'_, AliasConfig> = config.extract(pyy)?;
@@ -654,14 +660,14 @@ impl PyApp {
     fn get_alias<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        alias_id: AliasId,
+        session_id: u32,
+        alias_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .aliases
                     .get(alias_id)
                     .cloned())
@@ -669,12 +675,12 @@ impl PyApp {
         })
     }
 
-    fn aliases<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn aliases<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .aliases
                     .iter()
                     .map(|(_, a)| a.clone())
@@ -686,22 +692,22 @@ impl PyApp {
     fn disable_alias<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        alias_id: AliasId,
+        session_id: u32,
+        alias_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.toggle_alias(py, id, alias_id, false)
+        self.toggle_alias(py, session_id, alias_id, false)
     }
 
     fn remove_alias<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        alias_id: AliasId,
+        session_id: u32,
+        alias_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .aliases
                 .remove(alias_id);
             Ok(())
@@ -711,11 +717,14 @@ impl PyApp {
     fn remove_module_aliases<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         module: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            let aliases = &mut state.client_for_id_mut(id).ok_or(Error::from(id))?.aliases;
+            let aliases = &mut state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .aliases;
             let aliases_to_remove = aliases
                 .iter()
                 .filter_map(|(id, alias)| {
@@ -742,10 +751,10 @@ impl PyApp {
     fn enable_alias<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        alias_id: AliasId,
+        session_id: u32,
+        alias_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.toggle_alias(py, id, alias_id, true)
+        self.toggle_alias(py, session_id, alias_id, true)
     }
 
     fn new_timer<'py>(
@@ -791,12 +800,12 @@ impl PyApp {
         })
     }
 
-    fn start_timer<'py>(&self, py: Python<'py>, timer_id: TimerId) -> PyResult<Bound<'py, PyAny>> {
+    fn start_timer<'py>(&self, py: Python<'py>, timer_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             let timers = &mut state.timers;
             let timer = timers
                 .get_mut(timer_id)
-                .ok_or(Error::Timer(timer_id.into()))?;
+                .ok_or(Error::Timer(TimerError::UnknownId(timer_id)))?;
 
             if timer.running {
                 warn!("timer {} is already running", timer.id);
@@ -821,7 +830,7 @@ impl PyApp {
         })
     }
 
-    fn stop_timer<'py>(&self, py: Python<'py>, id: TimerId) -> PyResult<Bound<'py, PyAny>> {
+    fn stop_timer<'py>(&self, py: Python<'py>, id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             match state.timers.get_mut(id) {
                 Some(timer) => {
@@ -834,20 +843,23 @@ impl PyApp {
 
                     Ok(())
                 }
-                None => Err(Error::Timer(id.into()).into()),
+                None => Err(Error::Timer(TimerError::UnknownId(id)).into()),
             }
         })
     }
 
-    fn get_timer<'py>(&self, py: Python<'py>, id: TimerId) -> PyResult<Bound<'py, PyAny>> {
+    fn get_timer<'py>(&self, py: Python<'py>, id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| Python::with_gil(|_| {
             Ok(state.timers.get(id).cloned())
         }))
     }
 
-    fn remove_timer<'py>(&self, py: Python<'py>, id: TimerId) -> PyResult<Bound<'py, PyAny>> {
+    fn remove_timer<'py>(&self, py: Python<'py>, id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            let timer = state.timers.get_mut(id).ok_or(Error::Timer(id.into()))?;
+            let timer = state
+                .timers
+                .get_mut(id)
+                .ok_or(Error::Timer(TimerError::UnknownId(id)))?;
             if timer.running {
                 timer.running = false;
                 timer.stop_tx.send(true).ok();
@@ -900,21 +912,21 @@ impl PyApp {
         })
     }
 
-    fn get_input<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn get_input<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
+                .client_for_id(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .input
                 .value())
         })
     }
 
-    fn get_input_echo<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn get_input_echo<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
+                .client_for_id(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .input
                 .telnet_echo())
         })
@@ -923,24 +935,24 @@ impl PyApp {
     fn set_input<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         input: InputLine,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .input
                 .set_value(input);
             Ok(())
         })
     }
 
-    fn clear_input<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn clear_input<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .input
                 .reset();
             Ok(())
@@ -950,13 +962,13 @@ impl PyApp {
     fn add_output<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         output: client::output::Item,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .output
                 .push(output);
             Ok(())
@@ -966,34 +978,34 @@ impl PyApp {
     fn add_outputs<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         output: Vec<client::output::Item>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .output
                 .extend(output.into_iter());
             Ok(())
         })
     }
 
-    fn dimensions<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn dimensions<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Ok(state
-                .client_for_id(id)
-                .ok_or(Error::from(id))?
+                .client_for_id(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .buffer_dimensions)
         })
     }
 
-    fn layout<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn layout<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .layout
                     .clone())
             })
@@ -1003,13 +1015,13 @@ impl PyApp {
     fn new_buffer<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         config: Py<tui::layout::BufferConfig>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             Ok(state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .extra_buffers
                 .construct(|id| tui::layout::ExtraBuffer { id, config }))
         })
@@ -1018,14 +1030,14 @@ impl PyApp {
     fn get_buffer<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        buffer_id: tui::layout::BufferId,
+        session_id: u32,
+        buffer_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .extra_buffers
                     .get(buffer_id)
                     .cloned())
@@ -1033,12 +1045,12 @@ impl PyApp {
         })
     }
 
-    fn buffers<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn buffers<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             Python::with_gil(|_| {
                 Ok(state
-                    .client_for_id(id)
-                    .ok_or(Error::from(id))?
+                    .client_for_id(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
                     .extra_buffers
                     .iter()
                     .map(|(_, a)| a.clone())
@@ -1050,24 +1062,24 @@ impl PyApp {
     fn remove_buffer<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
-        buffer_id: tui::layout::BufferId,
+        session_id: u32,
+        buffer_id: u32,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .extra_buffers
                 .remove(buffer_id);
             Ok(())
         })
     }
 
-    fn gmcp_enabled<'py>(&self, py: Python<'py>, id: SessionId) -> PyResult<Bound<'py, PyAny>> {
+    fn gmcp_enabled<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             Ok(state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .gmcp_enabled())
         })
     }
@@ -1078,14 +1090,14 @@ impl PyApp {
     fn gmcp_send<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         package: String,
         json: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .gmcp_send_json(&package, &json)
                 .map_err(Into::into)
         })
@@ -1094,13 +1106,13 @@ impl PyApp {
     fn gmcp_register<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         module: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .gmcp_register(&module)
                 .map_err(Into::into)
         })
@@ -1109,31 +1121,31 @@ impl PyApp {
     fn gmcp_unregister<'py>(
         &self,
         py: Python<'py>,
-        id: SessionId,
+        session_id: u32,
         module: String,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             state
-                .client_for_id_mut(id)
-                .ok_or(Error::from(id))?
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
                 .gmcp_unregister(&module)
                 .map_err(Into::into)
         })
     }
 
-    #[pyo3(signature = (custom_type, data, id=None))]
+    #[pyo3(signature = (custom_type, data, session_id=None))]
     fn emit_event<'py>(
         &self,
         py: Python<'py>,
         custom_type: String,
         data: PyObject,
-        id: Option<SessionId>,
+        session_id: Option<u32>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| {
             state
                 .event_tx
                 .send(Event::Python {
-                    id,
+                    id: session_id,
                     custom_type,
                     data,
                 })
@@ -1172,71 +1184,71 @@ pub enum Event {
     NewSession {
         // Having a separate ID field is duplicative with 'SessionInfo.id', but makes it easier to
         // use consistently with other events.
-        id: SessionId,
+        id: u32,
         info: SessionInfo,
         mud: Mud,
     },
     Connection {
-        id: SessionId,
+        id: u32,
         status: client::Status,
     },
     Prompt {
-        id: SessionId,
+        id: u32,
         prompt: MudLine,
     },
     Iac {
-        id: SessionId,
+        id: u32,
         command: u8,
     },
     OptionEnabled {
-        id: SessionId,
+        id: u32,
         option: u8,
     },
     OptionDisabled {
-        id: SessionId,
+        id: u32,
         option: u8,
     },
     Subnegotiation {
-        id: SessionId,
+        id: u32,
         option: u8,
         data: Vec<u8>,
     },
     BufferResized {
-        id: SessionId,
+        id: u32,
         dimensions: (u16, u16),
     },
     InputLine {
-        id: SessionId,
+        id: u32,
         input: InputLine,
     },
     Shortcut {
-        id: SessionId,
+        id: u32,
         shortcut: Shortcut,
     },
     KeyPress {
-        id: SessionId,
+        id: u32,
         key: KeyEvent,
     },
     GmcpEnabled {
-        id: SessionId,
+        id: u32,
     },
     GmcpDisabled {
-        id: SessionId,
+        id: u32,
     },
     GmcpMessage {
-        id: SessionId,
+        id: u32,
         package: String,
         json: String,
     },
     Python {
-        id: Option<SessionId>,
+        id: Option<u32>,
         custom_type: String,
         data: PyObject,
     },
     ConfigReloaded {},
     PythonReloaded {},
     ResumeSession {
-        id: SessionId,
+        id: u32,
     },
 }
 
@@ -1266,7 +1278,7 @@ impl Event {
         }
     }
 
-    pub fn session_id(&self) -> Option<SessionId> {
+    pub fn session_id(&self) -> Option<u32> {
         match self {
             Event::NewSession { id, .. }
             | Event::Connection { id, .. }
@@ -1565,7 +1577,7 @@ fn user_modules() -> Result<Vec<PyObject>, Error> {
     })
 }
 
-async fn run_timer(timer_id: TimerId, config: TimerConfig, mut stop_rx: watch::Receiver<bool>) {
+async fn run_timer(timer_id: u32, config: TimerConfig, mut stop_rx: watch::Receiver<bool>) {
     let mut interval = tokio::time::interval(config.duration);
     let mut ticks = 0;
     let mut first_tick = true;

@@ -5,7 +5,6 @@ from commands import Command, add_command
 from mudpuppy_core import (
     Event,
     OutputItem,
-    SessionId,
     Status,
     StreamInfo,
     mudpuppy_core,
@@ -15,7 +14,7 @@ from mudpuppy import on_new_session
 
 
 class StatusCmd(Command):
-    def __init__(self, session: SessionId):
+    def __init__(self, session: int):
         super().__init__("status", session, self.status, "Connection status")
         self.parser.add_argument(
             "--verbose",
@@ -25,7 +24,7 @@ class StatusCmd(Command):
         )
         logging.debug(f"parser in Status = {self.parser}")
 
-    async def status(self, sesh_id: SessionId, args: Namespace):
+    async def status(self, sesh_id: int, args: Namespace):
         conn_status = await mudpuppy_core.status(sesh_id)
         items = []
         if args.verbose:

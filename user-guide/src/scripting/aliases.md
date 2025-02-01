@@ -10,11 +10,10 @@ more complex actions like making an HTTP request.
 name, or so that they're available for all MUDs you connect to.
 
 * The line that matched the alias, as well as any regexp groups in the pattern are
-provided to the alias callback function alongside the [SessionId] of the MUD.
+provided to the alias callback function alongside the session ID of the MUD.
 
 Search the [API documentation] for [Alias][alias-search] to learn more.
 
-[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
 [API documentation]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/index.html
 [alias-search]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html?search=Alias
 
@@ -26,10 +25,10 @@ script:
 
 ```python
 from mudpuppy import alias
-from mudpuppy_core import mudpuppy_core, SessionId, AliasId
+from mudpuppy_core import mudpuppy_core
 
 @alias(pattern="^e$", expansion="east")
-async def quick_east(_session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
+async def quick_east(_session_id: int, _alias_id: int, _line: str, _groups):
     pass
 ```
 
@@ -39,7 +38,7 @@ equivalent to using [send_line()] directly:
 
 ```python
 @alias(pattern="^e$", name="Quick East")
-async def quick_east(session_id: SessionId, _alias_id: AliasId, _line: str, _groups):
+async def quick_east(session_id: int, _alias_id: int, _line: str, _groups):
     await mudpuppy_core.send_line(session_id, "east")
 ```
 
@@ -66,11 +65,11 @@ and then also wait 5 seconds before issuing the command "headbutt soldier".
 import logging
 import asyncio
 from mudpuppy import alias
-from mudpuppy_core import mudpuppy_core, SessionId, AliasId
+from mudpuppy_core import mudpuppy_core
 
 
 @alias(mud_name="Dune", pattern="^kill (.*)$")
-async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, groups):
+async def kill_headbutt(session_id: int, _alias_id: int, line: str, groups):
     # Send through the original line so that we actually start combat in-game
     # with the 'kill' command.
     await mudpuppy_core.send_line(session_id, line)
@@ -88,13 +87,13 @@ If you wanted to have this alias also available on MUDs named "DevDune" and
 
 ```python
 @alias(mud_name=["Dune","DevDune","Dune (alt)"], pattern="^kill (.*)$")
-async def kill_headbutt(session_id: SessionId, _alias_id: AliasId, line: str, groups):
+async def kill_headbutt(session_id: int, _alias_id: int, line: str, groups):
     ...
 ```
 
 ## Alias info
 
-You can use the [AliasId] passed to the alias handler to access information
+You can use the alias ID passed to the alias handler to access information
 about the alias, like how many times it has matched. See the [get_alias()] and
 [AliasConfig] API references for more information.
 
@@ -103,10 +102,10 @@ usages:
 
 ```python
 from mudpuppy import alias
-from mudpuppy_core import mudpuppy_core, SessionId, AliasId, OutputItem
+from mudpuppy_core import mudpuppy_core, OutputItem
 
 @alias(pattern="^backstab$")
-async def backstab(session_id: SessionId, alias_id: AliasId, line: str, _groups):
+async def backstab(session_id: int, alias_id: int, line: str, _groups):
     alias_info = await mudpuppy_core.get_alias(session_id, alias_id)
 
     # Too many backstabs this session!
@@ -123,6 +122,5 @@ async def backstab(session_id: SessionId, alias_id: AliasId, line: str, _groups)
     await mudpuppy_core.send_line(session_id, line)
 ```
 
-[AliasId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#AliasId
 [get_alias()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudpuppyCore.get_alias
 [AliasConfig]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#AliasConfig

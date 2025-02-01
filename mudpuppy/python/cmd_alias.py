@@ -3,10 +3,8 @@ from argparse import Namespace
 
 from mudpuppy_core import (
     AliasConfig,
-    AliasId,
     Event,
     OutputItem,
-    SessionId,
     mudpuppy_core,
 )
 from commands import Command, add_command
@@ -15,7 +13,7 @@ from cformat import cformat
 
 
 class AliasCmd(Command):
-    def __init__(self, session_id: SessionId):
+    def __init__(self, session_id: int):
         super().__init__("alias", session_id, self.run, "Manage aliases")
         subparsers = self.parser.add_subparsers(
             required=True,
@@ -76,14 +74,14 @@ class AliasCmd(Command):
         enable_parser.set_defaults(func=self.enable)
         enable_parser.error = Command.on_error
 
-    async def run(self, sesh_id: SessionId, args: Namespace):
+    async def run(self, sesh_id: int, args: Namespace):
         logging.debug(f"args: {args}")
         if hasattr(args, "func"):
             await args.func(sesh_id, args)
         else:
             self.display_help(sesh_id)
 
-    async def add(self, sesh_id: SessionId, args: Namespace):
+    async def add(self, sesh_id: int, args: Namespace):
         if args.pattern is None:
             return
         new_alias = AliasConfig(
@@ -95,25 +93,25 @@ class AliasCmd(Command):
             OutputItem.command_result(f"Created alias {alias_id}"),
         )
 
-    async def remove(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.remove_alias(sesh_id, AliasId(args.alias_id))
+    async def remove(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.remove_alias(sesh_id, args.alias_id)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Removed alias {args.alias_id}")
         )
 
-    async def disable(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.disable_alias(sesh_id, AliasId(args.alias_id))
+    async def disable(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.disable_alias(sesh_id, args.alias_id)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Disabled alias {args.alias_id}")
         )
 
-    async def enable(self, sesh_id: SessionId, args: Namespace):
-        await mudpuppy_core.enable_alias(sesh_id, AliasId(args.alias_id))
+    async def enable(self, sesh_id: int, args: Namespace):
+        await mudpuppy_core.enable_alias(sesh_id, args.alias_id)
         await mudpuppy_core.add_output(
             sesh_id, OutputItem.command_result(f"Enabled alias {args.alias_id}")
         )
 
-    async def list(self, sesh_id: SessionId, _args: Namespace):
+    async def list(self, sesh_id: int, _args: Namespace):
         aliases = await mudpuppy_core.aliases(sesh_id)
         output_items = []
         for alias in sorted(aliases, key=lambda a: a.id):

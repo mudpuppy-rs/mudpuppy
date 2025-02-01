@@ -10,7 +10,7 @@ use tokio_util::codec::Framed;
 use tracing::{instrument, trace, Level};
 
 use crate::error::Error;
-use crate::model::{Mud, SessionId};
+use crate::model::Mud;
 use crate::net::stream::{self, Stream};
 use crate::net::telnet;
 
@@ -23,7 +23,7 @@ use crate::net::telnet;
 ///
 /// Returns an error if it isn't possible to connect to the specified MUD server.
 pub async fn connect(
-    session: SessionId,
+    session_id: u32,
     mud: &Mud,
     event_tx: UnboundedSender<Event>,
 ) -> Result<(Handle, stream::Info), Error> {
@@ -34,7 +34,7 @@ pub async fn connect(
     let codec = telnet::codec::Codec::default();
     let task = tokio::spawn(
         Connection {
-            session,
+            session_id,
             stream: Framed::with_capacity(stream, codec, 32_768), // 32 KiB
             event_tx,
         }
@@ -43,7 +43,7 @@ pub async fn connect(
 
     Ok((
         Handle {
-            session,
+            session: session_id,
             task,
             action_tx,
         },
@@ -54,7 +54,7 @@ pub async fn connect(
 /// A handle to an active MUD server connection.
 pub struct Handle {
     /// The session ID of the connection.
-    pub session: SessionId,
+    pub session: u32,
 
     /// A task that can be joined to await the completion of the connection.
     pub task: JoinHandle<Result<(), Error>>,
@@ -105,7 +105,7 @@ impl From<telnet::codec::Item> for Action {
 /// A connection event.
 #[derive(Debug)]
 pub struct Event {
-    pub session_id: SessionId,
+    pub session_id: u32,
     pub event: SessionEvent,
 }
 
@@ -131,13 +131,13 @@ pub enum SessionEvent {
 /// Operates as an "Actor", receiving action messages from a handle over a `action_rx`
 /// channel and dispatching connection events over a `event_tx` channel.
 struct Connection {
-    session: SessionId,
+    session_id: u32,
     stream: Framed<Stream, telnet::codec::Codec>,
     event_tx: UnboundedSender<Event>,
 }
 
 impl Connection {
-    #[instrument(level = Level::TRACE, skip(self, action_rx), fields(self.session = %self.session))]
+    #[instrument(level = Level::TRACE, skip(self, action_rx), fields(self.session = %self.session_id))]
     async fn io_loop(mut self, mut action_rx: UnboundedReceiver<Action>) -> Result<(), Error> {
         trace!("connection i/o loop starting");
         loop {
@@ -158,7 +158,7 @@ impl Connection {
                     trace!("breaking from select! due to err: {err:?}");
                     let msg = format!("connection i/o loop: {err}");
                     self.event_tx.send(Event {
-                        session_id: self.session,
+                        session_id: self.session_id,
                         event: SessionEvent::Error(err),
                     })?;
                     return Err(Error::Internal(msg));
@@ -170,14 +170,14 @@ impl Connection {
             }
         }
         self.event_tx.send(Event {
-            session_id: self.session,
+            session_id: self.session_id,
             event: SessionEvent::Disconnected,
         })?;
         trace!("connection i/o loop finished");
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(self.session = %self.session))]
+    #[instrument(level = Level::TRACE, skip(self), fields(self.session = %self.session_id))]
     async fn stream_read(&mut self) -> ControlFlow<Option<Error>> {
         while let Some(item) = self.stream.next().await {
             let item = match item {
@@ -226,7 +226,7 @@ impl Connection {
     fn emit_event(&self, event: SessionEvent) -> Result<(), Error> {
         self.event_tx
             .send(Event {
-                session_id: self.session,
+                session_id: self.session_id,
                 event,
             })
             .map_err(Into::into)

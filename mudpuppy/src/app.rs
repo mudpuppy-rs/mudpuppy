@@ -33,7 +33,7 @@ use crate::client::Client;
 use crate::config::{config_dir, config_file, GlobalConfig};
 use crate::error::Error;
 use crate::idmap::IdMap;
-use crate::model::{InputMode, Mud, SessionId, SessionInfo, Shortcut, Timer, TimerId};
+use crate::model::{InputMode, Mud, SessionInfo, Shortcut, Timer};
 use crate::net::connection;
 use crate::python::{self, PyApp};
 use crate::tui::{mudlist, session};
@@ -237,7 +237,10 @@ impl App {
         for (tab_id, tab) in self.tabs.iter().enumerate() {
             titles.push(match tab.session_id() {
                 Some(sesh_id) => {
-                    let sesh = state.clients.get(sesh_id).ok_or(Error::from(sesh_id))?;
+                    let sesh = state
+                        .clients
+                        .get(sesh_id)
+                        .ok_or(Error::UnknownSession(sesh_id))?;
                     let sesh_focused = state.selected_tab == tab_id;
 
                     if sesh.output.new_data > 0 && !sesh_focused {
@@ -548,7 +551,7 @@ pub trait Tab: Debug + Send + Sync {
     fn title(&self) -> Line;
 
     #[must_use]
-    fn session_id(&self) -> Option<SessionId> {
+    fn session_id(&self) -> Option<u32> {
         match self.kind() {
             TabKind::MudList {} => None,
             TabKind::Session { session } => Some(session.id),
@@ -614,12 +617,12 @@ impl TabKind {
 pub struct State {
     pub ui_state: UiState,
     pub event_tx: UnboundedSender<python::Event>,
-    pub active_session_id: Option<SessionId>,
-    pub timers: IdMap<TimerId, Timer>,
+    pub active_session_id: Option<u32>,
+    pub timers: IdMap<Timer>,
 
     config: GlobalConfig,
     selected_tab: usize,
-    clients: IdMap<SessionId, Client>,
+    clients: IdMap<Client>,
     conn_tx: UnboundedSender<connection::Event>,
 }
 
@@ -675,15 +678,15 @@ impl State {
         Ok(info)
     }
 
-    pub fn client_for_id_mut(&mut self, id: SessionId) -> Option<&mut Client> {
-        self.clients.get_mut(id)
+    pub fn client_for_id_mut(&mut self, session_id: u32) -> Option<&mut Client> {
+        self.clients.get_mut(session_id)
     }
 
-    pub fn client_for_id(&self, id: SessionId) -> Option<&Client> {
-        self.clients.get(id)
+    pub fn client_for_id(&self, session_id: u32) -> Option<&Client> {
+        self.clients.get(session_id)
     }
 
-    pub fn client_ids(&self) -> Vec<SessionId> {
+    pub fn client_ids(&self) -> Vec<u32> {
         self.clients.ids()
     }
 

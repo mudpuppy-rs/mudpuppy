@@ -11,7 +11,7 @@ use tracing::info;
 
 use crate::client::{output, Status};
 use crate::error::Error;
-use crate::model::{InputLine, Mud, SessionId};
+use crate::model::{InputLine, Mud};
 use crate::tui::buffer;
 use crate::tui::buffer::DrawScrollbar;
 use crate::tui::layout::BufferConfig;
@@ -19,14 +19,14 @@ use crate::{client, python, Result};
 
 #[derive(Debug, Deref, DerefMut)]
 pub(super) struct MudBuffer {
-    session_id: SessionId,
+    session_id: u32,
     mud: Mud,
     #[deref]
     buff: BufferConfig,
 }
 
 impl MudBuffer {
-    pub(super) fn new(mud: Mud, session_id: SessionId) -> Result<Self> {
+    pub(super) fn new(mud: Mud, session_id: u32) -> Result<Self> {
         let mut buff = BufferConfig::new(OUTPUT_SECTION_NAME.to_string())?;
         buff.line_wrap = !mud.no_line_wrap;
         Ok(Self {

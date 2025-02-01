@@ -59,7 +59,7 @@ By default several helpful items are provided in-scope:
 * `mudpuppy` - the [mudpuppy module].
 * `commands` - the [commands module].
 * `config` - the result from `mudpuppy_core.config()`.
-* `session` - the current [SessionId].
+* `session` - the current session ID.
 * `session_info` - the current [SessionInfo].
 * `cformat` - the `cformat.cformat()` function.
 * `history` - the history module (documentation TBD).
@@ -67,7 +67,5 @@ By default several helpful items are provided in-scope:
 [mudpuppy module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy.html
 [commands module]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/commands.html
 [mudpuppy_core.config()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#MudpuppyCore.config
-[SessionId]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionId
 [SessionInfo]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/mudpuppy_core.html#SessionInfo
 [cformat.cformat()]: https://mudpuppy-rs.github.io/mudpuppy/api-docs/cformat.html#cformat
-

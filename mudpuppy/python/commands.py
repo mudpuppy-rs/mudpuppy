@@ -4,13 +4,13 @@ from argparse import ArgumentError, ArgumentParser, Namespace
 from io import StringIO
 from typing import Awaitable, Callable, Optional
 
-from mudpuppy_core import AliasId, OutputItem, SessionId, mudpuppy_core
+from mudpuppy_core import OutputItem, mudpuppy_core
 
 from mudpuppy import alias
 
 __all__ = ["add_command", "all_commands", "Command", "CommandCallable"]
 
-CommandCallable = Callable[[SessionId, Namespace], Awaitable[None]]
+CommandCallable = Callable[[int, Namespace], Awaitable[None]]
 
 # This is a gross hack, but we can't call an async method to display
 # the parser error from the `on_error` handler e set on the ArgumentParser.
@@ -25,7 +25,7 @@ class Command:
     def __init__(
         self,
         name: str,
-        session: SessionId,
+        session: int,
         handler: CommandCallable,
         description: Optional[str] = None,
         aliases: Optional[list[str]] = None,
@@ -53,7 +53,7 @@ class Command:
         last_error = message
         logging.error(f"command error: {message}")
 
-    async def display_help(self, sesh_id: SessionId):
+    async def display_help(self, sesh_id: int):
         """
         Called when the user requests help for this command.
         """
@@ -62,9 +62,9 @@ class Command:
         for line in file.getvalue().split("\n"):
             await mudpuppy_core.add_output(sesh_id, OutputItem.command_result(line))
 
-    async def invoke(self, sesh_id: SessionId, args: str):
+    async def invoke(self, sesh_id: int, args: str):
         """
-        Invoke the command for the provided `mudpuppy_core.SessionId` by parsing `args` with the `Command`'s
+        Invoke the command for the provided `sesh_id` by parsing `args` with the `Command`'s
         parser.
         """
         logging.debug(f"invoking in sesh {sesh_id}: cmd: {self.name} args: {args}")
@@ -93,7 +93,7 @@ class Command:
             )
 
 
-def add_command(sesh_id: SessionId, command: Command):
+def add_command(sesh_id: int, command: Command):
     command_map = commands.get(sesh_id, {})
     command_map[command.name] = command
     for a in command.aliases:
@@ -101,9 +101,9 @@ def add_command(sesh_id: SessionId, command: Command):
     commands[sesh_id] = command_map
 
 
-def all_commands(sesh_id: SessionId) -> list[Command]:
+def all_commands(sesh_id: int) -> list[Command]:
     """
-    Returns a list of all `Command`s that have been registered for the given `mudpuppy_core.SessionId`
+    Returns a list of all `Command`s that have been registered for the given `sesh_id`
     with `add_command`.
     """
     return list(commands.get(sesh_id, {}).values())
@@ -115,7 +115,7 @@ def all_commands(sesh_id: SessionId) -> list[Command]:
 
 @alias(pattern=r"^/([\w]+) ?(.*)?", name="Run a command")
 async def __command_callback(
-    session_id: SessionId, _alias_id: AliasId, _line: str, args: list[str]
+    session_id: int, _alias_id: int, _line: str, args: list[str]
 ):
     assert len(args) == 2
 
@@ -133,4 +133,4 @@ async def __command_callback(
 
 
 logging.debug("commands: plugin loaded.")
-commands: dict[SessionId, dict[str, Command]] = {}
+commands: dict[int, dict[str, Command]] = {}

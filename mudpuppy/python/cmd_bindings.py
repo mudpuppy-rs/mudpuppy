@@ -4,7 +4,6 @@ from argparse import Namespace
 from mudpuppy_core import (
     Event,
     OutputItem,
-    SessionId,
     mudpuppy_core,
 )
 from commands import Command, add_command
@@ -13,7 +12,7 @@ from mudpuppy import on_new_session
 
 
 class BindingsCmd(Command):
-    def __init__(self, sesh_id: SessionId):
+    def __init__(self, sesh_id: int):
         super().__init__("bindings", sesh_id, self.run, "View keybindings")
         subparsers = self.parser.add_subparsers(
             required=True,
@@ -29,14 +28,14 @@ class BindingsCmd(Command):
         list_parser.set_defaults(func=self.list)
         list_parser.error = Command.on_error
 
-    async def run(self, sesh_id: SessionId, args: Namespace):
+    async def run(self, sesh_id: int, args: Namespace):
         logging.debug(f"args: {args}")
         if hasattr(args, "func"):
             await args.func(sesh_id, args)
         else:
             await self.display_help(sesh_id)
 
-    async def list(self, sesh_id: SessionId, args: Namespace):
+    async def list(self, sesh_id: int, args: Namespace):
         keybindings = mudpuppy_core.config().keybindings()
         output_items = []
 
