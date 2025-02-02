@@ -3,7 +3,12 @@ import json
 from typing import Any, Dict
 from pathlib import Path
 
-from custom_layout import CUSTOM_LAYOUT_READY, layouts
+from custom_layout import (
+    CUSTOM_LAYOUT_READY,
+    HP_GAUGE_SECTION,
+    CP_GAUGE_SECTION,
+    layouts,
+)
 from mudpuppy_core import (
     Event,
     EventType,
@@ -111,6 +116,12 @@ class StatusArea:
                 make_line(f"$$$: {self.money} Bank: {self.bank_money}"),
             ]
         )
+
+        logging.debug(f"status: setting hp/cp gauges for session {self.session_id}")
+        layout.gauges[HP_GAUGE_SECTION].value = self.hp
+        layout.gauges[HP_GAUGE_SECTION].max = self.max_hp
+        layout.gauges[CP_GAUGE_SECTION].value = self.sp
+        layout.gauges[CP_GAUGE_SECTION].max = self.max_sp
 
 
 def save_state():

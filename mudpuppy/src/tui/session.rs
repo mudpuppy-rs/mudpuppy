@@ -14,6 +14,7 @@ use crate::client::output;
 use crate::config::{edit_mud, GlobalConfig};
 use crate::error::Error;
 use crate::model::{InputMode, SessionInfo, Shortcut};
+use crate::tui::gauge::draw_gauge;
 use crate::tui::input::{self, Input};
 use crate::tui::layout::{LayoutNode, PyConstraint};
 use crate::tui::mudbuffer::{self, MudBuffer};
@@ -170,6 +171,10 @@ impl Tab for Widget {
         // Draw any extra buffers.
         for (_, buf) in &mut client.extra_buffers {
             buf.draw_buffer(frame, &sections)?;
+        }
+
+        for (_, gauge) in &client.gauges {
+            draw_gauge(gauge, frame, &sections)?;
         }
 
         Ok(())

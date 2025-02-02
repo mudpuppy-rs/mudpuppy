@@ -11,7 +11,6 @@ want to do more complex argument parsing.
 __all__ = ["CommandCallable", "Command", "add_command", "all_commands"]
 
 import argparse
-import mudpuppy_core
 from typing import Callable, Awaitable, Optional
 
 type CommandCallable = Callable[[int, argparse.Namespace], Awaitable[None]]
