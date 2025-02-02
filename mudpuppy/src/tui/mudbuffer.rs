@@ -12,9 +12,7 @@ use tracing::info;
 use crate::client::{output, Status};
 use crate::error::Error;
 use crate::model::{InputLine, Mud};
-use crate::tui::buffer;
-use crate::tui::buffer::DrawScrollbar;
-use crate::tui::layout::BufferConfig;
+use crate::tui::buffer::{self, BufferConfig, DrawScrollbar};
 use crate::{client, python, Result};
 
 #[derive(Debug, Deref, DerefMut)]

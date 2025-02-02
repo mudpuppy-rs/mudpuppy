@@ -7,9 +7,7 @@ use std::collections::HashMap;
 use crate::client::output;
 use crate::error::Error;
 use crate::model::{Mud, Shortcut};
-use crate::tui::buffer;
-use crate::tui::buffer::DrawScrollbar;
-use crate::tui::layout::BufferConfig;
+use crate::tui::buffer::{self, BufferConfig, DrawScrollbar};
 use crate::tui::mudbuffer::OUTPUT_SECTION_NAME;
 use crate::{client, Result};
 

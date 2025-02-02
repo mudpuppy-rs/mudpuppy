@@ -66,9 +66,9 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<tui::layout::LayoutNode>()?;
     m.add_class::<tui::layout::PyConstraint>()?;
     m.add_class::<tui::layout::PyDirection>()?;
-    m.add_class::<tui::layout::BufferConfig>()?;
-    m.add_class::<tui::layout::BufferDirection>()?;
-    m.add_class::<tui::layout::ExtraBuffer>()?;
+    m.add_class::<tui::buffer::BufferConfig>()?;
+    m.add_class::<tui::buffer::BufferDirection>()?;
+    m.add_class::<tui::extrabuffer::ExtraBuffer>()?;
     Ok(())
 }
 
@@ -1016,14 +1016,14 @@ impl PyApp {
         &self,
         py: Python<'py>,
         session_id: u32,
-        config: Py<tui::layout::BufferConfig>,
+        config: Py<tui::buffer::BufferConfig>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             Ok(state
                 .client_for_id_mut(session_id)
                 .ok_or(Error::UnknownSession(session_id))?
                 .extra_buffers
-                .construct(|id| tui::layout::ExtraBuffer { id, config }))
+                .construct(|id| tui::extrabuffer::ExtraBuffer { id, config }))
         })
     }
 

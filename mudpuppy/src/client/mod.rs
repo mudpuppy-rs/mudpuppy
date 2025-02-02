@@ -29,7 +29,8 @@ use crate::model::{
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation};
 use crate::net::{connection, stream, telnet};
 use crate::python;
-use crate::tui::layout::{ExtraBuffer, LayoutNode};
+use crate::tui::extrabuffer::ExtraBuffer;
+use crate::tui::layout::LayoutNode;
 use crate::tui::session;
 
 /// A telnet MUD client.
