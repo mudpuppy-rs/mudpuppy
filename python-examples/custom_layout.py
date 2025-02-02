@@ -11,11 +11,15 @@ from mudpuppy_core import (
     EventType,
     SessionInfo,
     mudpuppy_core,
+    Gauge,
 )
 
 from mudpuppy import on_event, unload_handlers
 
 CHANNEL_CAPTURE_SECTION = "channel_capture"
+GAUGE_SECTION = "gauges"
+HP_GAUGE_SECTION = "hp_gauge"
+CP_GAUGE_SECTION = "cp_gauge"
 STATUS_SECTION = "status"
 CUSTOM_LAYOUT_READY = "custom_layout_ready"
 
@@ -28,6 +32,7 @@ class TestCustomLayout:
     status_buffer: BufferConfig
     status_buffer_id: Optional[int] = None
     status_on_left: bool = False
+    gauges: Optional[Dict[str, Gauge]] = None
 
     # TODO(XXX): expose status_on_left setting?
     def __init__(self, sesh_id: int):
@@ -96,6 +101,59 @@ class TestCustomLayout:
         logging.debug(f"channel buffer id: {channel_buffer_id}")
         self.channel_buffer_id = channel_buffer_id
 
+        if self.gauges is None:
+            logging.debug(f"creating gauge section for {self.session_id}")
+            # Create a veritical split for the set of gauges
+            await layout_manager.split_section(
+                self.session_id,
+                section_name="output_area",
+                constraint=Constraint.with_min(1),
+                new_section_name=GAUGE_SECTION,
+                new_constraint=Constraint.with_max(3),
+                direction=Direction.Vertical,
+                old_section_first=True,
+            )
+            # Extend the gauge section with a horizontal section for the HP gauge
+            await layout_manager.extend_section(
+                self.session_id,
+                section_name=GAUGE_SECTION,
+                new_section_name=HP_GAUGE_SECTION,
+                constraint=Constraint.with_percentage(50),
+                direction=Direction.Horizontal,
+            )
+            # Extend the gauge section with a horizontal section for the CP gauge
+            await layout_manager.extend_section(
+                self.session_id,
+                section_name=GAUGE_SECTION,
+                new_section_name=CP_GAUGE_SECTION,
+                constraint=Constraint.with_percentage(50),
+                direction=Direction.Horizontal,
+            )
+
+            # Create the HP gauge, assigned to the HP_GAUGE_SECTION
+            logging.debug(f"creating health gauge for {self.session_id}")
+            health_gauge = await mudpuppy_core.new_gauge(
+                self.session_id,
+                layout_name=HP_GAUGE_SECTION,
+                title="HP",
+                rgb=(0, 255, 0),
+            )
+            logging.debug(f"health gauge id: {health_gauge.id}")
+
+            # Create the CP gauge, assigned to the CP_GAUGE_SECTION
+            logging.debug(f"creating cp gauge for {self.session_id}")
+            cp_gauge = await mudpuppy_core.new_gauge(
+                self.session_id,
+                layout_name=CP_GAUGE_SECTION,
+                title="CP",
+                rgb=(0, 0, 255),
+            )
+            logging.debug(f"cp gauge id: {cp_gauge.id}")
+
+            # Store both gauges keyed by their layout name.
+            # Consumers can poke at the Gauge instances in this dict to update as needed.
+            self.gauges = {HP_GAUGE_SECTION: health_gauge, CP_GAUGE_SECTION: cp_gauge}
+
         await mudpuppy_core.emit_event(CUSTOM_LAYOUT_READY, None, self.session_id)
 
     def toggle_status_area(self):
@@ -134,6 +192,13 @@ class TestCustomLayout:
         constraint.set_from(Constraint.with_percentage(constraint.percentage + amount))
         logging.debug(f"now: {constraint}")
 
+    def toggle_gauge_area(self):
+        constraint = manager.get_constraint(self.session_id, GAUGE_SECTION)
+        if constraint.max == 0:
+            manager.show_section(self.session_id, GAUGE_SECTION, Constraint.with_max(3))
+        else:
+            manager.hide_section(self.session_id, GAUGE_SECTION)
+
 
 async def layout_init(session: SessionInfo, layout_manager: LayoutManager):
     logging.debug("processing custom layout init")
@@ -165,6 +230,9 @@ async def on_key(event: Event):
         return
     elif no_modifiers and code == "f5":
         layout.toggle_status_area()
+        return
+    elif no_modifiers and code == "f6":
+        layout.toggle_gauge_area()
         return
 
     if modifiers == ["alt"]:

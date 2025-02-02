@@ -43,6 +43,7 @@ __all__ = [
     "BufferConfig",
     "BufferDirection",
     "ExtraBuffer",
+    "Gauge",
 ]
 
 from typing import Optional, Any, Callable, Awaitable, Tuple
@@ -1418,6 +1419,54 @@ class ExtraBuffer:
     The `BufferConfig` of the `ExtraBuffer`
     """
 
+class Gauge:
+    """
+    A gauge widget that can be created with `MudpuppyCore.new_gauge()`.
+    """
+
+    id: int
+    """
+    The read-only `int` ID assigned to the gauge.
+    """
+
+    layout_name: str
+    """
+    The layout name where the `Gauge` should be drawn.
+
+    Can be both read and set.
+    """
+
+    value: float
+    """
+    The gauge's current value.
+
+    Can be both read and set.
+    """
+
+    max: float
+    """
+    The gauge's maximum value.
+
+    Can be both read and set.
+    """
+
+    title: str
+    """
+    The title label for the gauge.
+    """
+
+    def set_colour(self, r: int, g: int, b: int):
+        """
+        Set the colour of the gauge to the RGB values provided.
+        """
+        ...
+
+    def set_color(self, r: int, g: int, b: int):
+        """
+        Set the color of the gauge to the RGB values provided.
+        """
+        ...
+
 class MudpuppyCore:
     def config(self) -> Config:
         """
@@ -1937,6 +1986,24 @@ class MudpuppyCore:
         The buffer will be deleted and its buffer ID will no longer be valid. You
         will need to recreate it with `MudpuppyCore.new_buffer()` if you want to
         restore the `BufferConfig`.
+        """
+        ...
+
+    async def new_gauge(
+        self,
+        session_id: int,
+        *,
+        title: Optional[str] = None,
+        layout_name: Optional[str] = None,
+        value: Optional[float] = None,
+        max: Optional[float] = None,
+        rgb: Optional[Tuple[int, int, int]] = None,
+    ) -> Gauge:
+        """
+        Creates a new `Gauge` based on the provided arguments, for the given `session_id`.
+
+        Returns the created `Gauge` instance. You can read/write values of this instance
+        to customize the gauge.
         """
         ...
 

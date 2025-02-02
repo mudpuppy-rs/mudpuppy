@@ -17,6 +17,7 @@ use pyo3::types::{
 use pyo3::{
     pyclass, pymethods, pymodule, Bound, Py, PyAny, PyErr, PyObject, PyRef, PyResult, Python,
 };
+use ratatui::style::Color;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -69,6 +70,7 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<tui::buffer::BufferConfig>()?;
     m.add_class::<tui::buffer::BufferDirection>()?;
     m.add_class::<tui::extrabuffer::ExtraBuffer>()?;
+    m.add_class::<tui::gauge::Gauge>()?;
     Ok(())
 }
 
@@ -1072,6 +1074,55 @@ impl PyApp {
                 .extra_buffers
                 .remove(buffer_id);
             Ok(())
+        })
+    }
+
+    #[pyo3(signature = (session_id, *, title=None, layout_name=None, value=None, max=None, rgb=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn new_gauge<'py>(
+        &self,
+        py: Python<'py>,
+        session_id: u32,
+        title: Option<String>,
+        layout_name: Option<String>,
+        value: Option<f64>,
+        max: Option<f64>,
+        rgb: Option<(u8, u8, u8)>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        with_state!(self, py, |mut state| {
+            let color = rgb.map(|(r, g, b)| Color::Rgb(r, g, b)).unwrap_or_default();
+
+            let new_id = state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .gauges
+                .construct(|id| {
+                    Python::with_gil(|pyy| {
+                        Py::new(
+                            pyy,
+                            tui::gauge::Gauge {
+                                id,
+                                layout_name: layout_name.unwrap_or_default(),
+                                value: value.unwrap_or_default(),
+                                max: max.unwrap_or_default(),
+                                title: title.unwrap_or_default(),
+                                color,
+                            },
+                        )
+                        .unwrap()
+                    })
+                });
+
+            debug!("constructed new gauge with ID {new_id} for session {session_id}");
+
+            Python::with_gil(|_pyy| {
+                Ok(state
+                    .client_for_id_mut(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
+                    .gauges
+                    .get(new_id)
+                    .cloned())
+            })
         })
     }
 

@@ -1,5 +1,6 @@
 pub mod buffer;
 pub(crate) mod extrabuffer;
+pub(crate) mod gauge;
 mod input;
 pub mod layout;
 pub mod mudbuffer;
