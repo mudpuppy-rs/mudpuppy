@@ -159,7 +159,7 @@ required Rust and Python dependencies as well as helpful development tools like
 pre-commit hooks for formatting/linting.
 
 Using the flake isn't mandatory to contribute to, or build Mudpuppy, but highly
-recommended. If you are not using the Nix Flake you will need Rust 1.74+ and
+recommended. If you are not using the Nix Flake you will need Rust 1.75+ and
 Python 3.12+ (_techincally Python 3.7+ may be compatible, but 3.12 is the most
 tested_).
 
