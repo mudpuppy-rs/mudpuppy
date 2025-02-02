@@ -1,16 +1,19 @@
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 
+use pyo3::{pyclass, pymethods, Py, Python};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Span, StyledGrapheme, Text};
-use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{
+    Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
 use ratatui::Frame;
 use tracing::trace;
 use unicode_width::UnicodeWidthStr;
 
-use crate::client::output;
+use crate::client::output::{self, Output};
 use crate::error::Error;
-use crate::tui::layout::{BufferConfig, BufferDirection};
 use crate::tui::reflow::{LineComposer, LineTruncator, WordWrapper, WrappedLine};
 use crate::Result;
 
@@ -206,5 +209,212 @@ const fn get_line_offset(line_width: u16, text_area_width: u16, alignment: Align
         Alignment::Center => (text_area_width / 2).saturating_sub(line_width / 2),
         Alignment::Right => text_area_width.saturating_sub(line_width),
         Alignment::Left => 0,
+    }
+}
+
+#[derive(Debug, Clone)]
+#[pyclass]
+#[allow(clippy::struct_excessive_bools)] // TODO(XXX): Consider.
+pub struct BufferConfig {
+    #[pyo3(get, set)]
+    pub layout_name: String,
+
+    #[pyo3(get, set)]
+    pub line_wrap: bool,
+
+    #[pyo3(get, set)]
+    pub border_top: bool,
+
+    #[pyo3(get, set)]
+    pub border_bottom: bool,
+
+    #[pyo3(get, set)]
+    pub border_left: bool,
+
+    #[pyo3(get, set)]
+    pub border_right: bool,
+
+    #[pyo3(get, set)]
+    pub direction: BufferDirection,
+
+    #[pyo3(get)]
+    pub output: Py<Output>,
+
+    #[pyo3(get)]
+    pub scroll_pos: usize,
+
+    #[pyo3(get)]
+    pub max_scroll: usize,
+}
+
+impl BufferConfig {
+    #[must_use]
+    pub fn area_inside_borders(&self, mut area: Rect, scrollbar: bool) -> Rect {
+        if self.border_top {
+            area.height = area.height.saturating_sub(1);
+            area.y = area.y.saturating_add(1);
+        }
+        if self.border_bottom {
+            area.height = area.height.saturating_sub(1);
+        }
+        if self.border_left {
+            area.width = area.width.saturating_sub(1);
+            area.x = area.x.saturating_add(1);
+        }
+        if self.border_right {
+            area.width = area.width.saturating_sub(1);
+        }
+        if scrollbar {
+            area.width = area.width.saturating_sub(1);
+        }
+        area
+    }
+
+    #[must_use]
+    pub fn area_inside_top_borders(&self, mut area: Rect) -> Rect {
+        if self.border_top {
+            area.height = area.height.saturating_sub(1);
+            area.y = area.y.saturating_add(1);
+        }
+        if self.border_bottom {
+            area.height = area.height.saturating_sub(1);
+        }
+        area
+    }
+
+    #[must_use]
+    pub fn borders(&self) -> Borders {
+        let mut borders = Borders::empty();
+        if self.border_top {
+            borders |= Borders::TOP;
+        }
+        if self.border_bottom {
+            borders |= Borders::BOTTOM;
+        }
+        if self.border_left {
+            borders |= Borders::LEFT;
+        }
+        if self.border_right {
+            borders |= Borders::RIGHT;
+        }
+        borders
+    }
+}
+
+#[pymethods]
+impl BufferConfig {
+    /// # Errors
+    /// If the layout name is empty
+    #[new]
+    pub fn new(layout_name: String) -> crate::Result<Self> {
+        if layout_name.is_empty() {
+            return Err(Error::BadLayout);
+        }
+        let output = Python::with_gil(|py| Py::new(py, Output::new()))?;
+        Ok(Self {
+            layout_name,
+            line_wrap: false,
+            output,
+            border_top: false,
+            border_bottom: false,
+            border_left: false,
+            border_right: false,
+            direction: BufferDirection::default(),
+            scroll_pos: 0,
+            max_scroll: 0,
+        })
+    }
+
+    #[must_use]
+    pub fn scroll(&self) -> usize {
+        self.scroll_pos
+    }
+
+    pub fn scroll_up(&mut self, lines: u16) {
+        trace!("scrolling up: scroll-pos: {}", self.scroll_pos);
+        self.scroll_pos = self
+            .scroll_pos
+            .checked_add(lines as usize)
+            .unwrap_or(self.scroll_pos);
+        trace!("scrolling up: scroll-pos now {}", self.scroll_pos);
+    }
+
+    pub fn scroll_down(&mut self, lines: u16) {
+        trace!("scrolling down: scroll-pos: {}", self.scroll_pos);
+        self.scroll_pos = self.scroll_pos.saturating_sub(lines as usize);
+        trace!("scrolling down: scroll-pos now {}", self.scroll_pos);
+    }
+
+    pub fn scroll_bottom(&mut self) {
+        trace!("scrolling to bottom: scroll-pos: {}", self.scroll_pos);
+        self.scroll_pos = 1;
+        trace!("scrolling to bottom: scroll-pos now {}", self.scroll_pos);
+    }
+
+    pub fn scroll_to(&mut self, scroll: usize) {
+        trace!(
+            "scrolling to pos: scroll-pos {}: {}",
+            scroll,
+            self.scroll_pos
+        );
+        self.scroll_pos = scroll;
+        trace!(
+            "scrolling to pos: scroll-pos {} now: {}",
+            scroll,
+            self.scroll_pos
+        );
+    }
+
+    pub fn scroll_max(&mut self) {
+        trace!("scrolling to max: scroll-pos: {}", self.max_scroll);
+        self.scroll_pos = self.max_scroll;
+        trace!("scrolling to max: scroll-pos now: {}", self.scroll_pos);
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn __str__(&self) -> String {
+        // TODO(XXX): nicer str format
+        format!("{self:?}")
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl Display for BufferConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "BufferConfig({})", self.layout_name)
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[pyclass(eq, eq_int)]
+pub enum BufferDirection {
+    TopToBottom,
+    #[default]
+    BottomToTop,
+}
+
+#[pymethods]
+impl BufferDirection {
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn __str__(&self) -> String {
+        format!("{self}")
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl Display for BufferDirection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BufferDirection::TopToBottom => write!(f, "top to bottom"),
+            BufferDirection::BottomToTop => write!(f, "bottom to top"),
+        }
     }
 }
