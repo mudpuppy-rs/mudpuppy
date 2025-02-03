@@ -12,7 +12,7 @@ use notify::{
 };
 use pyo3::{Py, PyObject, PyResult, Python};
 use ratatui::backend::{Backend, CrosstermBackend};
-use ratatui::crossterm::event::Event as TermEvent;
+use ratatui::crossterm::event::{Event as TermEvent, KeyEventKind};
 use ratatui::crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
@@ -299,6 +299,11 @@ impl App {
         let TermEvent::Key(key_event) = event else {
             return current_tab.term_event(state, event_futures, event);
         };
+
+        // Ignore release & repeat events. These only happen on Windows in practice and we're not that specific.
+        if key_event.kind != KeyEventKind::Press {
+            return Ok(None);
+        }
 
         if let UiState::Error(err) = &state.ui_state {
             if err.fatal() {
