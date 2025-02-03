@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use futures::stream::FuturesUnordered;
 use pyo3::{pyclass, pymethods, Py, PyRefMut, Python};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use serde::Serialize;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, info, instrument, trace, warn, Level};
@@ -160,7 +160,6 @@ impl Client {
         // If the key event was Enter being pressed, send the queued input.
         if let &KeyEvent {
             code: KeyCode::Enter,
-            kind: KeyEventKind::Press,
             ..
         } = event
         {

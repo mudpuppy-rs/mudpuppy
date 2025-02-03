@@ -3,7 +3,7 @@ use std::{iter, mem};
 
 use pyo3::{pyclass, pymethods};
 use ratatui::crossterm::event::KeyCode::{Backspace, Char, Delete, End, Home, Left, Right};
-use ratatui::crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
 use tracing::info;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -33,14 +33,8 @@ pub struct Input {
 impl Input {
     pub fn handle_key_event(&mut self, key_event: &KeyEvent) {
         let KeyEvent {
-            code,
-            modifiers,
-            kind,
-            ..
+            code, modifiers, ..
         } = key_event;
-        if *kind != KeyEventKind::Press {
-            return;
-        }
 
         match (code, *modifiers) {
             (Backspace, KeyModifiers::NONE) | (Char('h'), KeyModifiers::CONTROL) => {
