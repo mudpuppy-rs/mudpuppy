@@ -37,7 +37,7 @@ class ChannelLogger:
         self.logfile_path = Path(channel_log_dir, f"{mudname}.log")
 
         # Open for reading/appending.
-        self.logfile = open(self.logfile_path, "a")
+        self.logfile = open(self.logfile_path, "a", encoding="utf-8")
 
     def __del__(self, *args):
         if not self.logfile.closed:
