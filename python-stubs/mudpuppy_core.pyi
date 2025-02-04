@@ -1719,7 +1719,7 @@ class MudpuppyCore:
         """
         ...
 
-    async def new_alias(self, id: int, config: AliasConfig, module: str) -> int:
+    async def new_alias(self, session_id: int, config: AliasConfig, module: str) -> int:
         """
         Creates a new `Alias` for the given session ID for the given `AliasConfig`.
 
