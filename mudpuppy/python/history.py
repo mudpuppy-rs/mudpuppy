@@ -20,6 +20,7 @@ class History:
     lines: list[InputLine]
     max_lines: int
     cursor_pos: Optional[int] = None
+    partial: Optional[InputLine] = None
 
     def __init__(self, session: SessionInfo, max_lines: int = 1000):
         self.session = session
@@ -143,23 +144,49 @@ async def input_sent(event: Event):
 async def shortcut(event: Event):
     assert isinstance(event, Event.Shortcut)
 
-    h = history[event.id]
-    if event.shortcut == Shortcut.HistoryNext:
-        line = h.next()
-    elif event.shortcut == Shortcut.HistoryPrevious:
-        line = h.prev()
-    else:
+    if (
+        event.shortcut != Shortcut.HistoryNext
+        and event.shortcut != Shortcut.HistoryPrevious
+    ):
         return
 
     if await mudpuppy_core.get_input_echo(event.id) == EchoState.Password:
         logging.debug("history: ignoring history navigation in password echo state")
         return
 
-    if line is None:
+    h = history[event.id]
+
+    if h.cursor_pos is None and event.shortcut == Shortcut.HistoryPrevious:
+        current = await mudpuppy_core.get_input(event.id)
+        logging.debug(
+            f"history: first backward cursor move, storing current input as partial ({str(current)})"
+        )
+        h.partial = current
+
+    if event.shortcut == Shortcut.HistoryNext:
+        line = h.next()
+    elif event.shortcut == Shortcut.HistoryPrevious:
+        line = h.prev()
+    else:
+        raise ValueError(f"unexpected shortcut: {event.shortcut}")
+
+    if line is None and event.shortcut == Shortcut.HistoryPrevious:
+        logging.debug("history: no prev history - staying as-is")
+        return
+    elif (
+        line is None
+        and event.shortcut == Shortcut.HistoryNext
+        and h.partial is not None
+    ):
+        h.cursor_pos = None
+        logging.debug(f"history: no next - restoring partial input ({str(h.partial)})")
+        await mudpuppy_core.set_input(event.id, h.partial)
+    elif line is None:
+        logging.debug("history: no next/prev - clearing input")
         await mudpuppy_core.clear_input(event.id)
     else:
         logging.info(
-            f"history: populating {event.id} input with: {line} (original={line.original} scripted={line.scripted} echo={line.echo})"
+            f"history: populating {event.id} input with {event.shortcut} {line} (original={line.original} scripted={line.scripted} echo={line.echo})"
         )
         # When items are added to history its after processing for aliases, etc.
         # We want to reconstitute the InputLine the user produced pre-processing for display in the
