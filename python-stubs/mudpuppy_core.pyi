@@ -1610,6 +1610,31 @@ class Input:
         """
         ...
 
+    def add_markup(self, index: int, ansi_markup: str):
+        """
+        Adds the provided ansi_markup as a decoration to the input area at the given index.
+        """
+
+    def remove_markup(self, index: int):
+        """
+        Removes the ansi_markup decoration from the given index.
+        """
+
+    def clear_markup(self):
+        """
+        Clears all ansi_markup decorations from the input area.
+        """
+
+    def markup(self) -> dict[int, str]:
+        """
+        Returns a dictionary of ansi_markup decorations in the input area.
+        """
+
+    def decorated_value(self) -> str:
+        """
+        Returns the input area's value with the ANSI markup interposed at the correct positions.
+        """
+
 class MudpuppyCore:
     def config(self) -> Config:
         """
