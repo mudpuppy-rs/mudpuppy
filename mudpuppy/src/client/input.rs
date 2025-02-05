@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::{iter, mem};
 
@@ -27,6 +28,7 @@ use crate::model::InputLine;
 pub struct Input {
     line: InputLine,
     telnet_echo: EchoState,
+    markup: Markup,
     cursor: usize,
 }
 
@@ -291,6 +293,69 @@ impl Input {
             .map(|(_, c)| c)
             .collect();
     }
+
+    pub fn add_markup(&mut self, pos: usize, token: &str) {
+        if pos <= self.chars().count() {
+            self.markup.add(pos, token.to_string());
+        }
+    }
+
+    pub fn remove_markup(&mut self, pos: usize) {
+        self.markup.remove(pos);
+    }
+
+    pub fn clear_markup(&mut self) {
+        self.markup.clear_all();
+    }
+
+    #[must_use]
+    pub fn markup(&self) -> &BTreeMap<usize, String> {
+        &self.markup.tokens
+    }
+
+    #[must_use]
+    pub fn decorated_value(&self) -> String {
+        let content_str = match (&self.line.sent, &self.line.original) {
+            (s, _) if !s.is_empty() => s,
+            (_, Some(orig)) => orig,
+            _ => return String::new(),
+        };
+
+        let content_str = match self.line.echo {
+            EchoState::Password => "*".repeat(content_str.chars().count()),
+            EchoState::Enabled => content_str.to_string(),
+        };
+
+        let char_count = content_str.chars().count();
+
+        if self.markup.tokens.is_empty() {
+            return content_str;
+        }
+
+        let total_tokens_len: usize = self.markup.tokens.values().map(String::len).sum();
+        let mut result = String::with_capacity(char_count + total_tokens_len);
+
+        let mut chars = content_str.chars();
+        let mut current_pos = 0;
+
+        for (pos, token) in &self.markup.tokens {
+            let pos = *pos;
+            if pos > char_count {
+                break;
+            }
+
+            while current_pos < pos {
+                if let Some(c) = chars.next() {
+                    result.push(c);
+                }
+                current_pos += 1;
+            }
+            result.push_str(token);
+        }
+
+        result.extend(chars);
+        result
+    }
 }
 
 impl Display for Input {
@@ -322,6 +387,25 @@ impl From<EchoState> for bool {
             EchoState::Enabled => true,
             EchoState::Password => false,
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct Markup {
+    tokens: BTreeMap<usize, String>,
+}
+
+impl Markup {
+    fn add(&mut self, pos: usize, token: String) {
+        self.tokens.insert(pos, token);
+    }
+
+    fn remove(&mut self, pos: usize) {
+        self.tokens.remove(&pos);
+    }
+
+    fn clear_all(&mut self) {
+        self.tokens.clear();
     }
 }
 

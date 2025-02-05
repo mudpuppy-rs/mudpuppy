@@ -1,13 +1,12 @@
+use crate::client::input as client_input;
+use crate::error::Error;
+use crate::Result;
+use ansi_to_tui::IntoText;
 use ratatui::layout::{Position, Rect};
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use std::collections::HashMap;
-
-use crate::client::input as client_input;
-use crate::client::input::EchoState;
-use crate::error::Error;
-use crate::Result;
 
 #[derive(Debug, Default)]
 pub(super) struct Input {}
@@ -22,19 +21,12 @@ impl Input {
             .get(INPUT_SECTION_NAME)
             .ok_or(Error::LayoutMissing(INPUT_SECTION_NAME.to_string()))?;
 
-        let content = input.value();
-        let mut content_str = content.sent;
-        if content_str.is_empty() && content.original.is_some() {
-            content_str = content.original.unwrap();
-        }
-
-        if content.echo == EchoState::Password {
-            content_str = "*".repeat(content_str.len());
-        }
-
         let width = area.width.max(3) - 3;
         let scroll = input.visual_scroll(width as usize);
-        let input_text = Paragraph::new(content_str.as_str())
+
+        let input_text = input.decorated_value().into_text()?;
+
+        let input_text = Paragraph::new(input_text)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
