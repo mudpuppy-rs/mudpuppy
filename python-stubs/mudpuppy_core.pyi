@@ -1719,7 +1719,7 @@ class MudpuppyCore:
         """
         ...
 
-    async def new_alias(self, id: int, config: AliasConfig, module: str) -> int:
+    async def new_alias(self, session_id: int, config: AliasConfig, module: str) -> int:
         """
         Creates a new `Alias` for the given session ID for the given `AliasConfig`.
 
@@ -2057,7 +2057,7 @@ class MudpuppyCore:
         """
         ...
 
-    async def emit_event(self, custom_type: str, data: Any, id: Optional[int]):
+    async def emit_event(self, custom_type: str, data: Any, session_id: Optional[int]):
         """
         Emits a custom event with the given `custom_type` and `data` for the given session ID.
         If `id` is `None`, the event is emitted for all sessions.

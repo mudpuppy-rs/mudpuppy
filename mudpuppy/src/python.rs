@@ -832,9 +832,9 @@ impl PyApp {
         })
     }
 
-    fn stop_timer<'py>(&self, py: Python<'py>, id: u32) -> PyResult<Bound<'py, PyAny>> {
+    fn stop_timer<'py>(&self, py: Python<'py>, timer_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            match state.timers.get_mut(id) {
+            match state.timers.get_mut(timer_id) {
                 Some(timer) => {
                     if timer.running {
                         timer.running = false;
@@ -845,29 +845,29 @@ impl PyApp {
 
                     Ok(())
                 }
-                None => Err(Error::Timer(TimerError::UnknownId(id)).into()),
+                None => Err(Error::Timer(TimerError::UnknownId(timer_id)).into()),
             }
         })
     }
 
-    fn get_timer<'py>(&self, py: Python<'py>, id: u32) -> PyResult<Bound<'py, PyAny>> {
+    fn get_timer<'py>(&self, py: Python<'py>, timer_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |state| Python::with_gil(|_| {
-            Ok(state.timers.get(id).cloned())
+            Ok(state.timers.get(timer_id).cloned())
         }))
     }
 
-    fn remove_timer<'py>(&self, py: Python<'py>, id: u32) -> PyResult<Bound<'py, PyAny>> {
+    fn remove_timer<'py>(&self, py: Python<'py>, timer_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             let timer = state
                 .timers
-                .get_mut(id)
-                .ok_or(Error::Timer(TimerError::UnknownId(id)))?;
+                .get_mut(timer_id)
+                .ok_or(Error::Timer(TimerError::UnknownId(timer_id)))?;
             if timer.running {
                 timer.running = false;
                 timer.stop_tx.send(true).ok();
             }
-            info!("removed timer {id}");
-            state.timers.remove(id);
+            info!("removed timer {timer_id}");
+            state.timers.remove(timer_id);
             Ok(())
         })
     }
