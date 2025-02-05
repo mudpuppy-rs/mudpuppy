@@ -914,50 +914,15 @@ impl PyApp {
         })
     }
 
-    fn get_input<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
-        with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(session_id)
-                .ok_or(Error::UnknownSession(session_id))?
-                .input
-                .value())
-        })
-    }
-
-    fn get_input_echo<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
-        with_state!(self, py, |state| {
-            Ok(state
-                .client_for_id(session_id)
-                .ok_or(Error::UnknownSession(session_id))?
-                .input
-                .telnet_echo())
-        })
-    }
-
-    fn set_input<'py>(
-        &self,
-        py: Python<'py>,
-        session_id: u32,
-        input: InputLine,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn input<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
-            state
-                .client_for_id_mut(session_id)
-                .ok_or(Error::UnknownSession(session_id))?
-                .input
-                .set_value(input);
-            Ok(())
-        })
-    }
-
-    fn clear_input<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
-        with_state!(self, py, |mut state| {
-            state
-                .client_for_id_mut(session_id)
-                .ok_or(Error::UnknownSession(session_id))?
-                .input
-                .reset();
-            Ok(())
+            Python::with_gil(|_| {
+                Ok(state
+                    .client_for_id_mut(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
+                    .input
+                    .clone())
+            })
         })
     }
 

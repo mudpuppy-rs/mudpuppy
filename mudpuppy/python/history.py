@@ -10,6 +10,7 @@ from mudpuppy_core import (
     mudpuppy_core,
     OutputItem,
     EchoState,
+    Input,
 )
 
 from mudpuppy import on_event, on_new_session
@@ -150,14 +151,15 @@ async def shortcut(event: Event):
     ):
         return
 
-    if await mudpuppy_core.get_input_echo(event.id) == EchoState.Password:
+    input: Input = await mudpuppy_core.input(event.id)
+    if input.telnet_echo() == EchoState.Password:
         logging.debug("history: ignoring history navigation in password echo state")
         return
 
     h = history[event.id]
 
     if h.cursor_pos is None and event.shortcut == Shortcut.HistoryPrevious:
-        current = await mudpuppy_core.get_input(event.id)
+        current = input.value()
         logging.debug(
             f"history: first backward cursor move, storing current input as partial ({str(current)})"
         )
@@ -180,10 +182,10 @@ async def shortcut(event: Event):
     ):
         h.cursor_pos = None
         logging.debug(f"history: no next - restoring partial input ({str(h.partial)})")
-        await mudpuppy_core.set_input(event.id, h.partial)
+        input.set_value(h.partial)
     elif line is None:
         logging.debug("history: no next/prev - clearing input")
-        await mudpuppy_core.clear_input(event.id)
+        input.reset()
     else:
         logging.info(
             f"history: populating {event.id} input with {event.shortcut} {line} (original={line.original} scripted={line.scripted} echo={line.echo})"
@@ -193,7 +195,7 @@ async def shortcut(event: Event):
         # input area. E.g. we replace sent with original if there is an original value.
         if line.original is not None:
             line = line.clone_with_original()
-        await mudpuppy_core.set_input(event.id, line)
+        input.set_value(line)
 
 
 @on_new_session()
