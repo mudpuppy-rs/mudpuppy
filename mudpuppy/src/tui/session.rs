@@ -157,7 +157,7 @@ impl Tab for Widget {
         }
 
         // Draw the input area.
-        Input::draw(&mut client.input, frame, &sections)?;
+        Python::with_gil(|py| Input::draw(&mut client.input.borrow_mut(py), frame, &sections))?;
 
         // Draw the main output buffer.
         self.mud_buffer

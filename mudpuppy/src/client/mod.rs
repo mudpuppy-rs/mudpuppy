@@ -39,7 +39,7 @@ use crate::tui::session;
 pub struct Client {
     /// The MUD session the client is configured for.
     pub info: Arc<SessionInfo>,
-    pub input: Input,
+    pub input: Py<Input>,
     pub output: Output,
     pub prompt: Option<MudLine>,
     pub triggers: IdMap<Trigger>,
@@ -71,9 +71,11 @@ impl Client {
         conn_tx: UnboundedSender<connection::Event>,
     ) -> Self {
         let id = info.id;
+
+        let input = Python::with_gil(|py| Py::new(py, Input::default()).unwrap());
         Self {
             info,
-            input: Input::default(),
+            input,
             output: Output::default(),
             prompt: None,
             triggers: IdMap::default(),
@@ -167,7 +169,10 @@ impl Client {
         }
 
         // Otherwise, handle the input key event.
-        self.input.handle_key_event(event);
+        Python::with_gil(|py| {
+            self.input.borrow_mut(py).handle_key_event(event);
+        });
+
         if let Ok(model_event) = PyKeyEvent::try_from(*event) {
             self.event_tx.send(python::Event::KeyPress {
                 id: self.info.id,
@@ -182,7 +187,7 @@ impl Client {
         futures: &mut FuturesUnordered<python::PyFuture>,
     ) -> Result<(), Error> {
         // Pull the to-be-sent input. If it's None, transmit an empty line.
-        let Some(queued_input) = self.input.pop() else {
+        let Some(queued_input) = Python::with_gil(|py| self.input.borrow_mut(py).pop()) else {
             return self.transmit_input(InputLine::default(), futures);
         };
 
@@ -567,7 +572,11 @@ impl Client {
                         .send(connection::Action::Send(reply.into()))?;
 
                     match opt {
-                        telnet::option::ECHO => self.input.set_telnet_echo(EchoState::Password),
+                        telnet::option::ECHO => Python::with_gil(|py| {
+                            self.input
+                                .borrow_mut(py)
+                                .set_telnet_echo(EchoState::Password);
+                        }),
                         telnet::option::EOR => self.set_prompt_mode(PromptMode::Signalled {
                             signal: PromptSignal::EndOfRecord,
                         }),
@@ -591,7 +600,11 @@ impl Client {
                         .send(connection::Action::Send(reply.into()))?;
 
                     match opt {
-                        telnet::option::ECHO => self.input.set_telnet_echo(EchoState::Enabled),
+                        telnet::option::ECHO => Python::with_gil(|py| {
+                            self.input
+                                .borrow_mut(py)
+                                .set_telnet_echo(EchoState::Enabled);
+                        }),
                         // TODO(XXX): config for timeout?
                         telnet::option::EOR => self.set_prompt_mode(PromptMode::Unsignalled {
                             timeout: Duration::from_millis(200),

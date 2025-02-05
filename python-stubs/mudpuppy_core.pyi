@@ -1467,6 +1467,149 @@ class Gauge:
         """
         ...
 
+class Input:
+    """
+    The input area of the client window.
+    """
+
+    def value(self) -> InputLine:
+        """
+        Returns the current value of the input area.
+        """
+        ...
+
+    def cursor(self) -> int:
+        """
+        Returns the current cursor position in the input area.
+        """
+        ...
+
+    def visual_cursor(self) -> int:
+        """
+        Returns the visual cursor position in the input area.
+        """
+        ...
+
+    def visual_scroll(self, width: int) -> int:
+        """
+        Returns the visual scroll position in the input area.
+        """
+        ...
+
+    def telnet_echo(self) -> EchoState:
+        """
+        Returns the current telnet echo state of the input area.
+        """
+        ...
+
+    def reset(self):
+        """
+        Resets the input area to its default state.
+        """
+        ...
+
+    def pop(self) -> Optional[InputLine]:
+        """
+        Removes and returns the input from the input area.
+        """
+        ...
+
+    def set_value(self, value: InputLine):
+        """
+        Sets the value of the input area, adjusting the cursor to the end.
+        """
+        ...
+
+    def set_telnet_echo(self, state: EchoState):
+        """
+        Sets the telnet echo state of the input area.
+        """
+        ...
+
+    def set_cursor(self, pos: int):
+        """
+        Sets the cursor position in the input area.
+        """
+        ...
+
+    def insert(self, c: str):
+        """
+        Inserts a character at the cursor position.
+        """
+        ...
+
+    def delete_prev(self):
+        """
+        Deletes the character before the cursor.
+        """
+        ...
+
+    def delete_next(self):
+        """
+        Deletes the character after the cursor.
+        """
+        ...
+
+    def delete_word_left(self):
+        """
+        Deletes the word to the left of the cursor.
+        """
+        ...
+
+    def delete_word_right(self):
+        """
+        Deletes the word to the right of the cursor.
+        """
+        ...
+
+    def delete_to_end(self):
+        """
+        Deletes from the cursor to the end of the input.
+        """
+        ...
+
+    def cursor_left(self):
+        """
+        Moves the cursor left.
+        """
+        ...
+
+    def cursor_right(self):
+        """
+        Moves the cursor right.
+        """
+        ...
+
+    def cursor_word_left(self):
+        """
+        Moves the cursor to the left word boundary.
+        """
+        ...
+
+    def cursor_word_right(self):
+        """
+        Moves the cursor to the right word boundary.
+        """
+        ...
+
+    def cursor_start(self):
+        """
+        Moves the cursor to the start of the input.
+        """
+        ...
+
+    def cursor_end(self):
+        """
+        Moves the cursor to the end of the input.
+        """
+        ...
+
+    def drop_index(self, index: int):
+        """
+        Drops the character at the given index.
+        """
+        ...
+
 class MudpuppyCore:
     def config(self) -> Config:
         """
@@ -1865,46 +2008,12 @@ class MudpuppyCore:
         """
         ...
 
-    async def get_input(self, session_id: int) -> InputLine:
+    async def input(self, session_id: int) -> Input:
         """
-        Returns the current input line for the given session ID.
+        Returns the `Input` for the given session ID.
 
-        This is the data that has been typed in by the user into the input area,
-        but not yet transmitted to the MUD.
-
-        Use `MudpuppyCore.set_input()` to replace this yet-to-be-sent input.
-        """
-        ...
-
-    async def get_input_echo(self, session_id: int) -> EchoState:
-        """
-        Returns the current telnet echo state for the given session ID.
-
-        This indicates whether the MUD told us to stop echoing input because
-        sensitive data is being entered.
-        """
-        ...
-
-    async def set_input(self, session_id: int, new_input: InputLine):
-        """
-        Sets the current input line for the given session ID.
-
-        This is the data that has been typed in by the user into the input area,
-        but not yet transmitted to the MUD.
-
-        Use `MudpuppyCore.get_input()` to retrieve the current input.
-        """
-        ...
-
-    async def clear_input(self, session_id: int):
-        """
-        Clears the current input line for the given session ID.
-
-        This clears the data that has been typed in by the user into the input area,
-        but not yet transmitted to the MUD.
-
-        Use `MudpuppyCore.set_input()` to set the current input and `MudpuppyCore.get_input()`
-        to retrieve the current input.
+        The `Input` provides access to queued input typed by the user and has
+        functions to query/edit/replace that input.
         """
         ...
 
@@ -2567,149 +2676,6 @@ class PromptMode:
         """
         The `PromptSignal` used to indicate prompt lines.
         """
-
-class Input:
-    """
-    The input area of the client window.
-    """
-
-    def value(self) -> InputLine:
-        """
-        Returns the current value of the input area.
-        """
-        ...
-
-    def cursor(self) -> int:
-        """
-        Returns the current cursor position in the input area.
-        """
-        ...
-
-    def visual_cursor(self) -> int:
-        """
-        Returns the visual cursor position in the input area.
-        """
-        ...
-
-    def visual_scroll(self, width: int) -> int:
-        """
-        Returns the visual scroll position in the input area.
-        """
-        ...
-
-    def telnet_echo(self) -> EchoState:
-        """
-        Returns the current telnet echo state of the input area.
-        """
-        ...
-
-    def reset(self):
-        """
-        Resets the input area to its default state.
-        """
-        ...
-
-    def pop(self) -> Optional[InputLine]:
-        """
-        Removes and returns the input from the input area.
-        """
-        ...
-
-    def set_value(self, value: InputLine):
-        """
-        Sets the value of the input area, adjusting the cursor to the end.
-        """
-        ...
-
-    def set_telnet_echo(self, state: EchoState):
-        """
-        Sets the telnet echo state of the input area.
-        """
-        ...
-
-    def set_cursor(self, pos: int):
-        """
-        Sets the cursor position in the input area.
-        """
-        ...
-
-    def insert(self, c: str):
-        """
-        Inserts a character at the cursor position.
-        """
-        ...
-
-    def delete_prev(self):
-        """
-        Deletes the character before the cursor.
-        """
-        ...
-
-    def delete_next(self):
-        """
-        Deletes the character after the cursor.
-        """
-        ...
-
-    def delete_word_left(self):
-        """
-        Deletes the word to the left of the cursor.
-        """
-        ...
-
-    def delete_word_right(self):
-        """
-        Deletes the word to the right of the cursor.
-        """
-        ...
-
-    def delete_to_end(self):
-        """
-        Deletes from the cursor to the end of the input.
-        """
-        ...
-
-    def cursor_left(self):
-        """
-        Moves the cursor left.
-        """
-        ...
-
-    def cursor_right(self):
-        """
-        Moves the cursor right.
-        """
-        ...
-
-    def cursor_word_left(self):
-        """
-        Moves the cursor to the left word boundary.
-        """
-        ...
-
-    def cursor_word_right(self):
-        """
-        Moves the cursor to the right word boundary.
-        """
-        ...
-
-    def cursor_start(self):
-        """
-        Moves the cursor to the start of the input.
-        """
-        ...
-
-    def cursor_end(self):
-        """
-        Moves the cursor to the end of the input.
-        """
-        ...
-
-    def drop_index(self, index: int):
-        """
-        Drops the character at the given index.
-        """
-        ...
 
 type EventHandler = Callable[[Event], Awaitable[None]]
 """
