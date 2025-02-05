@@ -64,7 +64,7 @@ impl Widget {
     fn draw_help(frame: &mut Frame<'_>, area: Rect) {
         let help_text: Vec<Line> = vec![
             format!(
-                "* Edit {:?} to add/edit/remove MUDs. This list will reload automatically.",
+                "* Edit {} to add/edit/remove MUDs. This list will reload automatically.",
                 config_file().display()
             )
             .into(),
