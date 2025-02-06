@@ -18,4 +18,5 @@
     - [Custom Commands](scripting/custom_commands.md)
     - [Output](scripting/output.md)
     - [Prompts](scripting/prompts.md)
+    - [IDE Editing](scripting/editing.md)
 - [Tutorial](tutorial/README.md)
