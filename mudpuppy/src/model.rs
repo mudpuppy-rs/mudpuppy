@@ -2,7 +2,9 @@ use std::borrow::Cow;
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
-use crossterm::event::{MouseEvent, MouseEventKind};
+use crossterm::event::{
+    MouseButton, MouseEvent as TermMouseEvent, MouseEventKind as TermMouseEventKind,
+};
 use pyo3::{pyclass, pymethods, Py, PyAny, PyObject, PyRef, Python};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -355,6 +357,112 @@ impl Display for KeyCode {
     }
 }
 
+#[pyclass]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MouseEvent {
+    #[pyo3(get)]
+    pub kind: MouseEventKind,
+
+    #[pyo3(get)]
+    pub column: u16,
+
+    #[pyo3(get)]
+    pub row: u16,
+
+    pub modifiers: KeyModifiers,
+}
+
+#[pymethods]
+#[allow(clippy::trivially_copy_pass_by_ref)] // Can't move `self` for __str__ and __repr__.
+impl MouseEvent {
+    fn __str__(&self) -> String {
+        format!("{self}")
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+
+    #[pyo3(name = "modifiers")]
+    fn get_modifiers(&self) -> Vec<String> {
+        self.modifiers.modifiers()
+    }
+}
+
+impl TryFrom<TermMouseEvent> for MouseEvent {
+    type Error = ();
+
+    fn try_from(term_event: TermMouseEvent) -> Result<Self, Self::Error> {
+        Ok(Self {
+            kind: term_event.kind.try_into()?,
+            column: term_event.column,
+            row: term_event.row,
+            modifiers: term_event.modifiers.into(),
+        })
+    }
+}
+
+impl Display for MouseEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let modifiers = if self.modifiers.0 == 0 {
+            "no modifiers".to_string()
+        } else {
+            format!("modifiers: {}", self.modifiers.modifiers().join(", "))
+        };
+        write!(
+            f,
+            "{kind} at ({column}, {row}) with {modifiers}",
+            kind = self.kind,
+            column = self.column,
+            row = self.row,
+        )
+    }
+}
+
+#[pyclass(eq, eq_int)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
+#[strum(ascii_case_insensitive)]
+pub enum MouseEventKind {
+    LeftButtonDown,
+    RightButtonDown,
+    MiddleButtonDown,
+    Moved,
+    ScrollDown,
+    ScrollUp,
+    ScrollLeft,
+    ScrollRight,
+}
+
+#[pymethods]
+#[allow(clippy::trivially_copy_pass_by_ref)] // Can't move `self` for __str__ and __repr__.
+impl MouseEventKind {
+    fn __str__(&self) -> String {
+        format!("{self}")
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl TryFrom<TermMouseEventKind> for MouseEventKind {
+    type Error = ();
+
+    fn try_from(term_kind: TermMouseEventKind) -> Result<Self, Self::Error> {
+        Ok(match term_kind {
+            TermMouseEventKind::Down(MouseButton::Left) => Self::LeftButtonDown,
+            TermMouseEventKind::Down(MouseButton::Right) => Self::RightButtonDown,
+            TermMouseEventKind::Down(MouseButton::Middle) => Self::MiddleButtonDown,
+            TermMouseEventKind::Up(_) | TermMouseEventKind::Drag(_) => return Err(()),
+            TermMouseEventKind::Moved => Self::Moved,
+            TermMouseEventKind::ScrollDown => Self::ScrollDown,
+            TermMouseEventKind::ScrollUp => Self::ScrollUp,
+            TermMouseEventKind::ScrollLeft => Self::ScrollLeft,
+            TermMouseEventKind::ScrollRight => Self::ScrollRight,
+        })
+    }
+}
+
 #[pyclass(eq, eq_int)]
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
@@ -396,17 +504,17 @@ impl Shortcut {
     }
 }
 
-impl TryFrom<MouseEvent> for Shortcut {
+impl TryFrom<TermMouseEvent> for Shortcut {
     type Error = ();
 
-    fn try_from(event: MouseEvent) -> Result<Self, Self::Error> {
+    fn try_from(event: TermMouseEvent) -> Result<Self, Self::Error> {
         Ok(match event {
-            MouseEvent {
-                kind: MouseEventKind::ScrollUp,
+            TermMouseEvent {
+                kind: TermMouseEventKind::ScrollUp,
                 ..
             } => Self::ScrollUp,
-            MouseEvent {
-                kind: MouseEventKind::ScrollDown,
+            TermMouseEvent {
+                kind: TermMouseEventKind::ScrollDown,
                 ..
             } => Self::ScrollDown,
             _ => return Err(()),

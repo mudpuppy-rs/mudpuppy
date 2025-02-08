@@ -26,8 +26,8 @@ use crate::app::{State, UiState};
 use crate::config::{config_dir, data_dir, GlobalConfig, KeyBindings};
 use crate::error::{AliasError, Error, TimerError, TriggerError};
 use crate::model::{
-    Alias, AliasConfig, InputLine, KeyEvent, Mud, MudLine, PromptMode, PromptSignal, SessionInfo,
-    Shortcut, Timer, TimerConfig, Tls, Trigger, TriggerConfig,
+    Alias, AliasConfig, InputLine, KeyEvent, MouseEvent, MouseEventKind, Mud, MudLine, PromptMode,
+    PromptSignal, SessionInfo, Shortcut, Timer, TimerConfig, Tls, Trigger, TriggerConfig,
 };
 use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
 
@@ -40,6 +40,8 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
     m.add_class::<GlobalConfig>()?;
     m.add_class::<KeyEvent>()?;
+    m.add_class::<MouseEvent>()?;
+    m.add_class::<MouseEventKind>()?;
     m.add_class::<KeyBindings>()?;
     m.add_class::<Shortcut>()?;
     m.add_class::<SessionInfo>()?;
@@ -1245,6 +1247,10 @@ pub enum Event {
         id: u32,
         key: KeyEvent,
     },
+    Mouse {
+        id: u32,
+        event: MouseEvent,
+    },
     GmcpEnabled {
         id: u32,
     },
@@ -1285,6 +1291,7 @@ impl Event {
             Self::InputLine { .. } => EventType::InputLine {},
             Self::Shortcut { .. } => EventType::Shortcut {},
             Self::KeyPress { .. } => EventType::KeyPress {},
+            Self::Mouse { .. } => EventType::Mouse {},
             Self::Python { .. } => EventType::Python {},
             Self::GmcpEnabled { .. } => EventType::GmcpEnabled {},
             Self::GmcpDisabled { .. } => EventType::GmcpDisabled {},
@@ -1307,6 +1314,7 @@ impl Event {
             | Event::InputLine { id, .. }
             | Event::Shortcut { id, .. }
             | Event::KeyPress { id, .. }
+            | Event::Mouse { id, .. }
             | Event::GmcpEnabled { id, .. }
             | Event::GmcpDisabled { id, .. }
             | Event::GmcpMessage { id, .. }
@@ -1383,6 +1391,9 @@ impl Display for Event {
             Event::KeyPress { id, key } => {
                 write!(f, "event: connection ID {id} key press {key}")
             }
+            Event::Mouse { id, event } => {
+                write!(f, "event: connection ID {id} {event}")
+            }
             Event::Python {
                 id, custom_type, ..
             } => {
@@ -1426,6 +1437,7 @@ pub enum EventType {
     InputLine,
     Shortcut,
     KeyPress,
+    Mouse,
     Python,
     GmcpEnabled,
     GmcpDisabled,
@@ -1456,6 +1468,7 @@ impl EventType {
             Self::InputLine { .. } => "event type: input line",
             Self::Shortcut { .. } => "event type: keyboard shortcut",
             Self::KeyPress { .. } => "event type: key press",
+            Self::Mouse { .. } => "event type: mouse",
             Self::Python { .. } => "event type: custom python event",
             Self::GmcpEnabled { .. } => "event type: GMCP enabled",
             Self::GmcpDisabled { .. } => "event type: GMCP disabled",
