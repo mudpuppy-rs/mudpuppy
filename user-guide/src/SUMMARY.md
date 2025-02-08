@@ -8,6 +8,7 @@
 - [Config](config/README.md)
      - [MUDs](config/muds.md)
      - [Keybindings](config/keybindings.md)
+     - [Mouse support](config/mouse.md)
 - [Input](input.md)
 - [Commands](commands.md)
 - [Logging](logging.md)

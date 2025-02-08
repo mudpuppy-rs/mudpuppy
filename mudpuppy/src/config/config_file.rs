@@ -95,6 +95,8 @@ impl GlobalConfig {
 pub struct Config {
     #[serde(default)]
     pub muds: Vec<Mud>,
+    #[serde(default)]
+    pub mouse_enabled: bool, // Defaults to off - interferes with copy/paste!
     #[serde(default, flatten)]
     pub keybindings: KeyBindings,
 }

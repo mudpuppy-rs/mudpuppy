@@ -8,6 +8,7 @@ use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crossterm::event::MouseEvent;
 use futures::stream::FuturesUnordered;
 use pyo3::{pyclass, pymethods, Py, PyRefMut, Python};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -179,6 +180,18 @@ impl Client {
                 key: model_event,
             })?;
         }
+        Ok(())
+    }
+
+    pub fn mouse_event(
+        &mut self,
+        _futures: &mut FuturesUnordered<python::PyFuture>,
+        event: &MouseEvent,
+    ) -> Result<(), Error> {
+        debug!("mouse event: {event:?}");
+
+        // TODO(XXX): process mouse events.
+
         Ok(())
     }
 

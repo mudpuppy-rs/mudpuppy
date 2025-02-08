@@ -15,6 +15,10 @@
 # port = 6789
 # tls = "Disabled"
 
+# Uncomment to enable mouse mode. This may interfere with normal text selection for copy/pasting
+# and may not work in all terminals.
+# mouse = true
+
 [[binding]]
 mode = "mudlist"
 keys = "up"

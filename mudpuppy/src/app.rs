@@ -27,7 +27,7 @@ use tokio::select;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::time::{interval, MissedTickBehavior};
-use tracing::{error, info, instrument, trace, warn, Level};
+use tracing::{debug, error, info, instrument, trace, warn, Level};
 
 use crate::client::Client;
 use crate::config::{config_dir, config_file, GlobalConfig};
@@ -67,7 +67,8 @@ impl App {
     /// yielded from this function to initiate shutdown.
     #[allow(clippy::too_many_lines)] // right at threshold, consider refactor later.
     pub async fn run(&mut self, args: cli::Args) -> Result<()> {
-        let mut terminal = init_terminal()?;
+        let mouse_enabled = self.config.lookup(|c| c.mouse_enabled, false);
+        let mut terminal = init_terminal(mouse_enabled)?;
 
         let (event_tx, mut event_rx) = unbounded_channel();
         let (conn_tx, mut conn_rx) = unbounded_channel();
@@ -586,6 +587,8 @@ pub trait Tab: Debug + Send + Sync {
     ///
     /// # Errors
     /// Return an error if the event provokes an error state.
+    // TODO(XXX): is this needed? Session only uses it to forward key/mouse term events. Never
+    //   returns a tab action.
     fn term_event(
         &mut self,
         _state: &mut State,
@@ -743,12 +746,22 @@ pub enum TabAction {
     SwapRight,
 }
 
-fn init_terminal() -> io::Result<Terminal<impl Backend>> {
+fn init_terminal(mouse_enabled: bool) -> io::Result<Terminal<impl Backend>> {
     enable_raw_mode()?;
-    stdout().execute(EnterAlternateScreen)?;
+
+    let mut out = stdout();
+    out.execute(EnterAlternateScreen)?;
+
+    if mouse_enabled {
+        debug!("enabling mouse capture");
+        out.execute(crossterm::event::EnableMouseCapture)?;
+    }
+
+    // TODO(XXX): should support bracketed paste here w/ EnableBracketedPaste.
+
     // increase the cache size to avoid flickering for indeterminate layouts
     Layout::init_cache(NonZeroUsize::new(100).unwrap());
-    Terminal::new(CrosstermBackend::new(stdout()))
+    Terminal::new(CrosstermBackend::new(out))
 }
 
 pub(crate) fn restore_terminal() -> Result<()> {
