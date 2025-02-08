@@ -12,6 +12,8 @@ __all__ = [
     "Mud",
     "Tls",
     "KeyEvent",
+    "MouseEvent",
+    "MouseEventKind",
     "KeyBindings",
     "MudLine",
     "InputLine",
@@ -130,6 +132,78 @@ class KeyEvent:
     def modifiers(self) -> list[str]:
         """
         Return a list of key modifiers active for the key code.
+
+        Example: "ctrl", "shift", "alt"
+        """
+
+class MouseEventKind(StrEnum):
+    """
+    An enum describing possible `MouseEvent` types.
+    """
+
+    LeftButtonDown = auto()
+    """
+    The left mouse button was pressed.
+    """
+
+    RightButtonDown = auto()
+    """
+    The right mouse button was pressed.
+    """
+
+    MiddleButtonDown = auto()
+    """
+    The middle mouse button was pressed.
+    """
+
+    Moved = auto()
+    """
+    The mouse was moved.
+    """
+
+    ScrollDown = auto()
+    """
+    The mouse wheel was scrolled down.
+    """
+
+    ScrollUp = auto()
+    """
+    The mouse wheel was scrolled up.
+    """
+
+    ScrollLeft = auto()
+    """
+    The mouse wheel was scrolled left.
+    """
+
+    ScrollRight = auto()
+    """
+    The mouse wheel was scrolled right.
+    """
+
+class MouseEvent:
+    """
+    A mouse event.
+    """
+
+    kind: MouseEventKind
+    """
+    The `MouseEventKind` of mouse event that occurred.
+    """
+
+    column: int
+    """
+    The terminal column where the event occurred.
+    """
+
+    row: int
+    """
+    The terminal row where the event occurred.
+    """
+
+    def modifiers(self) -> list[str]:
+        """
+        Return a list of key modifiers active for the mouse event.
 
         Example: "ctrl", "shift", "alt"
         """
@@ -2306,6 +2380,11 @@ class EventType(StrEnum):
     An event emitted when a keyboard key was pressed.
     """
 
+    Mouse = auto()
+    """
+    An event emitted when there is mouse activity.
+    """
+
     Python = auto()
     """
     A custom event was emitted by a Python script.
@@ -2553,6 +2632,22 @@ class Event:
         key: KeyEvent
         """
         The `KeyEvent` describing the key that was pressed.
+        """
+
+    class Mouse:
+        """
+        An `EventType.Mouse` event. This is produced when there is mouse activity and the Mudpuppy config has
+        `mouse_enabled` set to `true`.
+        """
+
+        id: int
+        """
+        The session ID that received the mouse activity.
+        """
+
+        event: MouseEvent
+        """
+        The `MouseEvent` describing the mouse activity.
         """
 
     class GmcpEnabled:

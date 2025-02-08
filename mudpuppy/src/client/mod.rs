@@ -24,8 +24,8 @@ use crate::config::GlobalConfig;
 use crate::error::Error;
 use crate::idmap::{IdMap, Identifiable};
 use crate::model::{
-    Alias, AliasConfig, InputLine, KeyEvent as PyKeyEvent, MudLine, PromptMode, PromptSignal,
-    SessionInfo, Trigger, TriggerConfig,
+    Alias, AliasConfig, InputLine, KeyEvent as PyKeyEvent, MouseEvent as PyMouseEvent, MudLine,
+    PromptMode, PromptSignal, SessionInfo, Trigger, TriggerConfig,
 };
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation};
 use crate::net::{connection, stream, telnet};
@@ -188,9 +188,13 @@ impl Client {
         _futures: &mut FuturesUnordered<python::PyFuture>,
         event: &MouseEvent,
     ) -> Result<(), Error> {
-        debug!("mouse event: {event:?}");
-
-        // TODO(XXX): process mouse events.
+        if let Ok(mouse_event) = PyMouseEvent::try_from(*event) {
+            //debug!("mouse event: {mouse_event}");
+            self.event_tx.send(python::Event::Mouse {
+                id: self.info.id,
+                event: mouse_event,
+            })?;
+        }
 
         Ok(())
     }
