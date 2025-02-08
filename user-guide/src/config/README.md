@@ -37,6 +37,8 @@ MUDPUPPY_CONFIG=$HOME/mudpuppy-test/config MUDPUPPY_DATA=$HOME/mudpuppy-test/dat
 ### Example Config
 
 ```toml
+mouse_enabled = false
+
 [[muds]]
 name = "DuneMUD (TLS)"
 host = "dunemud.net"
@@ -47,6 +49,8 @@ tls = "Enabled"
 keys = "shift-up"
 action = "scrolltop"
 ```
+
+See [Mouse support](./mouse.md) for more information on `mouse_enabled`.
 
 See [MUDs](./muds.md) for more information on the MUD config fields.
 

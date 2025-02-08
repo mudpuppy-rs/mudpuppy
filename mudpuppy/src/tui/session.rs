@@ -124,11 +124,17 @@ impl Tab for Widget {
             return Ok(None);
         };
 
-        let TermEvent::Key(key_event) = event else {
-            return Ok(None);
-        };
+        match event {
+            TermEvent::Key(key_event) => {
+                client.key_event(futures, key_event)?;
+            }
+            TermEvent::Mouse(mouse_event) => {
+                client.mouse_event(futures, mouse_event)?;
+            }
+            _ => {}
+        }
 
-        client.key_event(futures, key_event).map(|()| None)
+        Ok(None)
     }
 
     fn draw(&mut self, state: &mut State, frame: &mut Frame<'_>, area: Rect) -> Result<()> {
