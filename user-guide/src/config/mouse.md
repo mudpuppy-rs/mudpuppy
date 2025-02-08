@@ -21,3 +21,18 @@ copy/paste. Support for mouse mode varies by terminal.
 
 [MUD]: ./muds.md
 [Keybinding]: ./keybindings.md
+
+## Mouse Scrolling
+
+When `mouse_enabled` is `true` you can choose whether or not mouse scroll events
+are used to scroll the output history scrollback buffer using the global setting
+`mouse_scroll`. For example:
+
+```toml
+# Enable mouse support, and mouse scrolling of output history
+mouse_enabled = true
+mouse_scroll = true
+```
+
+You can change `mouse_scroll` without restarting Mudpuppy, but remeber that
+changes to `mouse_enabled` require a restart.

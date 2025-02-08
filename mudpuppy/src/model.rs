@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
+use crossterm::event::{MouseEvent, MouseEventKind};
 use pyo3::{pyclass, pymethods, Py, PyAny, PyObject, PyRef, Python};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -392,6 +393,24 @@ impl Shortcut {
 
     fn __repr__(&self) -> String {
         format!("{self:?}")
+    }
+}
+
+impl TryFrom<MouseEvent> for Shortcut {
+    type Error = ();
+
+    fn try_from(event: MouseEvent) -> Result<Self, Self::Error> {
+        Ok(match event {
+            MouseEvent {
+                kind: MouseEventKind::ScrollUp,
+                ..
+            } => Self::ScrollUp,
+            MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                ..
+            } => Self::ScrollDown,
+            _ => return Err(()),
+        })
     }
 }
 
