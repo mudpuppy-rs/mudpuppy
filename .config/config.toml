@@ -16,8 +16,11 @@
 # tls = "Disabled"
 
 # Uncomment to enable mouse mode. This may interfere with normal text selection for copy/pasting
-# and may not work in all terminals.
-# mouse = true
+# and may not work in all terminals. Requires restarting Mudpuppy to change.
+# mouse_enabled = true
+
+# Uncomment to enable scrolling buffer history with the mouse wheel. Requires mouse_enabled = true.
+# mouse_scroll = true
 
 [[binding]]
 mode = "mudlist"

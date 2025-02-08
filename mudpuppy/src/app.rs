@@ -4,7 +4,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyEvent, MouseEvent};
 use futures::channel::mpsc::{channel as futures_channel, Receiver};
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, SinkExt, StreamExt};
@@ -294,13 +294,20 @@ impl App {
         event_futures: &mut FuturesUnordered<python::PyFuture>,
         event: &TermEvent,
     ) -> Result<Option<TabAction>, Error> {
-        if let TermEvent::Key(key_event) = event {
-            self.handle_key_event(state, event_futures, key_event).await
-        } else {
-            let Some(current_tab) = self.tabs.get_mut(state.selected_tab) else {
-                return Ok(None);
-            };
-            current_tab.term_event(state, event_futures, event)
+        match event {
+            TermEvent::Key(key_event) => {
+                self.handle_key_event(state, event_futures, key_event).await
+            }
+            TermEvent::Mouse(mouse_event) => {
+                self.handle_mouse_event(state, event_futures, mouse_event)
+                    .await
+            }
+            _ => {
+                let Some(current_tab) = self.tabs.get_mut(state.selected_tab) else {
+                    return Ok(None);
+                };
+                current_tab.term_event(state, event_futures, event)
+            }
         }
     }
 
@@ -414,6 +421,30 @@ impl App {
         info!("switched to tab {} ({})", state.selected_tab, new_title);
         // TODO(XXX): tab switch event?
         Ok(())
+    }
+
+    async fn handle_mouse_event(
+        &mut self,
+        state: &mut State,
+        event_futures: &mut FuturesUnordered<python::PyFuture>,
+        mouse_event: &MouseEvent,
+    ) -> Result<Option<TabAction>, Error> {
+        let Some(current_tab) = self.tabs.get_mut(state.selected_tab) else {
+            return Ok(None);
+        };
+
+        // If mouse scroll isn't enabled, forward the mouse event to the current tab.
+        if !self.config.lookup(|c| c.mouse_scroll, false) {
+            return current_tab.term_event(state, event_futures, &TermEvent::Mouse(*mouse_event));
+        }
+
+        // If possible, translate the mouse event into a shortcut and handle it that way.
+        if let Ok(shortcut) = Shortcut::try_from(*mouse_event) {
+            return current_tab.shortcut(state, shortcut).await.map(|_| None);
+        }
+
+        // Any other mouse events go to the current tab.
+        current_tab.term_event(state, event_futures, &TermEvent::Mouse(*mouse_event))
     }
 
     async fn new_session(
