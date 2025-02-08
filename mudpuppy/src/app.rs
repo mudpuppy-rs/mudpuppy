@@ -4,6 +4,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use crossterm::event::KeyEvent;
 use futures::channel::mpsc::{channel as futures_channel, Receiver};
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, SinkExt, StreamExt};
@@ -293,12 +294,24 @@ impl App {
         event_futures: &mut FuturesUnordered<python::PyFuture>,
         event: &TermEvent,
     ) -> Result<Option<TabAction>, Error> {
+        if let TermEvent::Key(key_event) = event {
+            self.handle_key_event(state, event_futures, key_event).await
+        } else {
+            let Some(current_tab) = self.tabs.get_mut(state.selected_tab) else {
+                return Ok(None);
+            };
+            current_tab.term_event(state, event_futures, event)
+        }
+    }
+
+    async fn handle_key_event(
+        &mut self,
+        state: &mut State,
+        event_futures: &mut FuturesUnordered<python::PyFuture>,
+        key_event: &KeyEvent,
+    ) -> Result<Option<TabAction>, Error> {
         let Some(current_tab) = self.tabs.get_mut(state.selected_tab) else {
             return Ok(None);
-        };
-
-        let TermEvent::Key(key_event) = event else {
-            return current_tab.term_event(state, event_futures, event);
         };
 
         // Ignore release & repeat events. These only happen on Windows in practice and we're not that specific.
@@ -306,6 +319,7 @@ impl App {
             return Ok(None);
         }
 
+        // If we're in an error state - handle the keys for dismissing the popup.
         if let UiState::Error(err) = &state.ui_state {
             if err.fatal() {
                 state.ui_state = UiState::Exit;
@@ -315,49 +329,42 @@ impl App {
                 crossterm::event::KeyCode::Char('c') => {
                     trace!("dismissed error ui_state");
                     state.ui_state = UiState::Running;
-                    return Ok(None);
                 }
                 crossterm::event::KeyCode::Char('q') => {
                     state.ui_state = UiState::Exit;
                     return Ok(None);
                 }
-                _ => return Ok(None), // Eat the keypress
+                _ => {} // Eat other key presses.
             }
+            return Ok(None);
         }
 
+        // If there's a keybinding for this key event we want to translate it into a shortcut and
+        // not dispatch the key event to the current tab - it'll get the shortcut instead.
+        //
+        // If there's no keybinding, then dispatch the raw key event.
         let Some(shortcut) = self.config.key_binding(current_tab.input_mode(), key_event) else {
-            return current_tab.term_event(state, event_futures, event);
+            return current_tab.term_event(state, event_futures, &TermEvent::Key(*key_event));
         };
 
         trace!("mapped {key_event:?} to shortcut: {shortcut:?}");
-        match shortcut {
-            Shortcut::Quit => {
-                state.ui_state = UiState::Exit;
-                Ok(None)
-            }
-            // TODO(XXX): try from for Shortcut -> TabAction?
-            Shortcut::TabNext => self
-                .handle_tab_action(state, TabAction::Next)
-                .await
-                .map(|()| None),
-            Shortcut::TabPrev => self
-                .handle_tab_action(state, TabAction::Prev)
-                .await
-                .map(|()| None),
-            Shortcut::TabClose => self
-                .handle_tab_action(state, TabAction::Close)
-                .await
-                .map(|()| None),
-            Shortcut::TabSwapLeft => self
-                .handle_tab_action(state, TabAction::SwapLeft)
-                .await
-                .map(|()| None),
-            Shortcut::TabSwapRight => self
-                .handle_tab_action(state, TabAction::SwapRight)
-                .await
-                .map(|()| None),
-            _ => current_tab.shortcut(state, shortcut).await,
+
+        // Intercept Quit to exit the application.
+        if let Shortcut::Quit = shortcut {
+            state.ui_state = UiState::Exit;
+            return Ok(None);
         }
+
+        // If the shortcut is a tab action, handle it ourselves.
+        if let Ok(tab_action) = TabAction::try_from(shortcut) {
+            return self
+                .handle_tab_action(state, tab_action)
+                .await
+                .map(|()| None);
+        }
+
+        // Let the current table handle everything else.
+        current_tab.shortcut(state, shortcut).await
     }
 
     async fn handle_tab_action(
@@ -744,6 +751,21 @@ pub enum TabAction {
     Prev,
     SwapLeft,
     SwapRight,
+}
+
+impl TryFrom<Shortcut> for TabAction {
+    type Error = ();
+
+    fn try_from(shortcut: Shortcut) -> std::result::Result<Self, Self::Error> {
+        Ok(match shortcut {
+            Shortcut::TabNext => Self::Next,
+            Shortcut::TabPrev => Self::Prev,
+            Shortcut::TabClose => Self::Close,
+            Shortcut::TabSwapLeft => Self::SwapLeft,
+            Shortcut::TabSwapRight => Self::SwapRight,
+            _ => return Err(()),
+        })
+    }
 }
 
 fn init_terminal(mouse_enabled: bool) -> io::Result<Terminal<impl Backend>> {
