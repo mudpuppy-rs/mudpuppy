@@ -1,12 +1,14 @@
-use crate::client::input as client_input;
-use crate::error::Error;
-use crate::Result;
+use std::collections::HashMap;
+
 use ansi_to_tui::IntoText;
 use ratatui::layout::{Position, Rect};
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
-use std::collections::HashMap;
+
+use crate::client::input as client_input;
+use crate::error::Error;
+use crate::Result;
 
 #[derive(Debug, Default)]
 pub(super) struct Input {}
