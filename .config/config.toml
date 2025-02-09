@@ -113,6 +113,10 @@ keys = "f3"
 action = "togglelinewrap"
 
 [[binding]]
+keys = "f8"
+action = "ToggleMouseMode"
+
+[[binding]]
 keys = "up"
 action = "historyprevious"
 
