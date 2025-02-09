@@ -57,7 +57,7 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.75.0 # MSRV
+          toolchain: 1.80.0 # MSRV
 
       - name: cargo test (debug; all features)
         run: cargo test --locked --all-features
