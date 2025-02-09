@@ -819,6 +819,7 @@ fn init_terminal(mouse_enabled: bool) -> io::Result<Terminal<impl Backend>> {
 
 pub(crate) fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
+    stdout().execute(crossterm::event::DisableMouseCapture)?;
     stdout().execute(LeaveAlternateScreen)?;
     Ok(())
 }
