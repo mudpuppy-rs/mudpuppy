@@ -44,6 +44,7 @@ toml_edit = { workspace = true }
 tracing = { workspace = true }
 tracing-error = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "serde"] }
+tui-framework-experiment = { workspace = true }
 unicode-segmentation = { workspace = true, features = [] }
 unicode-width = { workspace = true }
 webpki-roots = { workspace = true }
@@ -61,4 +62,3 @@ assets = [
     ["target/release/mudpuppy", "usr/bin/", "755"],
     ["../README.md", "usr/share/doc/mudpuppy/README", "644"],
 ]
-

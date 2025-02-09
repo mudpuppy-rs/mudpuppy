@@ -73,6 +73,7 @@ pub fn mudpuppy_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<tui::buffer::BufferDirection>()?;
     m.add_class::<tui::extrabuffer::ExtraBuffer>()?;
     m.add_class::<tui::gauge::Gauge>()?;
+    m.add_class::<tui::button::Button>()?;
     Ok(())
 }
 
@@ -1087,6 +1088,56 @@ impl PyApp {
                     .client_for_id_mut(session_id)
                     .ok_or(Error::UnknownSession(session_id))?
                     .gauges
+                    .get(new_id)
+                    .cloned())
+            })
+        })
+    }
+
+    #[pyo3(signature = (session_id, callback, *, label=None, layout_name=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn new_button<'py>(
+        &self,
+        py: Python<'py>,
+        session_id: u32,
+        callback: Py<PyAny>,
+        label: Option<String>,
+        layout_name: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if !self.config.lookup(|c| c.mouse_enabled, false) {
+            warn!("creating a button, but mouse support not enabled");
+        }
+
+        with_state!(self, py, |mut state| {
+            Python::with_gil(|pyy| Self::require_coroutine(pyy, "button callback", &callback))?;
+
+            let new_id = state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .buttons
+                .construct(|id| {
+                    Python::with_gil(|pyy| {
+                        Py::new(
+                            pyy,
+                            tui::button::Button {
+                                id,
+                                layout_name: layout_name.unwrap_or_default(),
+                                label: label.unwrap_or_default(),
+                                callback,
+                                toggle_press: false,
+                            },
+                        )
+                        .unwrap()
+                    })
+                });
+
+            debug!("constructed new button with ID {new_id} for session {session_id}");
+
+            Python::with_gil(|_pyy| {
+                Ok(state
+                    .client_for_id_mut(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
+                    .buttons
                     .get(new_id)
                     .cloned())
             })

@@ -1,4 +1,5 @@
 pub mod buffer;
+pub(crate) mod button;
 pub(crate) mod extrabuffer;
 pub(crate) mod gauge;
 mod input;
