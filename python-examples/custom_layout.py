@@ -36,6 +36,7 @@ class TestCustomLayout:
     status_on_left: bool = False
     gauges: Optional[Dict[str, Gauge]] = None
     nav_buttons: Optional[Dict[int, Button]] = None
+    layout_manager: Optional[LayoutManager] = None
 
     # TODO(XXX): expose status_on_left setting?
     def __init__(self, sesh_id: int):
@@ -57,6 +58,7 @@ class TestCustomLayout:
             self.status_buffer.border_left = True
 
     async def layout_init(self, layout_manager: LayoutManager):
+        self.layout_manager = layout_manager
         existing_buffers = await mudpuppy_core.buffers(self.session_id)
 
         status_buffer_id = next(

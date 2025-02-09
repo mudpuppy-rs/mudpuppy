@@ -14,6 +14,13 @@ async def markup_input(event: Event):
     """
     assert isinstance(event, Event.KeyPress)
 
+    global annotation
+    if annotation is None:
+        annotation = await mudpuppy_core.new_annotation(  # type: ignore # TODO(XXX): stubs for annotations.
+            event.id, 0, 0, "", "input_area", enabled=False, rgb=(255, 0, 0)
+        )
+        logging.debug(f"annotation with ID {annotation.id}: {annotation}")
+
     i = await mudpuppy_core.input(event.id)
     if i.telnet_echo() == EchoState.Password:
         i.clear_markup()
@@ -38,6 +45,9 @@ def highlight_cmd(session_id: int, i: Input, cmd: str):
 def spellcheck_input(session_id: int, i: Input, parts: list[str]):
     i.clear_markup()
 
+    if annotation is not None:
+        annotation.enabled = False  # We'll turn it back on if needed.
+
     start = 0
     for part in parts:
         end = start + len(part)
@@ -51,6 +61,18 @@ def spellcheck_input(session_id: int, i: Input, parts: list[str]):
             i.add_markup(start, cformat("<bold><red>"))
             i.add_markup(end, cformat("<reset>"))
 
+            if annotation is not None and i.cursor() == end:
+                logging.debug(
+                    f"bad word: {clean_part} at {start}, {end}. cursor is {i.cursor()}"
+                )
+                from itertools import islice
+
+                suggestions = ", ".join(islice(dictionary.suggest(clean_part), 3))
+                annotation.enabled = True
+                annotation.row = 0
+                annotation.column = i.cursor()
+                annotation.text = suggestions
+
         start = end + 1  # Offset by 1 to account for the space between words.
 
 
@@ -63,3 +85,5 @@ except ImportError:
     logging.warning("spylls is not in the PYTHONPATH. Spellchecking will be disabled.")
     logging.warning("perhaps you need to 'pip install spylls'?")
     dictionary = None
+
+annotation = None

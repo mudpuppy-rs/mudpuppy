@@ -19,6 +19,7 @@ use crate::client::output;
 use crate::config::{edit_global, edit_mud, GlobalConfig};
 use crate::error::Error;
 use crate::model::{InputMode, SessionInfo, Shortcut};
+use crate::tui::annotation::draw_annotation;
 use crate::tui::button::draw_button;
 use crate::tui::gauge::draw_gauge;
 use crate::tui::input::{self, Input};
@@ -266,6 +267,10 @@ impl Tab for Widget {
             // Keep track of where each button drew itself for event handling.
             let area = draw_button(button, frame, &sections)?;
             self.button_areas.insert(*i, area);
+        }
+
+        for (_, annotation) in &client.annotations {
+            draw_annotation(annotation, frame, &sections)?;
         }
 
         Ok(())

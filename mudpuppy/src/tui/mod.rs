@@ -1,3 +1,4 @@
+pub(crate) mod annotation;
 pub mod buffer;
 pub(crate) mod button;
 pub(crate) mod extrabuffer;
