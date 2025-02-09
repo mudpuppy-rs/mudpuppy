@@ -30,6 +30,7 @@ use crate::model::{
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation};
 use crate::net::{connection, stream, telnet};
 use crate::python;
+use crate::tui::button::Button;
 use crate::tui::extrabuffer::ExtraBuffer;
 use crate::tui::gauge::Gauge;
 use crate::tui::layout::LayoutNode;
@@ -49,6 +50,7 @@ pub struct Client {
     pub layout: Py<LayoutNode>,
     pub extra_buffers: IdMap<ExtraBuffer>,
     pub gauges: IdMap<Py<Gauge>>,
+    pub buttons: IdMap<Py<Button>>,
     pub gmcp: Gmcp,
     config: GlobalConfig,
     event_tx: UnboundedSender<python::Event>,
@@ -85,6 +87,7 @@ impl Client {
             layout: session::initial_layout(),
             extra_buffers: IdMap::default(),
             gauges: IdMap::default(),
+            buttons: IdMap::default(),
             gmcp: Gmcp::new(id),
             config,
             event_tx,

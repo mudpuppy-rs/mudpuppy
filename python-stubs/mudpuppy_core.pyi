@@ -46,6 +46,8 @@ __all__ = [
     "BufferDirection",
     "ExtraBuffer",
     "Gauge",
+    "Button",
+    "ButtonCallable",
 ]
 
 from typing import Optional, Any, Callable, Awaitable, Tuple
@@ -1541,6 +1543,42 @@ class Gauge:
         """
         ...
 
+type ButtonCallable = Callable[[int, int], Awaitable[None]]
+"""
+An async function that is called when a button is clicked.
+
+Typically assigned to a `Button`'s `callback` property.
+
+The callable is called with:
+
+* the `int` session ID of the session that owns the button that was clicked.
+* the `int` button ID of the button that was clicked.
+"""
+
+class Button:
+    """
+    A button widget that can be created with `MudpuppyCore.new_button()`.
+    """
+
+    id: int
+    """
+    The read-only `int` ID assigned to the button.
+    """
+
+    layout_name: str
+    """
+    The layout name where the `Button` should be drawn.
+
+    Can be both read and set.
+    """
+
+    label: str
+    """
+    The label for the button.
+    """
+
+    callback: ButtonCallable
+
 class Input:
     """
     The input area of the client window.
@@ -2212,6 +2250,23 @@ class MudpuppyCore:
 
         Returns the created `Gauge` instance. You can read/write values of this instance
         to customize the gauge.
+        """
+        ...
+
+    async def new_button(
+        self,
+        session_id: int,
+        callback: ButtonCallable,
+        *,
+        label: Optional[str] = None,
+        layout_name: Optional[str] = None,
+    ) -> Button:
+        """
+        Creates a new `Button` based on the provided arguments, for the given `session_id`.
+        The `ButtonCallable` will be invoked when the button is clicked.
+
+        Returns the created `Button` instance. You can read/write values of this instance
+        to customize the button.
         """
         ...
 

@@ -1,19 +1,25 @@
+use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use crossterm::event::MouseEvent;
 use futures::stream::FuturesUnordered;
 use pyo3::{Py, PyErr, PyRef, Python};
-use ratatui::crossterm::event::Event as TermEvent;
+use ratatui::crossterm::event::{
+    Event as TermEvent, MouseButton, MouseEventKind as TermMouseEventKind,
+};
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::Frame;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::app::{State, Tab, TabAction, TabKind};
 use crate::client::output;
 use crate::config::{edit_global, edit_mud, GlobalConfig};
 use crate::error::Error;
 use crate::model::{InputMode, SessionInfo, Shortcut};
+use crate::tui::button::draw_button;
 use crate::tui::gauge::draw_gauge;
 use crate::tui::input::{self, Input};
 use crate::tui::layout::{LayoutNode, PyConstraint};
@@ -28,6 +34,7 @@ pub struct Widget {
 
     mud_buffer: MudBuffer,
     scroll_window: ScrollWindow,
+    button_areas: HashMap<u32, Rect>,
 }
 
 impl Widget {
@@ -40,7 +47,57 @@ impl Widget {
             session,
             mud_buffer,
             scroll_window,
+            button_areas: HashMap::new(),
         })
+    }
+
+    fn handle_button_click(
+        &mut self,
+        state: &mut State,
+        futures: &mut FuturesUnordered<python::PyFuture>,
+        mouse_event: MouseEvent,
+    ) -> Result<ControlFlow<()>> {
+        // For now, we only react to left mouse button press events for buttons.
+        if mouse_event.kind != TermMouseEventKind::Down(MouseButton::Left) {
+            return Ok(ControlFlow::Continue(()));
+        }
+
+        let row = mouse_event.row;
+        let column = mouse_event.column;
+        for (id, area) in &self.button_areas {
+            let area_contains_click = area.left() <= column
+                && column < area.right()
+                && area.top() <= row
+                && row < area.bottom();
+            if !area_contains_click {
+                continue;
+            }
+
+            debug!("button ID {id} was clicked.");
+
+            let Some(client) = state.client_for_id_mut(self.session.id) else {
+                warn!("missing client for session tab: {}", self.session);
+                return Ok(ControlFlow::Continue(()));
+            };
+
+            Python::with_gil(|py| {
+                let mut btn = client.buttons.get(*id).unwrap().borrow_mut(py);
+                btn.toggle_press = true;
+
+                trace!("preparing callback future for button {id}");
+                futures.push(Box::pin(pyo3_async_runtimes::tokio::into_future(
+                    btn.callback
+                        .call1(py, (self.session.id, btn.id))?
+                        .into_bound(py),
+                )?));
+
+                Ok::<_, Error>(())
+            })?;
+
+            return Ok(ControlFlow::Break(()));
+        }
+
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -130,16 +187,27 @@ impl Tab for Widget {
         futures: &mut FuturesUnordered<python::PyFuture>,
         event: &TermEvent,
     ) -> Result<Option<TabAction>, Error> {
-        let Some(client) = state.client_for_id_mut(self.session.id) else {
-            warn!("missing client for session tab: {}", self.session);
-            return Ok(None);
-        };
-
         match event {
             TermEvent::Key(key_event) => {
+                let Some(client) = state.client_for_id_mut(self.session.id) else {
+                    warn!("missing client for session tab: {}", self.session);
+                    return Ok(None);
+                };
                 client.key_event(futures, key_event)?;
             }
             TermEvent::Mouse(mouse_event) => {
+                // Check left click events against button areas, pushing a callback future
+                // if a button was hit by the click.
+                if self.handle_button_click(state, futures, *mouse_event)? == ControlFlow::Break(())
+                {
+                    return Ok(None); // buton was clicked, don't send mouse event.
+                }
+
+                // Non-button click mouse events are passed onward.
+                let Some(client) = state.client_for_id_mut(self.session.id) else {
+                    warn!("missing client for session tab: {}", self.session);
+                    return Ok(None);
+                };
                 client.mouse_event(futures, mouse_event)?;
             }
             _ => {}
@@ -192,6 +260,12 @@ impl Tab for Widget {
 
         for (_, gauge) in &client.gauges {
             draw_gauge(gauge, frame, &sections)?;
+        }
+
+        for (i, button) in &client.buttons {
+            // Keep track of where each button drew itself for event handling.
+            let area = draw_button(button, frame, &sections)?;
+            self.button_areas.insert(*i, area);
         }
 
         Ok(())
