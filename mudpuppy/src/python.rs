@@ -1144,6 +1144,55 @@ impl PyApp {
         })
     }
 
+    #[pyo3(signature = (session_id, row, column, text, layout_name, *, enabled = true, rgb = None))]
+    #[allow(clippy::too_many_arguments)]
+    fn new_annotation<'py>(
+        &self,
+        py: Python<'py>,
+        session_id: u32,
+        row: u16,
+        column: u16,
+        text: String,
+        layout_name: String,
+        enabled: bool,
+        rgb: Option<(u8, u8, u8)>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        with_state!(self, py, |mut state| {
+            let new_id = state
+                .client_for_id_mut(session_id)
+                .ok_or(Error::UnknownSession(session_id))?
+                .annotations
+                .construct(|id| {
+                    Python::with_gil(|pyy| {
+                        Py::new(
+                            pyy,
+                            tui::annotation::Annotation {
+                                id,
+                                row,
+                                column,
+                                enabled,
+                                text,
+                                layout_name,
+                                color: rgb.map(|(r, g, b)| Color::Rgb(r, g, b)).unwrap_or_default(),
+                            },
+                        )
+                        .unwrap()
+                    })
+                });
+
+            debug!("constructed new annotation with ID {new_id} for session {session_id}");
+
+            Python::with_gil(|_pyy| {
+                Ok(state
+                    .client_for_id_mut(session_id)
+                    .ok_or(Error::UnknownSession(session_id))?
+                    .annotations
+                    .get(new_id)
+                    .cloned())
+            })
+        })
+    }
+
     fn gmcp_enabled<'py>(&self, py: Python<'py>, session_id: u32) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
             Ok(state
