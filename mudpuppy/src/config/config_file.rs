@@ -244,4 +244,26 @@ pub fn edit_mud(name: &str, key: &str, v: impl Into<Value> + Debug) -> Result<()
     Ok(())
 }
 
+pub fn edit_global(key: &str, v: impl Into<Value> + Debug) -> Result<()> {
+    let mut config_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .append(false)
+        .open(config_file())?;
+
+    let mut config_data = String::new();
+    config_file.read_to_string(&mut config_data)?;
+    let mut config_doc = config_data
+        .parse::<DocumentMut>()
+        .map_err(|err| Error::Config(ConfigError::TomlEdit(err)))?;
+
+    info!("updated global {key} to {v:?}");
+    config_doc[key] = Item::Value(v.into());
+
+    config_file.rewind()?;
+    config_file.write_all(config_doc.to_string().as_bytes())?;
+
+    Ok(())
+}
+
 const CONFIG: &str = include_str!("../../../.config/config.toml");

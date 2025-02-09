@@ -482,6 +482,7 @@ pub enum Shortcut {
 
     ToggleLineWrap,
     ToggleInputEcho,
+    ToggleMouseMode,
 
     HistoryNext,
     HistoryPrevious,

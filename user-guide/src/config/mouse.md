@@ -11,9 +11,6 @@ mouse_enabled = true
 Make sure this configuration is outside of any [MUD] or [Keybinding] stanzas in
 your config TOML.
 
-Note that unlike other settings, you **must** restart Mudpuppy for a change to
-`mouse_enabled` to take effect.
-
 <div class="warning">
 <strong>Important:</strong> mouse mode often interferes with selecting text to
 copy/paste. Support for mouse mode varies by terminal.
@@ -33,6 +30,3 @@ are used to scroll the output history scrollback buffer using the global setting
 mouse_enabled = true
 mouse_scroll = true
 ```
-
-You can change `mouse_scroll` without restarting Mudpuppy, but remeber that
-changes to `mouse_enabled` require a restart.

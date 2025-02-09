@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 
 use crate::app::{State, Tab, TabAction, TabKind};
 use crate::client::output;
-use crate::config::{edit_mud, GlobalConfig};
+use crate::config::{edit_global, edit_mud, GlobalConfig};
 use crate::error::Error;
 use crate::model::{InputMode, SessionInfo, Shortcut};
 use crate::tui::gauge::draw_gauge;
@@ -100,6 +100,10 @@ impl Tab for Widget {
                         if echo_input { "enabled" } else { "disabled" }
                     ),
                 });
+            }
+            Shortcut::ToggleMouseMode => {
+                let current_status = self.config.lookup(|c| c.mouse_enabled, false);
+                edit_global("mouse_enabled", !current_status)?;
             }
             _ => {}
         }
