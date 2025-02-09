@@ -578,6 +578,20 @@ fn config_reload_event(
         error!("{err}");
         state.ui_state = err.into();
     }
+
+    // Update the mouse capture state.
+    if config.lookup(|c| c.mouse_enabled, false) {
+        if let Err(e) = stdout().execute(crossterm::event::EnableMouseCapture) {
+            error!("failed to enable mouse capture: {e}");
+        }
+        debug!("enabled mouse mode");
+    } else {
+        if let Err(e) = stdout().execute(crossterm::event::DisableMouseCapture) {
+            error!("failed to disable mouse capture: {e}");
+        }
+        debug!("disabled mouse mode");
+    }
+
     // Notify each tab to reprocess the updated config.
     if let Err(err) = tabs.iter_mut().try_for_each(|tab| tab.reload_config()) {
         error!("{err}");
