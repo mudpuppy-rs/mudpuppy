@@ -17,20 +17,26 @@ async def markup_input(event: Event):
     global annotation
     if annotation is None:
         annotation = await mudpuppy_core.new_annotation(  # type: ignore # TODO(XXX): stubs for annotations.
-            event.id, 0, 0, "", "input_area", enabled=False, rgb=(255, 0, 0)
+            event.id, 0, 0, "", "input_area", rgb=(255, 0, 0)
         )
         logging.debug(f"annotation with ID {annotation.id}: {annotation}")
+    else:
+        annotation.text = ""
 
     i = await mudpuppy_core.input(event.id)
+    i.clear_markup()
+
     if i.telnet_echo() == EchoState.Password:
-        i.clear_markup()
         return  # Don't try to spellcheck/highlight masked password entry!
 
-    to_be_sent = i.value().sent
-    if len(to_be_sent) <= 1:
-        return
+    spellcheck_input(event.id, i)
 
-    spellcheck_input(event.id, i, to_be_sent.split())
+
+@on_event(EventType.InputLine)
+async def on_input(event: Event):
+    global annotation
+    if annotation is not None:
+        annotation.text = ""
 
 
 def highlight_cmd(session_id: int, i: Input, cmd: str):
@@ -42,11 +48,8 @@ def highlight_cmd(session_id: int, i: Input, cmd: str):
     i.add_markup(len(cmd), cformat("<reset>"))
 
 
-def spellcheck_input(session_id: int, i: Input, parts: list[str]):
-    i.clear_markup()
-
-    if annotation is not None:
-        annotation.enabled = False  # We'll turn it back on if needed.
+def spellcheck_input(session_id: int, i: Input):
+    parts = i.value().sent.split()
 
     start = 0
     for part in parts:
@@ -68,7 +71,6 @@ def spellcheck_input(session_id: int, i: Input, parts: list[str]):
                 from itertools import islice
 
                 suggestions = ", ".join(islice(dictionary.suggest(clean_part), 3))
-                annotation.enabled = True
                 annotation.row = 0
                 annotation.column = i.cursor()
                 annotation.text = suggestions

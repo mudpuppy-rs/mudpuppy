@@ -1144,7 +1144,7 @@ impl PyApp {
         })
     }
 
-    #[pyo3(signature = (session_id, row, column, text, layout_name, *, enabled = true, rgb = None))]
+    #[pyo3(signature = (session_id, row, column, text, layout_name, *, rgb = None))]
     #[allow(clippy::too_many_arguments)]
     fn new_annotation<'py>(
         &self,
@@ -1154,7 +1154,6 @@ impl PyApp {
         column: u16,
         text: String,
         layout_name: String,
-        enabled: bool,
         rgb: Option<(u8, u8, u8)>,
     ) -> PyResult<Bound<'py, PyAny>> {
         with_state!(self, py, |mut state| {
@@ -1170,7 +1169,6 @@ impl PyApp {
                                 id,
                                 row,
                                 column,
-                                enabled,
                                 text,
                                 layout_name,
                                 color: rgb.map(|(r, g, b)| Color::Rgb(r, g, b)).unwrap_or_default(),

@@ -22,9 +22,6 @@ pub struct Annotation {
     pub layout_name: String,
 
     #[pyo3(get, set)]
-    pub enabled: bool,
-
-    #[pyo3(get, set)]
     pub row: u16,
 
     #[pyo3(get, set)]
@@ -66,9 +63,6 @@ pub fn draw_annotation(
 ) -> Result<()> {
     Python::with_gil(|py| {
         let annotation = annotation.borrow_mut(py);
-        if !annotation.enabled {
-            return Ok(());
-        }
 
         let area = sections
             .get(&annotation.layout_name)
