@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -179,8 +180,11 @@ where
                     continue;
                 }
                 let symbol = if symbol.is_empty() { " " } else { symbol };
+
+                let (symbol, width) = simplify_complex_emoji(symbol);
+
                 buf[(area.left() + x, area.top() + y)]
-                    .set_symbol(symbol)
+                    .set_symbol(&symbol)
                     .set_style(style);
                 x += u16::try_from(width)
                     .map_err(|e| Error::Internal(format!("bad symbol width for {symbol}: {e}")))?;
@@ -194,6 +198,60 @@ where
     }
 
     Ok(()) // Rendered all available lines.
+}
+
+/// Simplify symbols that are a sequence of emoji
+///
+/// Presently Ratatui doesn't handle these correctly, resulting in buffer corruption when
+/// the cells they occupy are redrawn.
+///
+/// In most cases we can hack around this by just extracting the first emoji from the overall
+/// grapheme symbol. We can't use unicode segmentation for this because it's _already_ produced
+/// this `symbol`.
+///
+/// For most cases we drop everything but the first emoji. For regional indicator flags
+/// we preserve both characters, since that seems to render OK and returning just the first
+/// symbol makes the content unreadable.
+///
+/// This only picks up subsequent emoji in the supplementary plane (leading 0xF0) but in
+/// practice that seems sufficient for this hacky workaround.
+// TODO(XXX): revisit as upstream support evolves.
+fn simplify_complex_emoji(symbol: &str) -> (Cow<'_, str>, usize) {
+    // Too small to be of interest.
+    if symbol.len() <= 3 {
+        return (symbol.into(), symbol.width());
+    }
+
+    let mut chars = symbol.chars();
+    let is_regional = |c: char| {
+        let cp = c as u32;
+        (0x1F1E6..=0x1F1FF).contains(&cp)
+    };
+    if let Some(first_char) = chars.next() {
+        if is_regional(first_char) {
+            if let Some(second_char) = chars.next() {
+                if is_regional(second_char) {
+                    let mut flag_str = String::with_capacity(8);
+                    flag_str.push(first_char);
+                    flag_str.push(second_char);
+                    let width = flag_str.width();
+                    return (Cow::Owned(flag_str), width);
+                }
+            }
+        }
+    }
+
+    let bytes = symbol.as_bytes();
+    let first_part_end = bytes
+        .iter()
+        .enumerate()
+        .skip(3)
+        .find(|(_, b)| **b == 0xF0)
+        .map_or(bytes.len(), |(i, _)| i);
+
+    let symbol = String::from_utf8_lossy(&bytes[0..first_part_end]);
+    let width = symbol.width();
+    (symbol, width)
 }
 
 pub trait Item: Debug + Send + Sync {
@@ -416,5 +474,34 @@ impl Display for BufferDirection {
             BufferDirection::TopToBottom => write!(f, "top to bottom"),
             BufferDirection::BottomToTop => write!(f, "bottom to top"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::simplify_complex_emoji;
+
+    #[test]
+    fn multipart_emoji() {
+        // Representative complex multipart emoji:
+        //   Man and Woman Holding Hands
+        //   + Light skin tone
+        //   + Medium-light skin tone
+        let (res, w) = simplify_complex_emoji("👫🏻🏼");
+        // Should be simplified down to a width 2 single emoji.
+        assert_eq!(res, "👫");
+        assert_eq!(w, 2);
+
+        // Test case with only 3 leading bytes:
+        //   Victory hand sign
+        //   + Dark skin tone
+        let (res, w) = simplify_complex_emoji("✌🏿");
+        assert_eq!(res, "✌");
+        assert_eq!(w, 1);
+
+        // Republic of the Cheeto Fascist flag
+        let (res, w) = simplify_complex_emoji("🇺🇸");
+        assert_eq!(res, "🇺🇸");
+        assert_eq!(w, 2);
     }
 }
