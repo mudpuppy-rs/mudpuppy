@@ -98,7 +98,6 @@ impl<Value> Default for IdMap<Value>
 where
     Value: Identifiable + Debug + Display,
 {
-    #[must_use]
     fn default() -> Self {
         Self::new()
     }
