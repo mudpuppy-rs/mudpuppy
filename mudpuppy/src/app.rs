@@ -392,7 +392,7 @@ impl App {
             }
             TabAction::Close => {
                 self.tabs.remove(state.selected_tab);
-                if let Some(session_id) = state.active_session_id {
+                if let Some(session_id) = state.active_session_id.take() {
                     state.clients.remove(session_id);
                 }
                 state.selected_tab = state.selected_tab.saturating_sub(1);
