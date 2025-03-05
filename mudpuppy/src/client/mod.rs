@@ -309,10 +309,10 @@ impl Client {
 
                 if matches!(self.prompt_mode, PromptMode::Unsignalled { .. }) {
                     trace!("spawning new prompt flusher");
-                    if let Some(flusher) = mem::replace(
-                        &mut self.prompt_flusher,
-                        Some(PromptFlusher::new(tx, Duration::from_millis(200))),
-                    ) {
+                    if let Some(flusher) = self
+                        .prompt_flusher
+                        .replace(PromptFlusher::new(tx, Duration::from_millis(200)))
+                    {
                         trace!("stopping old prompt flusher");
                         flusher.stop();
                     }
