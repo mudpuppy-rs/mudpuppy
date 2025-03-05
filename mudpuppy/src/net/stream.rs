@@ -27,7 +27,7 @@ pub enum Stream {
     /// A TLS encrypted TCP stream, with an indication of whether certificate verification was
     /// performed.
     Tls {
-        tls_stream: TlsStream<TcpStream>,
+        tls_stream: Box<TlsStream<TcpStream>>,
         verify_skipped: bool,
     },
 }
@@ -51,7 +51,7 @@ impl Stream {
         Ok(match mud.tls {
             Tls::Disabled => Stream::Tcp(tcp_stream),
             Tls::Enabled | Tls::InsecureSkipVerify => Stream::Tls {
-                tls_stream: Self::connect_tls(mud, tcp_stream).await?,
+                tls_stream: Self::connect_tls(mud, tcp_stream).await?.into(),
                 verify_skipped: mud.tls == Tls::InsecureSkipVerify,
             },
         })
