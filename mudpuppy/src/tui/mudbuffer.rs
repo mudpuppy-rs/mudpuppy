@@ -2,18 +2,18 @@ use std::collections::HashMap;
 
 use ansi_to_tui::IntoText;
 use deref_derive::{Deref, DerefMut};
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
 
-use crate::client::{output, Status};
+use crate::client::{Status, output};
 use crate::error::Error;
 use crate::model::{InputLine, Mud};
 use crate::tui::buffer::{self, BufferConfig, DrawScrollbar};
-use crate::{client, python, Result};
+use crate::{Result, client, python};
 
 #[derive(Debug, Deref, DerefMut)]
 pub(super) struct MudBuffer {

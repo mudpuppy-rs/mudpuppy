@@ -3,11 +3,11 @@ use std::ops::ControlFlow;
 
 use futures::{SinkExt, StreamExt};
 use tokio::select;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::task::JoinHandle;
 use tokio_util::bytes::Bytes;
 use tokio_util::codec::Framed;
-use tracing::{instrument, trace, Level};
+use tracing::{Level, instrument, trace};
 
 use crate::error::Error;
 use crate::model::Mud;
