@@ -418,9 +418,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.14"
+version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06ba6d68e24814cb8de6bb986db8222d3a027d15872cabc0d18817bc3c0e4471"
+checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1439,6 +1439,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc2f1e56baa61e93533aebc21af4d2134b70f66275e0fcdf3cbe43d77ff7e8fc"
 dependencies = [
  "prost",
+]
+
+[[package]]
+name = "pup"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "better-panic",
+ "clap",
+ "config",
+ "console-subscriber",
+ "crossterm",
+ "directories",
+ "futures",
+ "happy-eyeballs",
+ "human-panic",
+ "notify",
+ "pyo3",
+ "pyo3-async-runtimes",
+ "pyo3-pylogger",
+ "ratatui",
+ "regex",
+ "serde",
+ "serde_json",
+ "socket2",
+ "strip-ansi-escapes",
+ "strum 0.27.0",
+ "thiserror 2.0.11",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-error",
+ "tracing-subscriber",
+ "unicode-width 0.2.0",
+ "webpki-roots",
 ]
 
 [[package]]
