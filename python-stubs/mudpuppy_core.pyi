@@ -519,7 +519,7 @@ class MudLine:
         Sets the `MudLine`'s `raw` value to the UTF-8 bytes of the string `new`.
         """
 
-type TriggerCallable = Callable[[int, int, str, list[str]], Awaitable[None]]
+type TriggerCallable = Callable[[int, int, MudLine, list[str]], Awaitable[None]]
 """
 An async function that is called when output sent from a MUD matches a trigger pattern.
 Typically assigned to a `TriggerConfig`'s `callback` property, alternatively see

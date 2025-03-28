@@ -35,6 +35,8 @@ class TelnetNawsHandler:
         del self.state[session]
 
     async def resize(self, session: int, columns: int, rows: int):
+        if session not in self.state:
+            return
         logging.debug(f"naws: session {session} resized to {columns}x{rows}")
         self.state[session] = (columns, rows)
         await mudpuppy_core.send_subnegotiation(

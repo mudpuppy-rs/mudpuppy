@@ -300,7 +300,7 @@ class TestCustomLayout:
 
     async def gauge_layout_init(self, layout_manager: LayoutManager):
         logging.debug(f"creating gauge section for {self.session_id}")
-        # Create a veritical split for the set of gauges
+        # Create a vertical split for the set of gauges
         await layout_manager.split_section(
             self.session_id,
             section_name="output_area",

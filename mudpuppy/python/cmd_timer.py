@@ -89,7 +89,7 @@ class TimerCmd(Command):
         if hasattr(args, "func"):
             await args.func(sesh_id, args)
         else:
-            self.display_help(sesh_id)
+            await self.display_help(sesh_id)
 
     async def stop(self, sesh_id: int, args: Namespace):
         # TODO(XXX): check if already stopped, provide output if so.
