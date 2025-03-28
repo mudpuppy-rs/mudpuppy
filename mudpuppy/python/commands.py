@@ -83,7 +83,7 @@ class Command:
                     sesh_id, OutputItem.failed_command_result(f"{last_error}")
                 )
                 if args == "":
-                    self.display_help(sesh_id)
+                    await self.display_help(sesh_id)
             else:
                 await self.handler(sesh_id, cli_args)
         except ArgumentError as e:
