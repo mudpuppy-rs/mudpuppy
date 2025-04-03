@@ -30,9 +30,9 @@ happy-eyeballs = { version = "0.2", default-features = false }
 human-panic = "2"
 notify = "7"
 pretty_assertions = "1"
-pyo3 = { version = "0.23", features = ["experimental-async", "py-clone"] }
-pyo3-async-runtimes = { version = "0.23", features = ["attributes", "tokio-runtime"] }
-pyo3-pylogger = "0.3"
+pyo3 = { version = "0.24", features = ["experimental-async", "py-clone"] }
+pyo3-async-runtimes = { version = "0.24", features = ["attributes", "tokio-runtime"] }
+pyo3-pylogger = "0.4"
 ratatui = { version = "0.29", default-features = false }
 regex = "1"
 serde = "1"
