@@ -15,10 +15,11 @@ use tokio_util::bytes::Bytes;
 use tracing::{debug, error, info, instrument, trace, warn, Level};
 
 use crate::error::Error;
+use crate::keyboard::KeyEvent;
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation as TelnetNegotiation};
 use crate::net::{connection, telnet};
-
 use crate::python;
+
 pub(crate) use input::*;
 pub(crate) use mud::*;
 pub(crate) use prompt::*;
@@ -31,6 +32,7 @@ pub(super) struct Session {
     pub(super) event_handlers: python::SessionHandlers,
     pub(super) prompt: Prompt,
     pub(super) triggers: Vec<Py<Trigger>>,
+    pub(super) input: Py<Input>,
 
     state: ConnectionState,
     telnet_state: telnet::negotiation::Table,
@@ -46,12 +48,13 @@ impl Session {
         mud: Mud,
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        Ok(Self {
             id,
             mud,
             event_handlers: python::SessionHandlers::default(),
             prompt: Prompt::new(id, python_event_tx.clone()),
+            input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
 
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),
@@ -60,7 +63,7 @@ impl Session {
 
             conn_event_tx,
             python_event_tx,
-        }
+        })
     }
 
     #[instrument(level = Level::TRACE, skip(self))]
@@ -200,6 +203,14 @@ impl Session {
     #[instrument(level = Level::TRACE, skip(self, line))]
     pub(super) fn send_line(&self, line: &str) -> Result<(), Error> {
         self.connected_handle()?.send_line(line)
+    }
+
+    #[instrument(level = Level::TRACE, skip(self))]
+    pub(super) fn key_event(&mut self, event: &KeyEvent) {
+        trace!("updating input");
+        Python::with_gil(|py| {
+            self.input.borrow_mut(py).key_event(event);
+        });
     }
 
     #[instrument(level = Level::TRACE, skip(self, event))]

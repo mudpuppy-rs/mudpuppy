@@ -141,7 +141,7 @@ impl App {
                 mud.clone(),
                 conn_event_tx.clone(),
                 py_event_tx.clone(),
-            ),
+            )?,
         );
         Ok(python::Session {
             id: new_id,

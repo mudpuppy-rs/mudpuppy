@@ -83,22 +83,18 @@ impl FromStr for KeyEvent {
 pub struct KeyModifiers(u8);
 
 impl KeyModifiers {
-    const NONE: Self = KeyModifiers(0);
-    const SHIFT: Self = KeyModifiers(1);
-    const CONTROL: Self = KeyModifiers(2);
-    const ALT: Self = KeyModifiers(4);
+    pub(crate) const NONE: Self = KeyModifiers(0);
+    pub(crate) const SHIFT: Self = KeyModifiers(1);
+    pub(crate) const CONTROL: Self = KeyModifiers(2);
+    pub(crate) const ALT: Self = KeyModifiers(4);
+    pub(crate) const META: Self = KeyModifiers(5);
 
     #[must_use]
-    pub fn bits(self) -> u8 {
-        self.0
-    }
-
-    #[must_use]
-    pub fn contains(self, other: KeyModifiers) -> bool {
+    pub(crate) fn contains(self, other: KeyModifiers) -> bool {
         (self.0 & other.0) == other.0
     }
 
-    pub fn insert(&mut self, other: KeyModifiers) {
+    pub(crate) fn insert(&mut self, other: KeyModifiers) {
         self.0 |= other.0;
     }
 }
@@ -111,6 +107,7 @@ impl FromStr for KeyModifiers {
             "ctrl" => KeyModifiers::CONTROL,
             "shift" => KeyModifiers::SHIFT,
             "alt" => KeyModifiers::ALT,
+            "meta" => KeyModifiers::META,
             _ => {
                 return Err(KeyBindingError::InvalidKeys(format!(
                     "unknown key modifier: {s}"

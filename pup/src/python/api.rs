@@ -5,6 +5,7 @@ use pyo3::{pyclass, pymethods, pymodule, IntoPyObject, Py, PyObject, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
+use crate::keyboard::KeyEvent;
 use crate::session::{Mud, PromptMode, Trigger};
 
 use super::{
@@ -52,6 +53,16 @@ impl Session {
             Command::SendLine {
                 session: self.id,
                 line,
+            },
+        )
+    }
+
+    fn send_key(&self, py: Python<'_>, key: KeyEvent) -> Result {
+        dispatch_command(
+            py,
+            Command::SendKey {
+                session: self.id,
+                key,
             },
         )
     }

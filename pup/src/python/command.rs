@@ -5,6 +5,7 @@ use tracing::debug;
 use crate::app::App;
 use crate::config::Config;
 use crate::error::Error;
+use crate::keyboard::KeyEvent;
 use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, GlobalEvent, Result};
@@ -29,6 +30,10 @@ pub(crate) enum Command {
     SendLine {
         session: u32,
         line: String,
+    },
+    SendKey {
+        session: u32,
+        key: KeyEvent,
     },
     AddGlobalEventHandler(python::GlobalHandler),
     AddEventHandler(python::SessionHandler),
@@ -82,6 +87,9 @@ impl Command {
             }
             Command::SendLine { session, line } => {
                 app.session(session)?.send_line(&line)?;
+            }
+            Command::SendKey { session, key } => {
+                app.session_mut(session)?.key_event(&key);
             }
             Command::AddGlobalEventHandler(handler) => {
                 app.global_event_handlers.add(handler);
