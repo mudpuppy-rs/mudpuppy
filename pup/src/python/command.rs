@@ -9,7 +9,7 @@ use crate::keyboard::KeyEvent;
 use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, GlobalEvent, Result};
-use crate::session::{Mud, PromptMode, Trigger};
+use crate::session::{InputLine, Mud, PromptMode, Trigger};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
@@ -31,7 +31,8 @@ pub(crate) enum Command {
     Disconnect(u32),
     SendLine {
         session: u32,
-        line: String,
+        line: InputLine,
+        skip_aliases: bool,
     },
     SendKey {
         session: u32,
@@ -93,8 +94,12 @@ impl Command {
             Command::ConnectionInfo { session, tx } => {
                 let _ = tx.send(app.session(session)?.connected());
             }
-            Command::SendLine { session, line } => {
-                app.session(session)?.send_line(&line)?;
+            Command::SendLine {
+                session,
+                line,
+                skip_aliases,
+            } => {
+                app.session(session)?.send_line(line, skip_aliases);
             }
             Command::SendKey { session, key } => {
                 app.session_mut(session)?.key_event(&key);

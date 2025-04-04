@@ -77,7 +77,7 @@ impl Trigger {
         };
 
         // Then, borrow an immutable reference to extract the callback/highlight/gag
-        // status, cloning the Py<PyAny> ref's so we don't retain any borrows of 't'.
+        // status, cloning the Py<PyAny> ref's so we don't retain any borrows of 'py_self'.
         let (callback, highlight, gag) = {
             let trigger = py_self.borrow(py);
             (

@@ -6,7 +6,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
 use crate::keyboard::KeyEvent;
-use crate::session::{Mud, PromptMode, Trigger};
+use crate::session::{InputLine, Mud, PromptMode, Trigger};
 
 use super::{
     Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand, Result, TelnetCommand,
@@ -47,12 +47,14 @@ impl Session {
         dispatch_command(py, Command::SetActiveSession(self.id))
     }
 
-    fn send_line(&self, py: Python<'_>, line: String) -> Result {
+    #[pyo3(signature = (line, skip_aliases = false))]
+    fn send_line(&self, py: Python<'_>, line: InputLine, skip_aliases: bool) -> Result {
         dispatch_command(
             py,
             Command::SendLine {
                 session: self.id,
                 line,
+                skip_aliases,
             },
         )
     }

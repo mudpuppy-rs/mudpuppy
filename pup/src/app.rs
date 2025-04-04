@@ -17,9 +17,9 @@ use crate::session::{Mud, Session};
 
 #[derive(Debug)]
 pub(super) struct App {
-    pub(super) config: Py<Config>,
     pub(super) global_event_handlers: python::GlobalHandlers,
 
+    config: Py<Config>,
     active_session: Option<u32>,
     sessions: HashMap<u32, Session>,
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
@@ -29,9 +29,9 @@ pub(super) struct App {
 impl App {
     pub(super) fn new(config: Config) -> Self {
         Self {
-            config: Python::with_gil(|py| Py::new(py, config).unwrap()),
             global_event_handlers: python::GlobalHandlers::default(),
 
+            config: Python::with_gil(|py| Py::new(py, config).unwrap()),
             active_session: None,
             sessions: HashMap::new(),
             conn_event_tx: None,
