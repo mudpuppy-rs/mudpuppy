@@ -15,6 +15,8 @@ pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
     ActiveSession(oneshot::Sender<Option<Session>>),
     Sessions(oneshot::Sender<Vec<Session>>),
+    Session(u32, oneshot::Sender<Option<Session>>),
+    SessionForMud(Mud, oneshot::Sender<Option<Session>>),
     ConnectionInfo {
         session: u32,
         tx: oneshot::Sender<Option<connection::Info>>,
@@ -55,6 +57,12 @@ impl Command {
             }
             Command::Sessions(tx) => {
                 let _ = tx.send(app.sessions());
+            }
+            Command::Session(id, tx) => {
+                let _ = tx.send(app.session(id).ok().map(Into::into));
+            }
+            Command::SessionForMud(mud, tx) => {
+                let _ = tx.send(app.sessions().into_iter().find(|s| s.mud == mud));
             }
             Command::NewSession { mud, tx } => {
                 let new_sesh = app.new_session(&mud)?;

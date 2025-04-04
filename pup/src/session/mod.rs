@@ -290,10 +290,7 @@ impl Session {
 
         let mut line = line.into();
         let mut futures = FuturesUnordered::new();
-        let py_sesh = python::Session {
-            id: self.id,
-            mud: self.mud.clone(),
-        };
+        let py_sesh = python::Session::from(&*self);
         Python::with_gil(|py| {
             for t in &self.triggers {
                 Trigger::evaluate(py, t.clone(), &futures, &py_sesh, &mut line)?;
@@ -404,6 +401,15 @@ impl Session {
                     ))
                     .map_err(Into::into)
             }
+        }
+    }
+}
+
+impl From<&Session> for python::Session {
+    fn from(sesh: &Session) -> Self {
+        Self {
+            id: sesh.id,
+            mud: sesh.mud.clone(),
         }
     }
 }

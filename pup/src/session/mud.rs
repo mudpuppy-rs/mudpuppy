@@ -5,7 +5,7 @@ use pyo3::{pyclass, pymethods};
 use serde::{Deserialize, Serialize};
 use tokio_util::bytes::Bytes;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[pyclass(frozen)]
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
 pub(crate) struct Mud {

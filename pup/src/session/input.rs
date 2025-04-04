@@ -31,6 +31,7 @@ impl Input {
         })
     }
 
+    // TODO(XXX): support customizing these bindings...
     pub(crate) fn key_event(&mut self, key_event: &KeyEvent) {
         let KeyEvent {
             code, modifiers, ..

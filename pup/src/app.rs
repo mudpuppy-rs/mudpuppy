@@ -118,13 +118,7 @@ impl App {
     }
 
     pub(crate) fn sessions(&self) -> Vec<python::Session> {
-        self.sessions
-            .iter()
-            .map(|(id, session)| python::Session {
-                id: *id,
-                mud: session.mud.clone(),
-            })
-            .collect()
+        self.sessions.values().map(Into::into).collect()
     }
 
     pub(crate) fn new_session(&mut self, mud: &Mud) -> Result<python::Session, Error> {
@@ -150,11 +144,7 @@ impl App {
     }
 
     pub(crate) fn active_session(&self) -> Option<python::Session> {
-        let session = self.session(self.active_session?).ok()?;
-        Some(python::Session {
-            id: session.id,
-            mud: session.mud.clone(),
-        })
+        self.session(self.active_session?).ok().map(Into::into)
     }
 
     pub(crate) fn set_active_session(&mut self, session_id: Option<u32>) -> Result<(), Error> {
@@ -171,14 +161,8 @@ impl App {
         let from = self.active_session.take();
         self.active_session = session_id;
 
-        let mk_session = |maybe_id: Option<u32>| {
-            maybe_id.and_then(|id| {
-                self.session(id).ok().map(|sesh| python::Session {
-                    id: sesh.id,
-                    mud: sesh.mud.clone(),
-                })
-            })
-        };
+        let mk_session =
+            |maybe_id: Option<u32>| maybe_id.and_then(|id| self.session(id).ok().map(Into::into));
 
         self.global_event_handlers
             .global_event(&python::GlobalEvent::ActiveSessionChanged {

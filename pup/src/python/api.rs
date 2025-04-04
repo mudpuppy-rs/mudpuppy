@@ -305,6 +305,16 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
+    fn session(py: Python<'_>, id: u32) -> FutureResult {
+        dispatch_async_command(py, |tx| Command::Session(id, tx))
+    }
+
+    #[pyfunction]
+    fn session_for_mud(py: Python<'_>, mud: Mud) -> FutureResult {
+        dispatch_async_command(py, |tx| Command::SessionForMud(mud, tx))
+    }
+
+    #[pyfunction]
     fn add_global_event_handler(
         py: Python<'_>,
         event_type: GlobalEventType,
