@@ -28,7 +28,7 @@ pub(crate) enum GlobalEvent {
     #[strum(to_string = "active session changed from {changed_from:?} to {changed_to:?}")]
     ActiveSessionChanged {
         // Note: tempting to name these fields 'from' and 'to', but Python
-        //  has 'from' as a reserved word and it makes life hard.
+        //  has 'from' as a reserved word, and it makes life hard.
         changed_from: Option<python::Session>,
         changed_to: Option<python::Session>,
     },
@@ -239,8 +239,8 @@ where
             }
         }
 
-        if let Some(global_handlers) = self.handlers.get(EventType::all()) {
-            for handler in global_handlers {
+        if let Some(all_handlers) = self.handlers.get(EventType::all()) {
+            for handler in all_handlers {
                 futures.push(invoke(handler, event)?);
             }
         }

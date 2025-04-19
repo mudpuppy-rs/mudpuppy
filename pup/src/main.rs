@@ -18,7 +18,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tracing::{error, info, instrument};
 
 use app::App;
-use config::Config;
+use config::{Config, CRATE_NAME};
 use python::{pup, APP};
 
 fn main() -> Result<(), Box<dyn StdError>> {
@@ -41,8 +41,8 @@ fn main() -> Result<(), Box<dyn StdError>> {
     panic::init();
 
     if !IsTerminal::is_terminal(&stdout()) {
-        let msg =
-            "pup is a TUI application that can only be run when STDOUT is a regular terminal.";
+        let msg = format!(
+            "{CRATE_NAME} is a TUI application that can only be run when STDOUT is a regular terminal.");
         error!("{msg}");
         return Err(msg.into());
     }

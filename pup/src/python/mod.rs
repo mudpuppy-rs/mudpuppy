@@ -21,8 +21,6 @@ pub(crate) use api::*;
 pub(crate) use command::*;
 pub(crate) use events::*;
 
-pub(super) type PyFuture = Pin<Box<dyn StdFuture<Output = PyResult<PyObject>> + Send + 'static>>;
-
 #[instrument]
 pub(super) async fn init_python_env() -> Result {
     Python::with_gil(|py| {
@@ -33,18 +31,17 @@ pub(super) async fn init_python_env() -> Result {
             .unwrap()
             .insert(0, config_dir())?;
 
+        // TODO(XXX): Load other built-in modules.
         trace!("loading built-in setup.py");
-        let _ = PyModule::from_code(
+        PyModule::from_code(
             py,
             c_str!(include_str!("setup.py")),
             c_str!("setup.py"),
             c_str!("setup"),
-        )?;
-
-        Ok::<(), PyErr>(())
-    })?;
-
-    Ok(())
+        )
+        .map(|_| ())
+    })
+    .map_err(Into::into)
 }
 
 // TODO(XXX): load more than just pup_test...
@@ -71,6 +68,8 @@ pub(super) async fn run_user_setup() -> Result {
 
     Ok(())
 }
+
+pub(super) type PyFuture = Pin<Box<dyn StdFuture<Output = PyResult<PyObject>> + Send + 'static>>;
 
 pub(crate) static APP: GILOnceCell<UnboundedSender<Command>> = GILOnceCell::new();
 

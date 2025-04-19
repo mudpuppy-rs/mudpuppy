@@ -42,7 +42,6 @@ impl Config {
         }
 
         let builder = config_crate::Config::builder()
-            // Safety: `set_default()` is documented to only panic if string conversion of the key fails.
             .set_default("_data_dir", data_dir().to_str().unwrap_or_default())?
             .set_default("_config_dir", config_dir().to_str().unwrap_or_default())?
             .add_source(

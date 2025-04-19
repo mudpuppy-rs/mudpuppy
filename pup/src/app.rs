@@ -63,6 +63,29 @@ impl App {
 
         loop {
             select! {
+                // User python module setup has completed
+                setup_result = &mut setup_task, if !setup_task.is_finished() => {
+                    match setup_result {
+                        Ok(Ok(())) => info!("Python setup completed successfully"),
+                        Ok(Err(e)) => error!("Python setup failed: {e}"),
+                        Err(e) => error!("Python setup task panicked: {e}"),
+                    }
+                }
+                // Configuration reload
+                Some(event) = config_event_rx.next() => {
+                    if let Ok(event) = event {
+                        self.config_reload(&event)?;
+                    }
+                }
+                // Connection event
+                Some(connection::Event{session_id, event}) = conn_event_rx.recv() => {
+                    let Ok(session) = self.session_mut(session_id) else {
+                        warn!("dropping event for missing session {session_id}: {event:?}");
+                        return Ok(());
+                    };
+                    session.event(&event)?;
+                }
+                // Python API command dispatch
                 Some(py_cmd) = py_rx.recv() => {
                     match py_cmd.exec(self) {
                         Ok(true) => {
@@ -75,27 +98,9 @@ impl App {
                         _ => {}
                     }
                 }
-                setup_result = &mut setup_task, if !setup_task.is_finished() => {
-                    match setup_result {
-                        Ok(Ok(())) => info!("Python setup completed successfully"),
-                        Ok(Err(e)) => error!("Python setup failed: {e}"),
-                        Err(e) => error!("Python setup task panicked: {e}"),
-                    }
-                }
-                Some(connection::Event{session_id, event}) = conn_event_rx.recv() => {
-                    let Ok(session) = self.session_mut(session_id) else {
-                        warn!("dropping event for missing session {session_id}: {event:?}");
-                        return Ok(());
-                    };
-                    session.event(&event)?;
-                }
+                // Python event dispatch
                 Some((id, event)) = python_event_rx.recv() => {
                     self.session(id)?.event_handlers.session_event(&event)?;
-                }
-                Some(event) = config_event_rx.next() => {
-                    if let Ok(event) = event {
-                        self.config_reload(&event)?;
-                    }
                 }
             }
         }
