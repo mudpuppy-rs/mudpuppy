@@ -8,7 +8,7 @@ use strum::Display;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
-use tracing::{debug, instrument, trace, Level};
+use tracing::{debug, instrument, trace, warn, Level};
 
 use crate::error::Error;
 use crate::net::connection;
@@ -47,20 +47,30 @@ impl Prompt {
 
     #[instrument(level = Level::TRACE, skip(self), fields(id = self.id, ?mode = self.mode, ?new_mode = mode))]
     pub(crate) fn set_mode(&mut self, mode: PromptMode) -> Result<PromptMode, Error> {
+        let had_flusher = self.flusher().is_some();
         let old_mode = mem::replace(&mut self.mode, mode.clone());
         if let Some(old_flusher) = self.flusher.take() {
             old_flusher.stop();
         }
 
-        /*
-        self.cmd_tx.send(python::Command::Prompt(
-            self.id,
-            python::PromptCommand::Flush,
-        ))?;*/
-        // TODO(XXX): schedule one flush?
-
         if let Some(conn_action_tx) = &self.conn_action_tx {
             self.init_flusher(conn_action_tx.clone());
+        }
+
+        if let Some(conn_action_tx) = &self.conn_action_tx {
+            // If we switched from an unsignalled mode to a signalled mode, we need to
+            // schedule one flush to ensure we don't miss any data that was in the buffer
+            // from before.
+            if had_flusher && self.flusher.is_none() {
+                let tx = conn_action_tx.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    trace!("one time signalled prompt flush running");
+                    if let Err(err) = tx.send(connection::Action::Flush) {
+                        warn!("failed to send prompt flush: {err}");
+                    }
+                });
+            }
         }
 
         self.py_event_tx.send((
@@ -98,7 +108,8 @@ impl Prompt {
             trace!("flusher already initialized");
             return;
         }
-        self.flusher = self.mode.flusher(conn_action_tx);
+        self.flusher = self.mode.flusher(conn_action_tx.clone());
+        self.conn_action_tx = Some(conn_action_tx);
     }
 
     pub(super) fn flusher(&self) -> Option<&PromptFlusher> {
