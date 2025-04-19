@@ -385,7 +385,7 @@ impl InputLine {
                 }
                 Some(Self {
                     sent: fragment.to_string(),
-                    original: None,
+                    original: Some(self.sent.clone()),
                     echo: self.echo,
                     scripted: self.scripted,
                 })

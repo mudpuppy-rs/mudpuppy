@@ -27,18 +27,24 @@ pub(crate) struct Mud {
     #[pyo3(get)]
     #[serde(default)]
     pub(crate) no_tcp_keepalive: bool,
+
+    /// The command separator to use when sending multiple commands in a single message.
+    #[serde(default = "default::command_separator")]
+    #[pyo3(get)]
+    pub command_separator: Option<String>,
 }
 
 #[pymethods]
 impl Mud {
     #[new]
-    #[pyo3(signature = (name, host, port, tls = None, no_tcp_keepalive = None))]
+    #[pyo3(signature = (name, host, port, tls = None, no_tcp_keepalive = None, command_separator = None))]
     fn new(
         name: String,
         host: String,
         port: u16,
         tls: Option<Tls>,
         no_tcp_keepalive: Option<bool>,
+        command_separator: Option<String>,
     ) -> Self {
         Self {
             name,
@@ -46,6 +52,7 @@ impl Mud {
             port,
             tls: tls.unwrap_or_default(),
             no_tcp_keepalive: no_tcp_keepalive.unwrap_or_default(),
+            command_separator: command_separator.or(default::command_separator()),
         }
     }
 
@@ -135,5 +142,13 @@ impl Display for MudLine {
 impl From<&Bytes> for MudLine {
     fn from(value: &Bytes) -> Self {
         Self::new(value)
+    }
+}
+
+// 🤷 https://github.com/serde-rs/serde/issues/368
+mod default {
+    #[allow(clippy::unnecessary_wraps)] // Matching config field.
+    pub(super) fn command_separator() -> Option<String> {
+        Some(";;".to_string())
     }
 }

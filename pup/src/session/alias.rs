@@ -47,8 +47,8 @@ impl Alias {
 
         // First, borrow mutable reference to alias to perform a match test.
         // This will increment the hit_count stored in the alias if it matches,
-        // and yield any match groups.
-        let groups = {
+        // and yield any match groups, or the replacement to send.
+        let (groups, replacement) = {
             let mut alias = py_self.borrow_mut(py);
             if !alias.enabled {
                 trace!("ignoring disabled alias {}", alias.name);
@@ -62,7 +62,7 @@ impl Alias {
             }
 
             debug!(?alias, "matched line");
-            groups
+            (groups, alias.reaction.clone())
         };
 
         // Then, borrow an immutable reference to extract the callback, cloning
@@ -81,6 +81,10 @@ impl Alias {
             futures.push(Box::pin(pyo3_async_runtimes::tokio::into_future(callback)?));
         }
 
+        line.original = Some(line.sent.clone());
+        if !line.sent.is_empty() {
+            line.sent = replacement.unwrap_or(line.sent.clone());
+        }
         Ok(())
     }
 }

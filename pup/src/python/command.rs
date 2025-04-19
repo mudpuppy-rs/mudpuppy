@@ -9,7 +9,7 @@ use crate::keyboard::KeyEvent;
 use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, GlobalEvent, Result};
-use crate::session::{InputLine, Mud, PromptMode, Trigger};
+use crate::session::{Alias, InputLine, Mud, PromptMode, Trigger};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
@@ -44,6 +44,7 @@ pub(crate) enum Command {
     Telnet(u32, TelnetCommand),
     Gmcp(u32, GmcpCommand),
     Trigger(u32, TriggerCommand),
+    Alias(u32, AliasCommand),
     Quit,
 }
 
@@ -99,7 +100,7 @@ impl Command {
                 line,
                 skip_aliases,
             } => {
-                app.session(session)?.send_line(line, skip_aliases);
+                app.session(session)?.send_line(line, skip_aliases)?;
             }
             Command::SendKey { session, key } => {
                 app.session_mut(session)?.key_event(&key);
@@ -127,6 +128,9 @@ impl Command {
                 cmd.exec(app, id)?;
             }
             Command::Trigger(id, cmd) => {
+                cmd.exec(app, id)?;
+            }
+            Command::Alias(id, cmd) => {
                 cmd.exec(app, id)?;
             }
             Command::Quit => return Ok(true),
@@ -249,6 +253,41 @@ impl TriggerCommand {
             TriggerCommand::Get(tx) => {
                 let triggers = Python::with_gil(|_| session.triggers.clone());
                 let _ = tx.send(triggers);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub(crate) enum AliasCommand {
+    Add(Py<Alias>),
+    Remove(Py<Alias>),
+    Get(oneshot::Sender<Vec<Py<Alias>>>),
+}
+
+impl AliasCommand {
+    fn exec(self, app: &mut App, id: u32) -> Result<()> {
+        let session = app.session_mut(id)?;
+
+        match self {
+            AliasCommand::Add(alias) => {
+                Python::with_gil(|py| {
+                    let alias = alias.borrow(py);
+                    debug!("Adding alias: {:?}", alias);
+                });
+                session.aliases.push(alias);
+            }
+            AliasCommand::Remove(alias) => {
+                let aliases = &mut session.aliases;
+                Python::with_gil(|py| {
+                    let alias = alias.borrow(py);
+                    aliases.retain(|t| t.borrow(py).name != alias.name.as_str());
+                });
+            }
+            AliasCommand::Get(tx) => {
+                let aliases = Python::with_gil(|_| session.aliases.clone());
+                let _ = tx.send(aliases);
             }
         }
 

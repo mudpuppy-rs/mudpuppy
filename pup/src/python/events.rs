@@ -16,7 +16,7 @@ use crate::config::Config;
 use crate::error::Error;
 use crate::net::connection;
 use crate::python::{self};
-use crate::session::{MudLine, PromptMode};
+use crate::session::{InputLine, MudLine, PromptMode};
 
 #[derive(Debug, Clone, Display)]
 #[pyclass]
@@ -97,6 +97,8 @@ pub(crate) enum Event {
     PromptModeChanged { from: PromptMode, to: PromptMode },
     #[strum(to_string = "received line: {line}")]
     Line { line: MudLine },
+    #[strum(to_string = "sent line: {line}")]
+    InputLine { line: InputLine },
     #[strum(to_string = "now GMCP enabled")]
     GmcpEnabled {},
     #[strum(to_string = "no longer GMCP enabled")]
@@ -119,6 +121,7 @@ impl Event {
             Event::PromptChanged { .. } => EventType::PromptChanged,
             Event::PromptModeChanged { .. } => EventType::PromptModeChanged,
             Event::Line { .. } => EventType::Line,
+            Event::InputLine { .. } => EventType::InputLine,
             Event::GmcpEnabled { .. } => EventType::GmcpEnabled,
             Event::GmcpDisabled { .. } => EventType::GmcpDisabled,
             Event::GmcpMessage { .. } => EventType::GmcpMessage,
@@ -149,6 +152,7 @@ pub(crate) enum EventType {
     PromptChanged,
     PromptModeChanged,
     Line,
+    InputLine,
     GmcpEnabled,
     GmcpDisabled,
     GmcpMessage,

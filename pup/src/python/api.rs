@@ -1,16 +1,16 @@
 use std::fmt::{Display, Formatter};
 
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::{pyclass, pymethods, pymodule, IntoPyObject, Py, PyObject, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
 use crate::keyboard::KeyEvent;
-use crate::session::{InputLine, Mud, PromptMode, Trigger};
+use crate::session::{Alias, EchoState, InputLine, Mud, PromptMode, Trigger};
 
 use super::{
-    Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand, Result, TelnetCommand,
-    TriggerCommand, APP,
+    AliasCommand, Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand, Result,
+    TelnetCommand, TriggerCommand, APP,
 };
 
 #[derive(Debug, Clone)]
@@ -47,8 +47,22 @@ impl Session {
         dispatch_command(py, Command::SetActiveSession(self.id))
     }
 
+    // line is Union[str, InputLine]
     #[pyo3(signature = (line, skip_aliases = false))]
-    fn send_line(&self, py: Python<'_>, line: InputLine, skip_aliases: bool) -> Result {
+    #[allow(clippy::needless_pass_by_value)] // TODO(XXX): figure out line: &PyObject
+    fn send_line(&self, py: Python<'_>, line: PyObject, skip_aliases: bool) -> Result {
+        let line = if let Ok(s) = line.extract::<String>(py) {
+            InputLine {
+                sent: s,
+                original: None,
+                echo: EchoState::default(),
+                scripted: true,
+            }
+        } else if let Ok(input) = line.extract::<InputLine>(py) {
+            input
+        } else {
+            return Err(PyTypeError::new_err("line must be a str or InputLine").into());
+        };
         dispatch_command(
             py,
             Command::SendLine {
@@ -95,6 +109,10 @@ impl Session {
 
     fn triggers(&self) -> Triggers {
         Triggers { id: self.id }
+    }
+
+    fn aliases(&self) -> Aliases {
+        Aliases { id: self.id }
     }
 
     fn __str__(&self) -> String {
@@ -232,6 +250,28 @@ impl Triggers {
     }
 }
 
+#[derive(Debug, Clone)]
+#[pyclass(frozen)]
+pub struct Aliases {
+    #[pyo3(get)]
+    pub id: u32,
+}
+
+#[pymethods]
+impl Aliases {
+    fn add(&self, py: Python<'_>, alias: Py<Alias>) -> Result {
+        dispatch_command(py, Command::Alias(self.id, AliasCommand::Add(alias)))
+    }
+
+    fn remove(&self, py: Python<'_>, trigger: Py<Alias>) -> Result {
+        dispatch_command(py, Command::Alias(self.id, AliasCommand::Remove(trigger)))
+    }
+
+    fn get<'py>(&self, py: Python<'py>) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| Command::Alias(self.id, AliasCommand::Get(tx)))
+    }
+}
+
 fn dispatch_async_command<T>(
     py: Python<'_>,
     cmd: impl FnOnce(oneshot::Sender<T>) -> Command,
@@ -268,7 +308,7 @@ pub(crate) mod pup {
     use crate::python::{Event, EventType, GlobalEvent, GlobalEventType};
     #[pymodule_export]
     use crate::session::{
-        EchoState, InputLine, Markup, Mud, MudLine, PromptMode, PromptSignal, Tls, Trigger,
+        Alias, EchoState, InputLine, Markup, Mud, MudLine, PromptMode, PromptSignal, Tls, Trigger,
     };
 
     #[pyfunction]

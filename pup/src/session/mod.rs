@@ -35,6 +35,7 @@ pub(super) struct Session {
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
     pub(super) triggers: Vec<Py<Trigger>>,
+    pub(super) aliases: Vec<Py<Alias>>,
 
     state: ConnectionState,
     telnet_state: telnet::negotiation::Table,
@@ -58,6 +59,7 @@ impl Session {
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
             triggers: Vec::default(),
+            aliases: Vec::default(),
 
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),
@@ -202,9 +204,59 @@ impl Session {
         connected_handle.send(connection::Action::Flush)
     }
 
+    #[instrument(level = Level::TRACE, skip(self))]
     pub(super) fn send_line(&self, line: InputLine, skip_aliases: bool) -> Result<(), Error> {
-        self.send_line_direct(&line.sent)?;
-        todo!()
+        let lines = match &self.mud.command_separator {
+            Some(separator) if line.sent.contains(separator) => line.split(separator),
+            _ => vec![line],
+        };
+
+        let py_sesh = python::Session::from(self);
+        for mut line in lines {
+            let mut futures = FuturesUnordered::new();
+            let mut skip_transmit = false;
+
+            // Empty lines can't match aliases.
+            if !skip_aliases && !line.sent.is_empty() {
+                // Run the input line through each enabled alias to see if any match. A mutable ref to
+                // input is passed to allow changing it when an alias matches.
+                for a in &self.aliases {
+                    Python::with_gil(|py| {
+                        Alias::evaluate(py, a.clone(), &futures, &py_sesh, &mut line)
+                    })?;
+
+                    // If an alias cleared out the to-be-sent text that we know wasn't empty
+                    // originally then we take that as an indicator that the alias "ate" the
+                    // input (e.g. to call a callback) and we skip transmitting anything. We also
+                    // don't bother evaluating any other aliases.
+                    if line.sent.is_empty() {
+                        skip_transmit = true;
+                        break;
+                    }
+                }
+            }
+
+            tokio::spawn(async move {
+                while let Some(result) = futures.next().await {
+                    if let Err(err) = result {
+                        error!("alias callback error: {err}");
+                    }
+                }
+            });
+
+            if skip_transmit {
+                trace!("non-transmitted input processed: {line:?}");
+                self.python_event_tx
+                    .send((self.id, python::Event::InputLine { line }))?;
+                return Ok(());
+            }
+
+            self.connected_handle()?.send_line(&line.sent)?;
+            self.python_event_tx
+                .send((self.id, python::Event::InputLine { line }))?;
+        }
+
+        Ok(())
     }
 
     #[instrument(level = Level::TRACE, skip(self))]
@@ -320,11 +372,6 @@ impl Session {
                 Err(Error::NotConnected)
             }
         }
-    }
-
-    #[instrument(level = Level::TRACE, skip(self, line))]
-    fn send_line_direct(&self, line: &str) -> Result<(), Error> {
-        self.connected_handle()?.send_line(line)
     }
 
     #[instrument(level = Level::TRACE, skip(self, item))]
