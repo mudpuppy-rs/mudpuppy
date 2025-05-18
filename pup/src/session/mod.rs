@@ -1,19 +1,19 @@
 mod alias;
+mod character;
 mod gmcp;
 mod input;
-mod mud;
 mod prompt;
 mod trigger;
 
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use pyo3::{Py, Python};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::bytes::Bytes;
-use tracing::{debug, error, info, instrument, trace, warn, Level};
+use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::error::Error;
 use crate::keyboard::KeyEvent;
@@ -22,15 +22,15 @@ use crate::net::{connection, telnet};
 use crate::python;
 
 pub(crate) use alias::*;
+pub(crate) use character::*;
 pub(crate) use input::*;
-pub(crate) use mud::*;
 pub(crate) use prompt::*;
 pub(crate) use trigger::*;
 
 #[derive(Debug)]
 pub(super) struct Session {
     pub(super) id: u32,
-    pub(super) mud: Mud,
+    pub(super) character: Character,
     pub(super) event_handlers: python::SessionHandlers,
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
@@ -48,13 +48,13 @@ pub(super) struct Session {
 impl Session {
     pub(super) fn new(
         id: u32,
-        mud: Mud,
+        character: Character,
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
     ) -> Result<Self, Error> {
         Ok(Self {
             id,
-            mud,
+            character,
             event_handlers: python::SessionHandlers::default(),
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
@@ -78,7 +78,7 @@ impl Session {
 
         self.state = ConnectionState::Connecting(connection::Handle::new(
             self.id,
-            self.mud.clone(),
+            self.character.mud.clone(),
             self.conn_event_tx.clone(),
         ));
         self.python_event_tx
@@ -205,7 +205,7 @@ impl Session {
 
     #[instrument(level = Level::TRACE, skip(self))]
     pub(super) fn send_line(&self, line: InputLine, skip_aliases: bool) -> Result<(), Error> {
-        let lines = match &self.mud.command_separator {
+        let lines = match &self.character.command_separator {
             Some(separator) if line.sent.contains(separator) => line.split(separator),
             _ => vec![line],
         };
@@ -462,7 +462,7 @@ impl From<&Session> for python::Session {
     fn from(sesh: &Session) -> Self {
         Self {
             id: sesh.id,
-            mud: sesh.mud.clone(),
+            character: sesh.character.clone(),
         }
     }
 }

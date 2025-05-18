@@ -1,8 +1,8 @@
 use std::io::{self, stdout};
 use std::{panic, process};
 
-use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
 use crossterm::ExecutableCommand;
+use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
 use tracing::error;
 
 pub(super) fn install_handler() {

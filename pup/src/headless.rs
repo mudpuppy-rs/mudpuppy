@@ -1,4 +1,4 @@
-use tokio::io::{stdin, AsyncBufReadExt, BufReader, Lines, Stdin};
+use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin, stdin};
 use tracing::{debug, error, trace, warn};
 
 use crate::app::AppData;

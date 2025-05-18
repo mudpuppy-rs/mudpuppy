@@ -3,23 +3,23 @@ mod mudlist;
 mod session;
 
 use std::fmt::Debug;
-use std::io::{stdout, IsTerminal, Stdout};
+use std::io::{IsTerminal, Stdout, stdout};
 use std::num::NonZeroUsize;
 use std::panic;
 
-use crossterm::event::{EventStream as CrosstermEventStream, KeyCode, KeyEventKind, KeyModifiers};
-use crossterm::terminal::{enable_raw_mode, EnterAlternateScreen};
 use crossterm::ExecutableCommand;
+use crossterm::event::{EventStream as CrosstermEventStream, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Layout;
-use ratatui::Terminal;
 use tokio::select;
-use tokio::time::{interval, Interval, MissedTickBehavior};
+use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace};
 
 use crate::app::AppData;
-use crate::config::{Config, CRATE_NAME};
+use crate::config::{CRATE_NAME, Config};
 use crate::error::Error;
 use crate::{cli, python};
 pub(super) use chrome::{Chrome, Tab};
@@ -131,7 +131,7 @@ impl Tui {
         match tab_action {
             TabAction::Create(sesh) => {
                 info!(sesh=?sesh, "creating session");
-                app.new_session(&sesh.mud)?;
+                app.new_session(&sesh.character)?;
                 self.chrome.new_tab(Session::new(sesh));
             }
             TabAction::Next => {
@@ -174,7 +174,8 @@ fn init_tui_terminal(mouse_enabled: bool) -> Result<Terminal<CrosstermBackend<St
 
     if !IsTerminal::is_terminal(&out) {
         let msg = format!(
-            "{CRATE_NAME} without --headless is a TUI application that can only be run when STDOUT is a regular terminal.");
+            "{CRATE_NAME} without --headless is a TUI application that can only be run when STDOUT is a regular terminal."
+        );
         error!("{msg}");
         return Err(Error::Cli(msg));
     }

@@ -22,8 +22,8 @@ use tokio::sync::mpsc::unbounded_channel;
 use tracing::{info, instrument};
 
 use app::App;
-use config::{Config, CRATE_NAME};
-use python::{pup, APP};
+use config::{CRATE_NAME, Config};
+use python::{APP, pup};
 
 fn main() -> Result<(), Box<dyn StdError>> {
     #[instrument(skip(args, config))]

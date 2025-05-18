@@ -6,17 +6,17 @@ use async_trait::async_trait;
 use crossterm::event::MouseEvent;
 use futures::stream::FuturesUnordered;
 use pyo3::{Py, PyErr, PyRef, Python};
+use ratatui::Frame;
 use ratatui::crossterm::event::{
     Event as TermEvent, MouseButton, MouseEventKind as TermMouseEventKind,
 };
 use ratatui::layout::Rect;
 use ratatui::text::Line;
-use ratatui::Frame;
 use tracing::{debug, trace, warn};
 
 use crate::app::{State, Tab, TabAction, TabKind};
 use crate::client::output;
-use crate::config::{edit_global, edit_mud, GlobalConfig};
+use crate::config::{GlobalConfig, edit_global, edit_mud};
 use crate::error::Error;
 use crate::model::{InputMode, SessionInfo, Shortcut};
 use crate::tui::annotation::draw_annotation;
@@ -26,7 +26,7 @@ use crate::tui::input::{self, Input};
 use crate::tui::layout::{LayoutNode, PyConstraint};
 use crate::tui::mudbuffer::{self, MudBuffer};
 use crate::tui::splitview::ScrollWindow;
-use crate::{python, Result};
+use crate::{Result, python};
 
 #[derive(Debug)]
 pub struct Widget {

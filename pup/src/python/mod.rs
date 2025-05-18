@@ -6,8 +6,8 @@ use std::fmt::Display;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use pyo3::exceptions::PyTypeError;
 use pyo3::ffi::c_str;
 use pyo3::sync::GILOnceCell;

@@ -1,21 +1,21 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::StreamExt;
 use notify::event::Event as NotifyEvent;
 use pyo3::{Py, Python};
 use tokio::select;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tracing::{error, info, instrument, trace, warn, Level};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tracing::{Level, error, info, instrument, trace, warn};
 
 use crate::config::{self, Config};
 use crate::error::Error;
 use crate::headless::Headless;
 use crate::net::connection::{self};
 use crate::python::GlobalEvent;
-use crate::session::{Mud, Session};
+use crate::session::{Character, Session};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::Tui;
 use crate::{cli, python, slash_command};
@@ -189,7 +189,7 @@ impl AppData {
         sessions
     }
 
-    pub(crate) fn new_session(&mut self, mud: &Mud) -> Result<python::Session, Error> {
+    pub(crate) fn new_session(&mut self, character: &Character) -> Result<python::Session, Error> {
         let (Some(conn_event_tx), Some(py_event_tx)) = (&self.conn_event_tx, &self.python_event_tx)
         else {
             return Err(Error::Internal("App not running".to_owned()));
@@ -200,7 +200,7 @@ impl AppData {
             new_id,
             Session::new(
                 new_id,
-                mud.clone(),
+                character.clone(),
                 conn_event_tx.clone(),
                 py_event_tx.clone(),
             )?,
@@ -208,7 +208,7 @@ impl AppData {
 
         let new_sesh = python::Session {
             id: new_id,
-            mud: mud.clone(),
+            character: character.clone(),
         };
 
         self.global_event_handlers
@@ -273,20 +273,20 @@ impl AppData {
 
         Python::with_gil(|py| {
             trace!(?auto_connect, "auto-connecting");
-            for mud_name in &auto_connect {
-                let Some(mud) = ({
+            for char_name in &auto_connect {
+                let Some(character) = ({
                     self.config
                         .borrow(py)
-                        .muds
+                        .characters
                         .iter()
-                        .find(|m| m.name == *mud_name)
+                        .find(|m| m.name == *char_name)
                         .cloned()
                 }) else {
-                    error!("mud not found in config: {mud_name}");
+                    error!("character not found in config: {char_name}");
                     continue;
                 };
-                info!("auto-connecting to mud: {mud_name}");
-                self.new_session(&mud)?.connect(py)?;
+                info!(character=?character, "auto-connecting");
+                self.new_session(&character)?.connect(py)?;
             }
             Ok::<(), Error>(())
         })

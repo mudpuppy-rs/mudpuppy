@@ -3,10 +3,10 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use pyo3::types::PyAnyMethods;
-use pyo3::{pyclass, pymethods, Py, PyObject, Python};
+use pyo3::{Py, PyObject, Python, pyclass, pymethods};
 
 use strum::Display;
 use tracing::{error, trace};

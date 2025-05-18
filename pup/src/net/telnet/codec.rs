@@ -113,7 +113,7 @@ impl Decoder for Codec {
 
                     // End a subnegotiation, returning the subnegotiation item.
                     Command::SubnegotiationEnd => {
-                        return Ok(Some(self.state.end_subnegotiation()?))
+                        return Ok(Some(self.state.end_subnegotiation()?));
                     }
 
                     // Pass through the command as an item. It's a Telnet negotiation or

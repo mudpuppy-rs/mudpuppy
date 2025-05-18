@@ -4,8 +4,8 @@ use std::sync::OnceLock;
 
 use config as config_crate;
 use directories::ProjectDirs;
-use futures::channel::mpsc::{channel as futures_channel, Receiver};
 use futures::SinkExt;
+use futures::channel::mpsc::{Receiver, channel as futures_channel};
 use notify::{
     Event as NotifyEvent, RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher,
 };
@@ -15,7 +15,7 @@ use tokio_rustls::rustls::pki_types;
 use tracing::{info, warn};
 
 use crate::error::ConfigError;
-use crate::session::{Mud, Tls};
+use crate::session::{Character, Tls};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[pyclass]
@@ -23,7 +23,7 @@ use crate::session::{Mud, Tls};
 pub(crate) struct Config {
     #[serde(default)]
     #[pyo3(get, set)]
-    pub(crate) muds: Vec<Mud>,
+    pub(crate) characters: Vec<Character>,
 
     #[serde(default = "default::mouse_enabled")]
     #[pyo3(get, set)]
@@ -38,7 +38,8 @@ impl Config {
     }
 
     pub(crate) fn load(&mut self) -> Result<(), ConfigError> {
-        let default_config = toml::from_str::<Config>(include_str!("../../.config/config.toml"))?;
+        // TODO(XXX): default config stuff...
+        // let default_config = toml::from_str::<Config>(include_str!("../../.config/config.toml"))?;
         let config_file = config_file();
 
         if !config_file.exists() {
@@ -54,10 +55,7 @@ impl Config {
                     .required(false),
             );
 
-        let mut cfg: Self = builder.build()?.try_deserialize()?;
-        if cfg.muds.is_empty() {
-            cfg.muds = default_config.muds;
-        }
+        let cfg: Self = builder.build()?.try_deserialize()?;
         cfg.validate()?;
 
         *self = cfg;
@@ -65,23 +63,23 @@ impl Config {
     }
 
     fn validate(&self) -> Result<(), ConfigError> {
-        for mud in &self.muds {
-            if mud.name.is_empty() {
+        for character in &self.characters {
+            if character.name.is_empty() {
                 return Err(ConfigError::InvalidMud("name is empty".to_string()));
             }
 
-            if mud.host.is_empty() {
+            if character.mud.host.is_empty() {
                 return Err(ConfigError::InvalidMud(format!(
                     "MUD {:?} host is empty",
-                    mud.name
+                    character.mud.name
                 )));
             }
 
-            if matches!(mud.tls, Tls::Enabled) {
-                pki_types::ServerName::try_from(mud.host.as_str()).map_err(|e| {
+            if matches!(character.mud.tls, Tls::Enabled) {
+                pki_types::ServerName::try_from(character.mud.host.as_str()).map_err(|e| {
                     ConfigError::InvalidMud(format!(
                         "MUD {:?} hostname {:?} invalid for TLS: {e}",
-                        mud.name, mud.host
+                        character.mud.name, character.mud.host
                     ))
                 })?;
             }
@@ -91,8 +89,8 @@ impl Config {
     }
 }
 
-pub(super) fn reload_watcher(
-) -> NotifyResult<(RecommendedWatcher, Receiver<NotifyResult<NotifyEvent>>)> {
+pub(super) fn reload_watcher()
+-> NotifyResult<(RecommendedWatcher, Receiver<NotifyResult<NotifyEvent>>)> {
     let (mut config_event_tx, config_event_rx) = futures_channel(1);
     let mut watcher = RecommendedWatcher::new(
         move |res| {

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::str::Chars;
 use std::{iter, mem};
 
-use pyo3::{pyclass, pymethods, Py, PyErr, Python};
+use pyo3::{Py, PyErr, Python, pyclass, pymethods};
 use strum::Display;
 use tracing::info;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};

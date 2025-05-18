@@ -2,9 +2,9 @@ use std::fmt::{self, Display, Formatter};
 
 use futures::stream::FuturesUnordered;
 use pyo3::types::PyAnyMethods;
-use pyo3::{pyclass, pymethods, Py, PyAny, PyObject, Python};
+use pyo3::{Py, PyAny, PyObject, Python, pyclass, pymethods};
 use regex::Regex;
-use tracing::{debug, instrument, trace, Level};
+use tracing::{Level, debug, instrument, trace};
 
 use crate::error::Error;
 use crate::python;

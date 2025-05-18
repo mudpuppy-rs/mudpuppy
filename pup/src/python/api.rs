@@ -3,18 +3,18 @@ use std::fmt::{Display, Formatter};
 use async_trait::async_trait;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::types::PyAnyMethods;
-use pyo3::{pyclass, pymethods, pymodule, IntoPyObject, Py, PyObject, Python};
+use pyo3::{IntoPyObject, Py, PyObject, Python, pyclass, pymethods, pymodule};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
 use crate::app::{AppData, SlashCommand};
 use crate::error::Error;
 use crate::keyboard::KeyEvent;
-use crate::session::{Alias, EchoState, InputLine, Mud, PromptMode, Trigger};
+use crate::session::{Alias, Character, EchoState, InputLine, PromptMode, Trigger};
 
 use super::{
-    require_coroutine, AliasCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
-    PromptCommand, Result, TelnetCommand, TriggerCommand, APP,
+    APP, AliasCommand, Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand,
+    Result, TelnetCommand, TriggerCommand, require_coroutine,
 };
 
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ pub(crate) struct Session {
     #[pyo3(get)]
     pub(crate) id: u32,
     #[pyo3(get)]
-    pub(crate) mud: Mud,
+    pub(crate) character: Character,
 }
 
 #[pymethods]
@@ -120,7 +120,7 @@ impl Session {
     }
 
     fn __str__(&self) -> String {
-        format!("{}: {}", self.id, self.mud)
+        format!("{}: {}", self.id, self.character)
     }
 
     fn __repr__(&self) -> String {
@@ -130,7 +130,7 @@ impl Session {
 
 impl Display for Session {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.id, self.mud)
+        write!(f, "{}: {}", self.id, self.character)
     }
 }
 
@@ -364,10 +364,10 @@ fn dispatch_command(py: Python<'_>, cmd: Command) -> Result {
 pub(crate) mod pup {
     use std::path::PathBuf;
 
-    use pyo3::{pyfunction, PyObject, Python};
+    use pyo3::{PyObject, Python, pyfunction};
 
     use super::{
-        dispatch_async_command, dispatch_command, Command, FutureResult, PySlashCommand, Result,
+        Command, FutureResult, PySlashCommand, Result, dispatch_async_command, dispatch_command,
     };
     use crate::python::{Handler, Slash};
 
@@ -379,7 +379,8 @@ pub(crate) mod pup {
     use crate::python::{Event, EventType, GlobalEvent, GlobalEventType};
     #[pymodule_export]
     use crate::session::{
-        Alias, EchoState, InputLine, Markup, Mud, MudLine, PromptMode, PromptSignal, Tls, Trigger,
+        Alias, Character, EchoState, InputLine, Markup, Mud, MudLine, PromptMode, PromptSignal,
+        Tls, Trigger,
     };
 
     #[pyfunction]
@@ -403,8 +404,8 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn new_session(py: Python<'_>, mud: Mud) -> FutureResult {
-        dispatch_async_command(py, |tx| Command::NewSession { mud, tx })
+    fn new_session(py: Python<'_>, character: Character) -> FutureResult {
+        dispatch_async_command(py, |tx| Command::NewSession { character, tx })
     }
 
     #[pyfunction]
@@ -423,8 +424,8 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn session_for_mud(py: Python<'_>, mud: Mud) -> FutureResult {
-        dispatch_async_command(py, |tx| Command::SessionForMud(mud, tx))
+    fn session_for_mud(py: Python<'_>, character: Character) -> FutureResult {
+        dispatch_async_command(py, |tx| Command::SessionForCharacter(character, tx))
     }
 
     #[pyfunction]

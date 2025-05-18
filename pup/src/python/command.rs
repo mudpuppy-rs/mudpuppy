@@ -11,20 +11,20 @@ use crate::keyboard::KeyEvent;
 use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
-use crate::session::{Alias, InputLine, Mud, PromptMode, Trigger};
+use crate::session::{Alias, Character, InputLine, PromptMode, Trigger};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
     ActiveSession(oneshot::Sender<Option<Session>>),
     Sessions(oneshot::Sender<Vec<Session>>),
     Session(u32, oneshot::Sender<Option<Session>>),
-    SessionForMud(Mud, oneshot::Sender<Option<Session>>),
+    SessionForCharacter(Character, oneshot::Sender<Option<Session>>),
     ConnectionInfo {
         session: u32,
         tx: oneshot::Sender<Option<connection::Info>>,
     },
     NewSession {
-        mud: Mud,
+        character: Character,
         tx: oneshot::Sender<Session>,
     },
     CloseSession(u32),
@@ -66,11 +66,15 @@ impl Command {
             Command::Session(id, tx) => {
                 let _ = tx.send(app.session(id).ok().map(Into::into));
             }
-            Command::SessionForMud(mud, tx) => {
-                let _ = tx.send(app.sessions_py().into_iter().find(|s| s.mud == mud));
+            Command::SessionForCharacter(character, tx) => {
+                let _ = tx.send(
+                    app.sessions_py()
+                        .into_iter()
+                        .find(|s| s.character == character),
+                );
             }
-            Command::NewSession { mud, tx } => {
-                let _ = tx.send(app.new_session(&mud)?);
+            Command::NewSession { character, tx } => {
+                let _ = tx.send(app.new_session(&character)?);
             }
             Command::CloseSession(id) => {
                 let session = app.session_mut(id)?;

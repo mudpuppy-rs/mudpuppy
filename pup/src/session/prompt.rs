@@ -1,14 +1,14 @@
 use std::mem;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use pyo3::{pyclass, pymethods};
 use strum::Display;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Notify;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
-use tracing::{debug, instrument, trace, warn, Level};
+use tracing::{Level, debug, instrument, trace, warn};
 
 use crate::error::Error;
 use crate::net::connection;

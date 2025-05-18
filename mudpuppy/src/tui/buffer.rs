@@ -2,21 +2,21 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
-use pyo3::{pyclass, pymethods, Py, Python};
+use pyo3::{Py, Python, pyclass, pymethods};
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Span, StyledGrapheme, Text};
 use ratatui::widgets::{
     Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
 };
-use ratatui::Frame;
 use tracing::trace;
 use unicode_width::UnicodeWidthStr;
 
+use crate::Result;
 use crate::client::output::{self, Output};
 use crate::error::Error;
 use crate::tui::reflow::{LineComposer, LineTruncator, WordWrapper, WrappedLine};
-use crate::Result;
 
 /// # Errors
 /// TODO(XXX): write docs.
@@ -412,14 +412,12 @@ impl BufferConfig {
     pub fn scroll_to(&mut self, scroll: usize) {
         trace!(
             "scrolling to pos: scroll-pos {}: {}",
-            scroll,
-            self.scroll_pos
+            scroll, self.scroll_pos
         );
         self.scroll_pos = scroll;
         trace!(
             "scrolling to pos: scroll-pos {} now: {}",
-            scroll,
-            self.scroll_pos
+            scroll, self.scroll_pos
         );
     }
 

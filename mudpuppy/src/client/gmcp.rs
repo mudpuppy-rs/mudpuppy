@@ -7,7 +7,7 @@ use crate::client::output;
 use crate::error::GmcpError;
 use crate::net::telnet;
 use crate::net::telnet::codec::Item as TelnetItem;
-use crate::{python, Result, CRATE_NAME, GIT_COMMIT_HASH};
+use crate::{CRATE_NAME, GIT_COMMIT_HASH, Result, python};
 
 #[derive(Debug)]
 #[pyclass]

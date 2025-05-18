@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
+use ratatui::Frame;
 use ratatui::layout::Constraint::{Fill, Length};
 use ratatui::layout::{Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Tabs};
-use ratatui::Frame;
 
 use crate::app::AppData;
-use crate::config::{Config, CRATE_NAME};
+use crate::config::{CRATE_NAME, Config};
 use crate::error::Error;
 use crate::tui::{Mudlist, TabAction};
 

@@ -111,7 +111,7 @@ impl FromStr for KeyModifiers {
             _ => {
                 return Err(KeyBindingError::InvalidKeys(format!(
                     "unknown key modifier: {s}"
-                )))
+                )));
             }
         })
     }
@@ -202,7 +202,7 @@ impl FromStr for KeyCode {
             _ => {
                 return Err(KeyBindingError::InvalidKeys(format!(
                     "unknown key code: {value:?}"
-                )))
+                )));
             }
         })
     }

@@ -2,7 +2,7 @@ use crossterm::event::{
     KeyCode as CrosstermKeyCode, KeyEvent as CrosstermKeyEvent,
     KeyModifiers as CrosstermKeyModifiers,
 };
-use pyo3::{pyclass, pymethods, Bound, IntoPyObject, PyResult, Python};
+use pyo3::{Bound, IntoPyObject, PyResult, Python, pyclass, pymethods};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::str::FromStr;

@@ -1,5 +1,5 @@
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::future::Future;
@@ -15,21 +15,21 @@ use pyo3::types::{
     PyModuleMethods, PyStringMethods, PyTuple,
 };
 use pyo3::{
-    pyclass, pymethods, pymodule, Bound, Py, PyAny, PyErr, PyObject, PyRef, PyResult, Python,
+    Bound, Py, PyAny, PyErr, PyObject, PyRef, PyResult, Python, pyclass, pymethods, pymodule,
 };
 use ratatui::style::Color;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{RwLock, watch};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::app::{State, UiState};
-use crate::config::{config_dir, data_dir, GlobalConfig, KeyBindings};
+use crate::config::{GlobalConfig, KeyBindings, config_dir, data_dir};
 use crate::error::{AliasError, Error, TimerError, TriggerError};
 use crate::model::{
     Alias, AliasConfig, InputLine, KeyEvent, MouseEvent, MouseEventKind, Mud, MudLine, PromptMode,
     PromptSignal, SessionInfo, Shortcut, Timer, TimerConfig, Tls, Trigger, TriggerConfig,
 };
-use crate::{client, net, tui, Result, CRATE_NAME, GIT_COMMIT_HASH};
+use crate::{CRATE_NAME, GIT_COMMIT_HASH, Result, client, net, tui};
 
 /// Low level types and APIs for interacting with Mudpuppy.
 ///

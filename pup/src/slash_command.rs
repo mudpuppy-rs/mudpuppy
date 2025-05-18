@@ -64,10 +64,10 @@ impl SlashCommand for NewSession {
     }
 
     async fn execute(&self, app: &mut AppData, line: String) -> Result<(), Error> {
-        let Some(mud) = Python::with_gil(|py| {
+        let Some(character) = Python::with_gil(|py| {
             app.config()
                 .borrow(py)
-                .muds
+                .characters
                 .iter()
                 .find(|m| m.name == line)
                 .cloned()
@@ -75,7 +75,7 @@ impl SlashCommand for NewSession {
             return Err(Error::NoSuchMud(line));
         };
 
-        let sesh = app.new_session(&mud)?;
+        let sesh = app.new_session(&character)?;
         app.set_active_session(Some(sesh.id))?;
         Ok(())
     }
@@ -152,7 +152,7 @@ impl Session {
         let active_id = app.active_session().map(|s| s.id);
 
         for sesh in sessions {
-            let mud = &sesh.mud;
+            let character = &sesh.character;
             let info = sesh.connected();
             let is_active = if Some(sesh.id) == active_id {
                 "(*) "
@@ -164,13 +164,13 @@ impl Session {
                 None => {
                     println!(
                         "{is_active}session {}: {} - not connected",
-                        sesh.id, mud.name
+                        sesh.id, character.name
                     );
                 }
                 Some(info) => {
                     println!(
                         "{is_active}session {}: {} - connected {}",
-                        sesh.id, mud.name, info
+                        sesh.id, character.name, info
                     );
                 }
             }

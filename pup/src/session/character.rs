@@ -8,6 +8,49 @@ use tokio_util::bytes::Bytes;
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[pyclass(frozen)]
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
+pub(crate) struct Character {
+    #[pyo3(get)]
+    pub(crate) name: String,
+
+    #[pyo3(get)]
+    pub mud: Mud,
+
+    /// The command separator to use when sending multiple commands in a single message.
+    #[serde(default = "default::command_separator")]
+    #[pyo3(get)]
+    pub command_separator: Option<String>,
+}
+
+#[pymethods]
+impl Character {
+    #[new]
+    #[pyo3(signature = (name, mud, command_separator = None))]
+    fn new(name: String, mud: Mud, command_separator: Option<String>) -> Self {
+        Self {
+            name,
+            mud,
+            command_separator: command_separator.or(default::command_separator()),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+
+    fn __str__(&self) -> String {
+        format!("{self}")
+    }
+}
+
+impl Display for Character {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.name, self.mud)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[pyclass(frozen)]
+#[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
 pub(crate) struct Mud {
     #[pyo3(get)]
     pub(crate) name: String,
@@ -27,24 +70,18 @@ pub(crate) struct Mud {
     #[pyo3(get)]
     #[serde(default)]
     pub(crate) no_tcp_keepalive: bool,
-
-    /// The command separator to use when sending multiple commands in a single message.
-    #[serde(default = "default::command_separator")]
-    #[pyo3(get)]
-    pub command_separator: Option<String>,
 }
 
 #[pymethods]
 impl Mud {
     #[new]
-    #[pyo3(signature = (name, host, port, tls = None, no_tcp_keepalive = None, command_separator = None))]
+    #[pyo3(signature = (name, host, port, tls = None, no_tcp_keepalive = None))]
     fn new(
         name: String,
         host: String,
         port: u16,
         tls: Option<Tls>,
         no_tcp_keepalive: Option<bool>,
-        command_separator: Option<String>,
     ) -> Self {
         Self {
             name,
@@ -52,7 +89,6 @@ impl Mud {
             port,
             tls: tls.unwrap_or_default(),
             no_tcp_keepalive: no_tcp_keepalive.unwrap_or_default(),
-            command_separator: command_separator.or(default::command_separator()),
         }
     }
 

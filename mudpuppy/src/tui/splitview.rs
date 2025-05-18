@@ -1,7 +1,7 @@
 use deref_derive::{Deref, DerefMut};
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::widgets::Clear;
-use ratatui::Frame;
 use std::collections::HashMap;
 
 use crate::client::output;
@@ -9,7 +9,7 @@ use crate::error::Error;
 use crate::model::{Mud, Shortcut};
 use crate::tui::buffer::{self, BufferConfig, DrawScrollbar};
 use crate::tui::mudbuffer::OUTPUT_SECTION_NAME;
-use crate::{client, Result};
+use crate::{Result, client};
 
 #[derive(Debug, Deref, DerefMut)]
 pub(super) struct ScrollWindow {

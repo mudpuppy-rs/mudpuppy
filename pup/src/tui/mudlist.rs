@@ -1,24 +1,24 @@
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use pyo3::Python;
+use ratatui::Frame;
 use ratatui::layout::Constraint::{Max, Min};
 use ratatui::layout::{Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
-use ratatui::Frame;
 use tracing::info;
 
 use crate::app::AppData;
-use crate::config::{config_file, Config};
+use crate::config::{Config, config_file};
 use crate::error::Error;
-use crate::session::Mud;
+use crate::session::Character;
 use crate::tui::{Tab, TabAction};
 
 #[derive(Debug, Default)]
 pub(crate) struct Mudlist {
     list: List<'static>,
     state: ListState,
-    muds: Vec<Mud>,
+    characters: Vec<Character>,
 }
 
 impl Mudlist {
@@ -30,14 +30,14 @@ impl Mudlist {
 
     fn load(&mut self, config: &Config) {
         let items = config
-            .muds
+            .characters
             .iter()
             .map(|mud| ListItem::new(mud.name.clone()))
             .collect::<Vec<_>>();
 
         self.state = ListState::default();
         self.state.select(items.first().map(|_| 0));
-        self.muds.clone_from(&config.muds);
+        self.characters.clone_from(&config.characters);
         self.list = List::new(items)
             .block(
                 Block::default()
@@ -117,11 +117,11 @@ impl Tab for Mudlist {
                 let Some(selected) = self.state.selected() else {
                     return Ok(None);
                 };
-                if selected >= self.muds.len() {
+                if selected >= self.characters.len() {
                     return Ok(None);
                 }
 
-                let selected = self.muds.get(selected).unwrap();
+                let selected = self.characters.get(selected).unwrap();
                 info!("spawning session for {selected}");
                 let sesh = app.new_session(selected)?;
 

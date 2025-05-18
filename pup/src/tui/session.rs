@@ -1,6 +1,6 @@
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::prelude::{Line, Text};
-use ratatui::Frame;
 
 use crate::app::AppData;
 use crate::error::Error;
@@ -21,7 +21,7 @@ impl Session {
 impl Tab for Session {
     fn title(&self) -> Line {
         // TODO(XXX): Styling, unread count, etc...
-        self.sesh.mud.name.clone().into()
+        self.sesh.character.name.clone().into()
     }
 
     fn session_id(&self) -> Option<u32> {
@@ -34,7 +34,10 @@ impl Tab for Session {
         f: &mut Frame<'_>,
         tab_content: Rect,
     ) -> Result<(), Error> {
-        f.render_widget::<Text>(format!("MUD: {}", self.sesh.mud).into(), tab_content);
+        f.render_widget::<Text>(
+            format!("MUD: {}", self.sesh.character.mud).into(),
+            tab_content,
+        );
         Ok(())
     }
 }
