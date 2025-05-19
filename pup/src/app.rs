@@ -23,6 +23,7 @@ use crate::{cli, python, slash_command};
 #[derive(Debug)]
 pub(super) struct App {
     args: cli::Args,
+    config: Config,
     data: AppData,
     frontend: Frontend,
 }
@@ -35,6 +36,7 @@ impl App {
                 true => Headless::new().into(),
                 false => Tui::new(&args, config)?.into(),
             },
+            config: config.clone(),
             args,
         })
     }
@@ -57,9 +59,10 @@ impl App {
 
         // Spawn a task to run the Python user setup code.
         let task_locals = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals)?;
+        let config = self.config.clone();
         let mut setup_task = tokio::spawn(pyo3_async_runtimes::tokio::scope(
             task_locals,
-            python::run_user_setup(),
+            python::run_user_setup(config),
         ));
 
         let result = loop {

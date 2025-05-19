@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -24,6 +25,9 @@ pub(crate) struct Config {
     #[serde(default)]
     #[pyo3(get, set)]
     pub(crate) characters: Vec<Character>,
+
+    #[serde(default)]
+    pub(crate) modules: Vec<String>,
 
     #[serde(default = "default::mouse_enabled")]
     #[pyo3(get, set)]
@@ -63,7 +67,18 @@ impl Config {
     }
 
     fn validate(&self) -> Result<(), ConfigError> {
+        let mut seen = HashSet::new();
+
         for character in &self.characters {
+            // TODO(XXX): would be nice if the get_or_insert() API were stabilized for HashSet...
+            if seen.contains(&character.name) {
+                return Err(ConfigError::InvalidCharacter(format!(
+                    "multiple characters named {}",
+                    character.name
+                )));
+            }
+            seen.insert(&character.name);
+
             if character.name.is_empty() {
                 return Err(ConfigError::InvalidMud("name is empty".to_string()));
             }

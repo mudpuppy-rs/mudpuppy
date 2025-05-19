@@ -14,14 +14,15 @@ use pyo3::sync::GILOnceCell;
 use pyo3::types::{
     PyAnyMethods, PyBool, PyBoolMethods, PyFunction, PyList, PyListMethods, PyModule,
 };
-use pyo3::{Bound, PyAny, PyErr, PyObject, PyResult, Python};
+use pyo3::{Bound, Py, PyAny, PyErr, PyObject, PyResult, Python};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, instrument, trace};
+use tracing::{Level, debug, error, instrument, trace};
 
-use crate::config::config_dir;
+use crate::config::{Config, config_dir};
 use crate::error::Error;
 
 use crate::cli;
+use crate::session::Character;
 pub(crate) use api::*;
 pub(crate) use command::*;
 pub(crate) use events::*;
@@ -74,29 +75,40 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
     Ok(())
 }
 
-// TODO(XXX): load more than just pup_test...
-#[instrument]
-pub(super) async fn run_user_setup() -> Result {
+#[instrument(level = Level::DEBUG, skip(config))]
+pub(super) async fn run_user_setup(config: Config) -> Result {
     let mut py_futures = FuturesUnordered::new();
 
     Python::with_gil(|py| {
-        trace!("loading user pup_test.py");
-        let module = PyModule::import(py, "pup_test")?;
-        if let Ok(setup_fn) = module.getattr("setup") {
-            let setup_future = pyo3_async_runtimes::tokio::into_future(setup_fn.call0()?)?;
-            py_futures.push(Box::pin(setup_future));
+        for module in &config.modules {
+            debug!(module, "loading");
+            let module = PyModule::import(py, module)?;
+            if let Ok(setup_fn) = module.getattr("setup") {
+                let setup_future = pyo3_async_runtimes::tokio::into_future(setup_fn.call0()?)?;
+                py_futures.push(Box::pin(setup_future));
+            }
         }
-
         Ok::<(), PyErr>(())
     })?;
 
     while let Some(result) = py_futures.next().await {
         if let Err(err) = result {
-            error!("python setup error: {err}");
+            error!("python config module setup error: {err}");
         }
     }
 
     Ok(())
+}
+
+#[instrument(level = Level::DEBUG)]
+pub(super) fn run_character_setup(character: &Character) -> Result<Option<Py<PyModule>>> {
+    let Some(module) = &character.module else {
+        return Ok(None);
+    };
+
+    Ok(Some(Python::with_gil(|py| {
+        Ok::<_, Error>(PyModule::import(py, module)?.unbind())
+    })?))
 }
 
 pub(super) fn require_coroutine(

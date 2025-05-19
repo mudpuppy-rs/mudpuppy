@@ -10,6 +10,7 @@ use std::fmt::Debug;
 
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
+use pyo3::types::PyModule;
 use pyo3::{Py, Python};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::bytes::Bytes;
@@ -40,6 +41,8 @@ pub(super) struct Session {
     state: ConnectionState,
     telnet_state: telnet::negotiation::Table,
     gmcp_packages: HashSet<String>,
+    #[allow(dead_code)] // TODO(XXX): use user_module for reload support.
+    user_module: Option<Py<PyModule>>,
 
     conn_event_tx: UnboundedSender<connection::Event>,
     python_event_tx: UnboundedSender<(u32, python::Event)>,
@@ -54,7 +57,6 @@ impl Session {
     ) -> Result<Self, Error> {
         Ok(Self {
             id,
-            character,
             event_handlers: python::SessionHandlers::default(),
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
@@ -64,6 +66,8 @@ impl Session {
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),
             gmcp_packages: HashSet::default(),
+            user_module: python::run_character_setup(&character)?,
+            character,
 
             conn_event_tx,
             python_event_tx,

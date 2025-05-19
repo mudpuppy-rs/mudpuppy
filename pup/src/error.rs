@@ -85,6 +85,9 @@ pub enum ConfigError {
     #[error("{0}")]
     General(#[from] config_crate::ConfigError),
 
+    #[error("invalid character in config: {0}")]
+    InvalidCharacter(String),
+
     #[error("invalid MUD server: {0}")]
     InvalidMud(String),
 }

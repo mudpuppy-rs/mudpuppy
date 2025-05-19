@@ -15,6 +15,9 @@ pub(crate) struct Character {
     #[pyo3(get)]
     pub mud: Mud,
 
+    #[pyo3(get)]
+    pub module: Option<String>,
+
     /// The command separator to use when sending multiple commands in a single message.
     #[serde(default = "default::command_separator")]
     #[pyo3(get)]
@@ -24,11 +27,17 @@ pub(crate) struct Character {
 #[pymethods]
 impl Character {
     #[new]
-    #[pyo3(signature = (name, mud, command_separator = None))]
-    fn new(name: String, mud: Mud, command_separator: Option<String>) -> Self {
+    #[pyo3(signature = (name, mud, module = None, command_separator = None))]
+    fn new(
+        name: String,
+        mud: Mud,
+        module: Option<String>,
+        command_separator: Option<String>,
+    ) -> Self {
         Self {
             name,
             mud,
+            module,
             command_separator: command_separator.or(default::command_separator()),
         }
     }
