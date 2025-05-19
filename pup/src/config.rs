@@ -22,7 +22,7 @@ use crate::session::{Character, Tls};
 #[pyclass]
 #[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
 pub(crate) struct Config {
-    #[serde(default)]
+    #[serde(default, rename = "character")]
     #[pyo3(get, set)]
     pub(crate) characters: Vec<Character>,
 
