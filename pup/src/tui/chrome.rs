@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, Borders, Tabs};
 use crate::app::AppData;
 use crate::config::{CRATE_NAME, Config};
 use crate::error::Error;
-use crate::tui::{Mudlist, TabAction};
+use crate::tui::{CharacterMenu, TabAction};
 
 #[derive(Debug)]
 pub(crate) struct Chrome {
@@ -22,7 +22,7 @@ impl Chrome {
     pub(crate) fn new(config: &Config) -> Self {
         Self {
             active_tab: 0,
-            tabs: vec![Box::new(Mudlist::new(config))],
+            tabs: vec![Box::new(CharacterMenu::new(config))],
         }
     }
 

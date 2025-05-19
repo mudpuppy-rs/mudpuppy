@@ -1,5 +1,5 @@
+mod char_menu;
 mod chrome;
-mod mudlist;
 mod session;
 
 use std::fmt::Debug;
@@ -22,8 +22,8 @@ use crate::app::AppData;
 use crate::config::{CRATE_NAME, Config};
 use crate::error::Error;
 use crate::{cli, python};
+pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab};
-pub(super) use mudlist::Mudlist;
 pub(super) use session::Session;
 
 #[derive(Debug)]

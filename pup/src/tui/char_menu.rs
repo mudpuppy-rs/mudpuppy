@@ -15,13 +15,13 @@ use crate::session::Character;
 use crate::tui::{Tab, TabAction};
 
 #[derive(Debug, Default)]
-pub(crate) struct Mudlist {
+pub(crate) struct CharacterMenu {
     list: List<'static>,
     state: ListState,
     characters: Vec<Character>,
 }
 
-impl Mudlist {
+impl CharacterMenu {
     pub(crate) fn new(config: &Config) -> Self {
         let mut ml = Self::default();
         ml.load(config);
@@ -41,7 +41,7 @@ impl Mudlist {
         self.list = List::new(items)
             .block(
                 Block::default()
-                    .title("Choose a MUD")
+                    .title("Choose a character")
                     .borders(Borders::ALL)
                     .border_style(Color::Magenta),
             )
@@ -55,9 +55,9 @@ impl Mudlist {
     }
 }
 
-impl Tab for Mudlist {
+impl Tab for CharacterMenu {
     fn title(&self) -> Line<'_> {
-        Line::from("MUDs")
+        Line::from("Menu")
     }
 
     fn render(
@@ -71,7 +71,7 @@ impl Tab for Mudlist {
         draw_help(f, help);
 
         if self.list.is_empty() {
-            f.render_widget::<Text>("No MUDs configured...".into(), mud_list);
+            f.render_widget::<Text>("No characters configured...".into(), mud_list);
         } else {
             f.render_stateful_widget(&self.list, mud_list, &mut self.state);
         }
@@ -140,12 +140,12 @@ impl Tab for Mudlist {
 fn draw_help(frame: &mut Frame<'_>, area: Rect) {
     let help_text: Vec<Line> = vec![
         format!(
-            "* Edit {} to add/edit/remove MUDs. This list will reload automatically.",
+            "* Edit {} to add/edit/remove characters. This list will reload automatically.",
             config_file().display()
         )
         .into(),
-        "* Use the arrow keys to select a MUD in the list.".into(),
-        "* Press enter to connect to a MUD.".into(),
+        "* Use the arrow keys to select a character in the list.".into(),
+        "* Press enter to create a new session.".into(),
     ];
     frame.render_widget(
         Paragraph::new(help_text).block(Block::default().title("Help:").borders(Borders::ALL)),
