@@ -156,6 +156,10 @@ impl Input {
         self.echo
     }
 
+    pub(crate) fn value(&self) -> InputLine {
+        self.line.clone()
+    }
+
     pub(crate) fn set_value(&mut self, value: InputLine) {
         self.line = value;
         self.cursor = self.line.sent.chars().count();
@@ -324,6 +328,10 @@ impl Input {
 
         result.extend(chars);
         result
+    }
+
+    fn __str__(&self) -> String {
+        format!("{self}")
     }
 }
 

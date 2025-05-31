@@ -135,7 +135,6 @@ impl Tui {
         match tab_action {
             TabAction::Create(sesh) => {
                 info!(sesh=?sesh, "creating session");
-                app.new_session(&sesh.character)?;
                 self.chrome.new_tab(Character::new(sesh));
             }
             TabAction::Next => {

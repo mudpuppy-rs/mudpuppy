@@ -108,7 +108,10 @@ impl Command {
                 app.session_mut(session)?.key_event(&key);
             }
             Command::Input { session, tx } => {
-                let _ = tx.send(app.session(session)?.input.clone());
+                let input = Python::with_gil(|py| {
+                    Ok::<_, Error>(app.session(session)?.input.clone_ref(py))
+                })?;
+                let _ = tx.send(input);
             }
             Command::Slash(cmd) => {
                 cmd.exec(app);

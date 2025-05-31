@@ -93,7 +93,8 @@ pub(super) async fn run_user_setup(config: Config) -> Result {
 
     while let Some(result) = py_futures.next().await {
         if let Err(err) = result {
-            error!("python config module setup error: {err}");
+            // Note: Error::from() to collect backtrace from PyErr.
+            error!("python config module setup error: {}", Error::from(err));
         }
     }
 
@@ -106,17 +107,32 @@ pub(super) fn run_character_setup(id: u32, character: &Character) -> Result<Opti
         return Ok(None);
     };
 
-    Ok(Some(Python::with_gil(|py| {
+    let (future, module) = Python::with_gil(|py| {
         let module = PyModule::import(py, module)?;
-        module.call_method1(
+
+        let future = pyo3_async_runtimes::tokio::into_future(module.call_method1(
             "setup",
             (Session {
                 id,
                 character: character.clone(),
             },),
-        )?;
-        Ok::<_, Error>(module.unbind())
-    })?))
+        )?)?;
+
+        Ok::<_, Error>((future, module.unbind()))
+    })?;
+
+    let character_name = character.to_string();
+    tokio::spawn(async move {
+        if let Err(err) = future.await {
+            // Note: Error::from() to collect backtrace from PyErr.
+            error!(
+                "character {character_name} setup error: {}",
+                Error::from(err)
+            );
+        }
+    });
+
+    Ok(Some(module))
 }
 
 pub(super) fn require_coroutine(

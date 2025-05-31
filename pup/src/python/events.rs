@@ -220,7 +220,7 @@ where
 impl<Event, EventType> Handlers<Event, EventType>
 where
     Event: Clone,
-    EventType: AllType + Eq + Hash + Clone + 'static,
+    EventType: AllType + Display + Eq + Hash + Clone + 'static,
 {
     pub(super) fn add(&mut self, handler: Handler<Event, EventType>) {
         self.handlers
@@ -247,10 +247,15 @@ where
             }
         }
 
+        let event_type_name = event_type.to_string();
         tokio::spawn(async move {
             while let Some(result) = futures.next().await {
                 if let Err(err) = result {
-                    error!("event callback error: {err}");
+                    // Note: Error::from() to collect backtrace from PyErr.
+                    error!(
+                        "event type {event_type_name} callback error: {}",
+                        Error::from(err)
+                    );
                 }
             }
         });

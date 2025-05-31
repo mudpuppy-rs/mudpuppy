@@ -239,10 +239,12 @@ impl Session {
                 }
             }
 
+            let session_name = self.character.to_string();
             tokio::spawn(async move {
                 while let Some(result) = futures.next().await {
                     if let Err(err) = result {
-                        error!("alias callback error: {err}");
+                        // Note: Error::from() to collect backtrace from PyErr.
+                        error!("{session_name} alias callback error: {}", Error::from(err));
                     }
                 }
             });
@@ -355,10 +357,15 @@ impl Session {
             Ok::<(), Error>(())
         })?;
 
+        let character_name = self.character.to_string();
         tokio::spawn(async move {
             while let Some(result) = futures.next().await {
                 if let Err(err) = result {
-                    error!("trigger callback error: {err}");
+                    // Note: Error::from() to collect backtrace from PyErr.
+                    error!(
+                        "{character_name} trigger callback error: {}",
+                        Error::from(err)
+                    );
                 }
             }
         });
