@@ -102,7 +102,7 @@ impl Command {
                 line,
                 skip_aliases,
             } => {
-                app.session(session)?.send_line(line, skip_aliases)?;
+                app.session_mut(session)?.send_line(line, skip_aliases)?;
             }
             Command::SendKey { session, key } => {
                 app.session_mut(session)?.key_event(&key);

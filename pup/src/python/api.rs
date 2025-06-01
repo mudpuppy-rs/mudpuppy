@@ -386,8 +386,8 @@ pub(crate) mod pup {
     use crate::python::{Event, EventType, GlobalEvent, GlobalEventType};
     #[pymodule_export]
     use crate::session::{
-        Alias, Character, EchoState, InputLine, Markup, Mud, MudLine, PromptMode, PromptSignal,
-        Tls, Trigger,
+        Alias, Character, EchoState, InputLine, Markup, Mud, MudLine, OutputItem, PromptMode,
+        PromptSignal, Tls, Trigger,
     };
     #[pymodule_export]
     use crate::tui::{Constraint, Direction, Section};

@@ -69,8 +69,6 @@ impl Tab for Character {
         };
 
         Python::with_gil(|py| {
-            let mut input = session.input.borrow_mut(py);
-
             if let &crossterm::event::KeyEvent {
                 kind: crossterm::event::KeyEventKind::Press,
                 code: crossterm::event::KeyCode::Enter,
@@ -79,11 +77,16 @@ impl Tab for Character {
             } = key_event
             {
                 if modifiers.is_empty() {
-                    session.send_line(input.pop().unwrap_or_default(), false)?;
+                    let input = {
+                        let mut input = session.input.borrow_mut(py);
+                        input.pop().unwrap_or_default()
+                    };
+                    session.send_line(input, false)?;
                 }
                 return Ok(None);
             }
 
+            let mut input = session.input.borrow_mut(py);
             let key_event = (*key_event).try_into().map_err(Error::Internal)?;
             input.key_event(&key_event);
             Ok(None)

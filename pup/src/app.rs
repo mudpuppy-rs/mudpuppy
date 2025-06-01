@@ -230,6 +230,11 @@ impl AppData {
         self.active_session.and_then(|id| self.sessions.get(&id))
     }
 
+    pub(crate) fn active_session_mut(&mut self) -> Option<&mut Session> {
+        self.active_session
+            .and_then(|id| self.sessions.get_mut(&id))
+    }
+
     pub(crate) fn active_session_py(&self) -> Option<python::Session> {
         self.session(self.active_session?).ok().map(Into::into)
     }

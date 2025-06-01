@@ -2,6 +2,7 @@ mod alias;
 mod character;
 mod gmcp;
 mod input;
+mod output;
 mod prompt;
 mod trigger;
 
@@ -25,6 +26,7 @@ use crate::python;
 pub(crate) use alias::*;
 pub(crate) use character::*;
 pub(crate) use input::*;
+pub(crate) use output::*;
 pub(crate) use prompt::*;
 pub(crate) use trigger::*;
 
@@ -35,6 +37,7 @@ pub(super) struct Session {
     pub(super) event_handlers: python::SessionHandlers,
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
+    pub(super) output: Output,
     pub(super) triggers: Vec<Py<Trigger>>,
     pub(super) aliases: Vec<Py<Alias>>,
 
@@ -60,6 +63,7 @@ impl Session {
             event_handlers: python::SessionHandlers::default(),
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
+            output: Output::default(),
             triggers: Vec::default(),
             aliases: Vec::default(),
 
@@ -87,6 +91,10 @@ impl Session {
         ));
         self.python_event_tx
             .send((self.id, python::Event::SessionConnecting {}))?;
+        self.output.add(OutputItem::ConnectionEvent {
+            message: "Connecting...".to_string(),
+            info: None,
+        });
 
         Ok(())
     }
@@ -96,6 +104,10 @@ impl Session {
         let handle = self.connected_handle()?;
         handle.action_tx.send(connection::Action::Disconnect)?;
         self.state = ConnectionState::Disconnected;
+        self.output.add(OutputItem::ConnectionEvent {
+            message: "Disconnected...".to_string(),
+            info: None,
+        });
         Ok(())
     }
 
@@ -208,13 +220,13 @@ impl Session {
     }
 
     #[instrument(level = Level::TRACE, skip(self))]
-    pub(super) fn send_line(&self, line: InputLine, skip_aliases: bool) -> Result<(), Error> {
+    pub(super) fn send_line(&mut self, line: InputLine, skip_aliases: bool) -> Result<(), Error> {
         let lines = match &self.character.command_separator {
             Some(separator) if line.sent.contains(separator) => line.split(separator),
             _ => vec![line],
         };
 
-        let py_sesh = python::Session::from(self);
+        let py_sesh = python::Session::from(&*self);
         for mut line in lines {
             let mut futures = FuturesUnordered::new();
             let mut skip_transmit = false;
@@ -258,7 +270,8 @@ impl Session {
 
             self.connected_handle()?.send_line(&line.sent)?;
             self.python_event_tx
-                .send((self.id, python::Event::InputLine { line }))?;
+                .send((self.id, python::Event::InputLine { line: line.clone() }))?;
+            self.output.add(line.into());
         }
 
         Ok(())
@@ -286,7 +299,10 @@ impl Session {
                     handle,
                     info: info.clone(),
                 };
-
+                self.output.add(OutputItem::ConnectionEvent {
+                    message: "Connected".to_string(),
+                    info: Some(info.clone()),
+                });
                 self.python_event_tx.send((
                     self.id,
                     python::Event::SessionConnected { info: info.clone() },
@@ -295,12 +311,20 @@ impl Session {
             connection::SessionEvent::Disconnected => {
                 info!("session disconnected");
                 self.state = ConnectionState::Disconnected;
+                self.output.add(OutputItem::ConnectionEvent {
+                    message: "Disconnected...".to_string(),
+                    info: None,
+                });
                 self.python_event_tx
                     .send((self.id, python::Event::SessionDisconnected {}))?;
             }
             connection::SessionEvent::Error(err) => {
                 error!("session error: {err}");
                 self.state = ConnectionState::Disconnected;
+                self.output.add(OutputItem::ConnectionEvent {
+                    message: "Disconnected...".to_string(),
+                    info: None,
+                });
                 // TODO(XXX): error event.
                 self.python_event_tx
                     .send((self.id, python::Event::SessionDisconnected {}))?;
@@ -311,8 +335,13 @@ impl Session {
             connection::SessionEvent::Telnet(TelnetItem::Subnegotiation(opt, data))
                 if *opt == telnet::option::GMCP =>
             {
+                let gmcp_event = gmcp::decode(data)?;
+                // TODO(XXX): Debug on/off for GMCP.
+                self.output.add(OutputItem::Debug {
+                    line: gmcp_event.to_string(),
+                });
                 if self.protocol_enabled(telnet::option::GMCP) {
-                    self.python_event_tx.send((self.id, gmcp::decode(data)?))?;
+                    self.python_event_tx.send((self.id, gmcp_event))?;
                 } else {
                     warn!("ignoring GMCP subnegotiation for disabled GMCP");
                 }
@@ -335,6 +364,14 @@ impl Session {
             connection::SessionEvent::PartialLine(content) => {
                 self.prompt
                     .set_content(String::from_utf8_lossy(content).to_string())?;
+                // TODO(XXX): held prompt?
+                self.output.add(OutputItem::Prompt {
+                    prompt: MudLine {
+                        raw: content.clone(),
+                        prompt: true,
+                        gag: false,
+                    },
+                });
             }
             connection::SessionEvent::Telnet(_) => {}
         }
@@ -369,8 +406,10 @@ impl Session {
                 }
             }
         });
+
         self.python_event_tx
-            .send((self.id, python::Event::Line { line }))?;
+            .send((self.id, python::Event::Line { line: line.clone() }))?;
+        self.output.add(OutputItem::Mud { line });
 
         Ok(())
     }

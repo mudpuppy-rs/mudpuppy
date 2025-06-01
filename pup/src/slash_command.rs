@@ -7,6 +7,7 @@ use pyo3::Python;
 
 use crate::app::AppData;
 use crate::error::Error;
+use crate::session::OutputItem;
 
 #[async_trait]
 pub(super) trait SlashCommand: Debug + Send + Sync {
@@ -50,6 +51,12 @@ impl SlashCommand for QuitCommand {
 
     async fn execute(&self, app: &mut AppData, _line: String) -> Result<(), Error> {
         app.should_quit = true;
+        if let Some(active_session) = app.active_session_mut() {
+            active_session.output.add(OutputItem::CommandResult {
+                error: false,
+                message: "Quitting...".to_string(),
+            });
+        }
         Ok(())
     }
 }
@@ -77,6 +84,12 @@ impl SlashCommand for NewSession {
 
         let sesh = app.new_session(&character)?;
         app.set_active_session(Some(sesh.id))?;
+
+        let active_sess = app.active_session_mut().unwrap();
+        active_sess.output.add(OutputItem::CommandResult {
+            error: false,
+            message: format!("Creating session for {character}"),
+        });
         Ok(())
     }
 }
