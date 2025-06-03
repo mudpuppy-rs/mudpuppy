@@ -9,7 +9,7 @@ use tracing_subscriber::{EnvFilter, Layer};
 use crate::app::restore_terminal;
 use crate::config::{config_dir, data_dir};
 use crate::error::{ConfigError, Error};
-use crate::{cli, Result, CRATE_NAME};
+use crate::{CRATE_NAME, Result, cli};
 
 /// Set up logging to a log file in the data directory.
 ///

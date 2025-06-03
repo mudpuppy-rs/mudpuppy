@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::{KeyEvent, MouseEvent};
-use futures::channel::mpsc::{channel as futures_channel, Receiver};
+use futures::channel::mpsc::{Receiver, channel as futures_channel};
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, SinkExt, StreamExt};
 use notify::{
@@ -13,32 +13,32 @@ use notify::{
 };
 use pyo3::{Py, PyObject, PyResult, Python};
 use ratatui::backend::{Backend, CrosstermBackend};
+use ratatui::crossterm::ExecutableCommand;
 use ratatui::crossterm::event::{Event as TermEvent, KeyEventKind};
 use ratatui::crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::crossterm::ExecutableCommand;
 use ratatui::layout::Constraint::{Fill, Length, Max, Min};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs};
-use ratatui::{crossterm, Frame, Terminal};
+use ratatui::{Frame, Terminal, crossterm};
 use tokio::select;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::RwLock;
-use tokio::time::{interval, MissedTickBehavior};
-use tracing::{debug, error, info, instrument, trace, warn, Level};
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+use tokio::time::{MissedTickBehavior, interval};
+use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::client::Client;
-use crate::config::{config_dir, config_file, GlobalConfig};
+use crate::config::{GlobalConfig, config_dir, config_file};
 use crate::error::Error;
 use crate::idmap::IdMap;
 use crate::model::{InputMode, Mud, SessionInfo, Shortcut, Timer};
 use crate::net::connection;
 use crate::python::{self, PyApp};
 use crate::tui::{mudlist, session};
-use crate::{cli, Result, CRATE_NAME};
+use crate::{CRATE_NAME, Result, cli};
 
 pub struct App {
     config: GlobalConfig,
@@ -554,8 +554,8 @@ fn config_reload_event(
     state: &mut State,
     event: &NotifyEvent,
 ) {
-    use notify::event::ModifyKind;
     use notify::EventKind;
+    use notify::event::ModifyKind;
 
     let data_changed = matches!(
         event.kind,

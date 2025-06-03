@@ -10,11 +10,11 @@ use std::time::Duration;
 
 use crossterm::event::MouseEvent;
 use futures::stream::FuturesUnordered;
-use pyo3::{pyclass, pymethods, Py, PyRefMut, Python};
+use pyo3::{Py, PyRefMut, Python, pyclass, pymethods};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use serde::Serialize;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, info, instrument, trace, warn, Level};
+use tracing::{Level, debug, info, instrument, trace, warn};
 
 use crate::client::gmcp::Gmcp;
 use crate::client::input::{EchoState, Input};

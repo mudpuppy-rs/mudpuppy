@@ -1,11 +1,11 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Notify;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
-use tracing::{instrument, trace, Level};
+use tracing::{Level, instrument, trace};
 
 use crate::net::connection;
 

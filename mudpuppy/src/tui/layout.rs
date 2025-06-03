@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use pyo3::types::{PyAnyMethods, PyDict, PyList, PyListMethods, PyTuple};
-use pyo3::{pyclass, pymethods, Bound, Py, Python};
+use pyo3::{Bound, Py, Python, pyclass, pymethods};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-use crate::error::Error;
 use crate::Result;
+use crate::error::Error;
 
 // TODO(XXX): Rename?
 #[derive(Debug, Clone)]
