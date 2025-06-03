@@ -9,11 +9,11 @@ use pyo3::{pyclass, pymethods};
 use socket2::{Socket, TcpKeepalive};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpStream;
+use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
-use tracing::{info, instrument, Level};
+use tracing::{Level, info, instrument};
 
 use crate::error::Error;
 use crate::model::{Mud, Tls};
@@ -263,7 +263,7 @@ mod danger {
     };
     use tokio_rustls::rustls::crypto::ring::default_provider;
     use tokio_rustls::rustls::crypto::{
-        verify_tls12_signature, verify_tls13_signature, CryptoProvider,
+        CryptoProvider, verify_tls12_signature, verify_tls13_signature,
     };
     use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName, UnixTime};
     use tokio_rustls::rustls::{DigitallySignedStruct, Error, SignatureScheme};

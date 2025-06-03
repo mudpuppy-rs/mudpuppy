@@ -11,10 +11,10 @@ use toml_edit::{ArrayOfTables, DocumentMut, Item, Value};
 use tracing::{debug, info, trace, warn};
 
 use super::keybindings::KeyBindings;
+use crate::Result;
 use crate::config::{config_dir, config_file, data_dir};
 use crate::error::{ConfigError, Error};
 use crate::model::{self, InputMode, Mud, Shortcut, Tls};
-use crate::Result;
 
 /// A [`Config`] that is shared globally for the entire application.
 #[derive(Debug, Clone)]

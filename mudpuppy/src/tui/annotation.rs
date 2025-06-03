@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
+use crate::Result;
 use crate::error::Error;
 use crate::idmap::Identifiable;
-use crate::Result;
 use pyo3::types::PyAnyMethods;
-use pyo3::{pyclass, pymethods, Py, Python};
+use pyo3::{Py, Python, pyclass, pymethods};
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::prelude::Color;
 use ratatui::style::Style;
-use ratatui::Frame;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
