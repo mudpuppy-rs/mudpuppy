@@ -1,17 +1,17 @@
 use async_trait::async_trait;
+use ratatui::Frame;
 use ratatui::layout::Constraint::{Max, Min};
 use ratatui::layout::{Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
-use ratatui::Frame;
-use tracing::{info, instrument, Level};
+use tracing::{Level, info, instrument};
 
+use crate::Result;
 use crate::app::{State, Tab, TabAction, TabKind};
-use crate::config::{config_file, GlobalConfig};
+use crate::config::{GlobalConfig, config_file};
 use crate::error::Error;
 use crate::model::{InputMode, Mud, Shortcut};
-use crate::Result;
 
 #[derive(Debug)]
 pub struct Widget {

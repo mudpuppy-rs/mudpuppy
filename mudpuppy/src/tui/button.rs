@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use pyo3::types::PyAnyMethods;
-use pyo3::{pyclass, Py, PyAny, Python};
+use pyo3::{Py, PyAny, Python, pyclass};
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
-use ratatui::Frame;
 use tui_framework_experiment::button as tui_button;
 
+use crate::Result;
 use crate::error::Error;
 use crate::idmap::Identifiable;
-use crate::Result;
 
 #[derive(Debug, Clone)]
 #[pyclass]

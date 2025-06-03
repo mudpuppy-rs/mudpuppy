@@ -3,9 +3,9 @@ use std::time::Duration;
 use clap::Parser;
 use tracing::level_filters::LevelFilter;
 
+use crate::Result;
 use crate::config::version;
 use crate::error::Error;
-use crate::Result;
 
 #[derive(Parser, Debug)]
 #[command(author, version = version(), about)]

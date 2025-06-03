@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use pyo3::{pyclass, pymethods, Py, PyRef, Python};
+use pyo3::{Py, PyRef, Python, pyclass, pymethods};
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::widgets::Clear;
-use ratatui::Frame;
 
 use crate::client::output::Output;
 use crate::error::Error;

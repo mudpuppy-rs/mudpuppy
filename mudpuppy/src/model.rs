@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossterm::event::{
     MouseButton, MouseEvent as TermMouseEvent, MouseEventKind as TermMouseEventKind,
 };
-use pyo3::{pyclass, pymethods, Py, PyAny, PyObject, PyRef, Python};
+use pyo3::{Py, PyAny, PyObject, PyRef, Python, pyclass, pymethods};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};

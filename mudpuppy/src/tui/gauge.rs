@@ -2,16 +2,16 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use pyo3::types::PyAnyMethods;
-use pyo3::{pyclass, pymethods, Py, Python};
+use pyo3::{Py, Python, pyclass, pymethods};
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Gauge as RatatuiGauge};
-use ratatui::Frame;
 
+use crate::Result;
 use crate::error::Error;
 use crate::idmap::Identifiable;
-use crate::Result;
 
 #[derive(Debug, Clone)]
 #[pyclass]
