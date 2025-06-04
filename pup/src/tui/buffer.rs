@@ -325,10 +325,12 @@ impl BufferItem for OutputItem {
                 " 💻 ",
                 Style::default().fg(Color::LightBlue),
             )]),
-            Self::CommandResult { error: true, .. } => Some(vec![Span::styled(
-                " ✗ ",
-                Style::default().fg(Color::LightRed),
-            )]),
+            Self::CommandResult { error: true, .. } | Self::Error { .. } => {
+                Some(vec![Span::styled(
+                    " ✗ ",
+                    Style::default().fg(Color::LightRed),
+                )])
+            }
             Self::CommandResult { error: false, .. } => Some(vec![Span::styled(
                 " ℹ ",
                 Style::default().fg(Color::LightBlue),
@@ -372,6 +374,16 @@ impl BufferItem for OutputItem {
                 let mut content = line.clean().into_text()?;
                 for line in &mut content.lines {
                     line.style = Style::default().add_modifier(Modifier::DIM);
+                    if let Some(spans) = self.icon() {
+                        line.spans.splice(0..0, spans);
+                    }
+                }
+                content
+            }
+            Self::Error { message } => {
+                let mut content = message.clean().into_text()?;
+                for line in &mut content.lines {
+                    line.style = Style::default().fg(Color::LightRed);
                     if let Some(spans) = self.icon() {
                         line.spans.splice(0..0, spans);
                     }

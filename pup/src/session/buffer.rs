@@ -198,23 +198,18 @@ impl TrackedOutput {
 #[pyclass]
 pub(crate) enum OutputItem {
     /// An item of output, usually from the MUD server.
-    Mud {
-        line: MudLine,
-    },
+    Mud { line: MudLine },
 
     /// A line of input, usually from the player.
-    Input {
-        line: InputLine,
-    },
+    Input { line: InputLine },
 
     /// A line of output that was detected as a prompt.
-    Prompt {
-        prompt: MudLine,
-    },
+    Prompt { prompt: MudLine },
 
-    HeldPrompt {
-        prompt: String,
-    },
+    /// A line of output that was detected as a prompt and should be displayed in a held
+    /// position at the bottom of the output.
+    // TODO(XXX): maybe better named LastPrompt, or folding into the existing Prompt item.
+    HeldPrompt { prompt: String },
 
     /// An item of output related to the connection status changing.
     // TODO(XXX): revisit.
@@ -224,15 +219,13 @@ pub(crate) enum OutputItem {
     },
 
     /// A line of output produced as a result of executing a mudpuppy command.
-    CommandResult {
-        error: bool,
-        message: String,
-    },
+    CommandResult { error: bool, message: String },
 
     /// A line of debug data
-    Debug {
-        line: String,
-    },
+    Debug { line: String },
+
+    /// A runtime error
+    Error { message: String },
 }
 
 #[pymethods]

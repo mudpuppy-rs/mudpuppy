@@ -310,11 +310,13 @@ impl Session {
             connection::SessionEvent::Error(err) => {
                 error!("session error: {err}");
                 self.state = ConnectionState::Disconnected;
+                self.output.add(OutputItem::Error {
+                    message: err.to_string(),
+                });
                 self.output.add(OutputItem::ConnectionEvent {
                     message: "Disconnected...".to_string(),
                     info: None,
                 });
-                // TODO(XXX): error event.
                 self.python_event_tx
                     .send((self.id, python::Event::SessionDisconnected {}))?;
             }
@@ -353,7 +355,6 @@ impl Session {
             connection::SessionEvent::PartialLine(content) => {
                 self.prompt
                     .set_content(String::from_utf8_lossy(content).to_string())?;
-                // TODO(XXX): held prompt?
                 self.output.add(OutputItem::Prompt {
                     prompt: MudLine {
                         raw: content.clone(),
