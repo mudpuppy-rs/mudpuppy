@@ -11,21 +11,6 @@ use std::io::{IsTerminal, Stdout, stdout};
 use std::num::NonZeroUsize;
 use std::panic;
 
-use crossterm::ExecutableCommand;
-use crossterm::event::{
-    Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode, KeyEvent, KeyEventKind,
-    KeyModifiers,
-};
-use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
-use futures::{FutureExt, StreamExt};
-use pyo3::Python;
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::layout::Layout;
-use tokio::select;
-use tokio::time::{Interval, MissedTickBehavior, interval};
-use tracing::{debug, error, info, trace, warn};
-
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::Error;
@@ -33,8 +18,22 @@ use crate::session::OutputItem;
 use crate::{cli, python};
 pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab};
+use crossterm::ExecutableCommand;
+use crossterm::event::{
+    Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers,
+};
+use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
+use futures::{FutureExt, StreamExt};
 pub(super) use layout::{Constraint, Direction, Section};
+use pyo3::Python;
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Layout;
 pub(super) use session::Character;
+use tokio::select;
+use tokio::time::{Interval, MissedTickBehavior, interval};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Debug)]
 pub(super) struct Tui {

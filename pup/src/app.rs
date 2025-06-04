@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use futures::StreamExt;
 use notify::event::Event as NotifyEvent;
 use pyo3::{Py, Python};
+use strum::Display;
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
@@ -112,7 +113,7 @@ impl App {
                     // TODO(XXX): feels awkward to have this layer handle UI related commands ad-hoc
                     if let python::Command::Tab(tab_action) = py_cmd {
                         self.frontend.tab_action(&mut self.data, tab_action)?;
-                    }                   else {
+                    } else {
                         match py_cmd.exec(&mut self.data) {
                             Ok(true) => {
                                 info!("quitting");
@@ -347,6 +348,7 @@ impl Frontend {
         }
     }
 
+    #[instrument(skip(self, app, action) fields(action=action.to_string()))]
     fn tab_action(&mut self, app: &mut AppData, action: TabAction) -> Result<(), Error> {
         let Frontend::Tui(tui) = self else {
             warn!(action=?action, "ignoring tab action in headless mode");
@@ -385,7 +387,7 @@ impl From<Tui> for Frontend {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub(crate) enum TabAction {
     Create {
         session: python::Session,
