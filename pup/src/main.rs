@@ -15,19 +15,20 @@ mod tui;
 use std::error::Error as StdError;
 
 use clap::Parser;
-use pyo3::{PyResult, Python};
+use pyo3::Python;
 use pyo3_async_runtimes::tokio as pyo3tokio;
 use tokio::runtime;
 use tokio::sync::mpsc::unbounded_channel;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
+use crate::error::Error;
 use app::App;
 use config::{CRATE_NAME, Config};
 use python::{APP, pup};
 
 fn main() -> Result<(), Box<dyn StdError>> {
-    #[instrument(skip(args, config))]
-    async fn main(args: cli::Args, config: Config) -> PyResult<()> {
+    #[instrument(skip(args))]
+    async fn main(args: cli::Args) -> Result<(), Error> {
         info!(args=?args, "starting app");
         pyo3_pylogger::register(CRATE_NAME);
 
@@ -36,10 +37,9 @@ fn main() -> Result<(), Box<dyn StdError>> {
             APP.set(py, py_tx).unwrap();
         });
 
-        App::new(args, &config)?
-            .run(py_rx)
-            .await
-            .map_err(Into::into)
+        let config = Config::new()?;
+
+        App::new(args, &config)?.run(py_rx).await
     }
 
     panic::install_handler();
@@ -54,10 +54,15 @@ fn main() -> Result<(), Box<dyn StdError>> {
     builder.enable_all();
     pyo3tokio::init(builder);
 
-    let config = Config::new()?;
-    if let Err(e) = Python::with_gil(|py| pyo3tokio::run(py, main(args, config))) {
-        // We want to invoke the panic handler explicitly - returning Err(e) will not.
-        panic!("{}", e)
-    }
+    Python::with_gil(|py| {
+        pyo3tokio::run(py, async move {
+            if let Err(e) = main(args).await {
+                error!("{e}");
+                let _ = panic::restore_terminal();
+                return Err(e.into());
+            }
+            Ok(())
+        })
+    })?;
     Ok(())
 }

@@ -35,7 +35,7 @@ fn panic_handler(panic_info: &panic::PanicHookInfo) {
     process::exit(1);
 }
 
-fn restore_terminal() -> io::Result<()> {
+pub(crate) fn restore_terminal() -> io::Result<()> {
     disable_raw_mode()?;
     stdout().execute(crossterm::event::DisableMouseCapture)?;
     stdout().execute(LeaveAlternateScreen)?;
