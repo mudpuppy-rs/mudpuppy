@@ -82,8 +82,13 @@
               'README.md'
           '';
 
-          rustNightly = (pkgs.rust-bin.selectLatestNightlyWith
-            (toolchain: toolchain.default.override { targets = rustTargets; }));
+          # Macro expansion broke with latest nightlies in rust-rover <2025.1.4
+          # Until I can update IDE versions, let's pin to the last working nightly.
+          # https://youtrack.jetbrains.com/issue/RUST-18045/Macro-expansion-not-working-anymore-on-latest-nightly
+          # https://github.com/NixOS/nixpkgs/pull/419026
+          rustNightly = (pkgs.rust-bin.nightly."2025-06-18".default.override {
+            targets = rustTargets;
+          });
 
           cargo-check = name: check: {
             enable = true;
