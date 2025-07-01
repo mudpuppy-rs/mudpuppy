@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import Optional, List
 
-import pup
 from pup import Session, Event, EventType, Tab
 
 logging.debug("TabAnimator package loaded")
@@ -33,14 +32,14 @@ class TabAnimator:
         asyncio.create_task(self.animate())
 
     async def on_close(self, _sesh: Session, _ev: Event):
-        logging.debug("TabAnimator: {self.name} tab closed")
+        logging.debug(f"TabAnimator: {self.name} tab closed")
         self.tab = None
 
     async def animate(self):
         i = 0
         while True:
             if self.tab is None:
-                logging.debug("{self.sesh} tab_title_task ending")
+                logging.debug(f"{self.name} tab_title_task ending")
                 break
             self.tab.set_title(f"{self.frames[i]}")
             i = (i + 1) % len(self.frames)
