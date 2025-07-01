@@ -41,7 +41,7 @@ impl Tab for Character {
     }
 
     // TODO(XXX): Styling
-    fn rendered_title(&self, app: &AppData) -> Line {
+    fn rendered_title(&self, app: &AppData) -> Line<'_> {
         let Ok(sesh) = app.session(self.sesh.id) else {
             return Line::from(self.title(app));
         };

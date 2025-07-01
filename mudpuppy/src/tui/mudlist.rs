@@ -88,7 +88,7 @@ impl Tab for Widget {
     }
 
     // TODO(XXX): Text styling.
-    fn title(&self) -> Line {
+    fn title(&self) -> Line<'_> {
         "MUDs".into()
     }
 

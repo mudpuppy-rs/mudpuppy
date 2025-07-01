@@ -80,7 +80,7 @@ impl Input {
             .skip_while(|c| c.is_alphanumeric())
     }
 
-    fn chars(&self) -> std::str::Chars {
+    fn chars(&self) -> std::str::Chars<'_> {
         self.line.sent.chars()
     }
 }

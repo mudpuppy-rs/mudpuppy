@@ -143,7 +143,7 @@ pub(crate) struct MudLine {
 }
 
 impl MudLine {
-    pub fn to_str(&self) -> Cow<str> {
+    pub fn to_str(&self) -> Cow<'_, str> {
         String::from_utf8_lossy(&self.raw)
     }
 }

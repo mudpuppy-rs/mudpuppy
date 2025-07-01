@@ -115,7 +115,7 @@ impl Tab for Widget {
     }
 
     // TODO(XXX): Text styling.
-    fn title(&self) -> Line {
+    fn title(&self) -> Line<'_> {
         self.session.mud_name.clone().into()
     }
 

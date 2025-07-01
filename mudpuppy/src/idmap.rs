@@ -61,16 +61,16 @@ where
     }
 
     #[must_use]
-    pub fn iter(&self) -> hash_map::Iter<u32, Value> {
+    pub fn iter(&self) -> hash_map::Iter<'_, u32, Value> {
         <&Self as IntoIterator>::into_iter(self)
     }
 
     #[must_use]
-    pub fn iter_mut(&mut self) -> hash_map::IterMut<u32, Value> {
+    pub fn iter_mut(&mut self) -> hash_map::IterMut<'_, u32, Value> {
         <&mut Self as IntoIterator>::into_iter(self)
     }
 
-    pub fn values_mut(&mut self) -> hash_map::ValuesMut<u32, Value> {
+    pub fn values_mut(&mut self) -> hash_map::ValuesMut<'_, u32, Value> {
         self.map.values_mut()
     }
 

@@ -609,7 +609,7 @@ pub trait Tab: Debug + Send + Sync {
 
     fn input_mode(&self) -> InputMode;
 
-    fn title(&self) -> Line;
+    fn title(&self) -> Line<'_>;
 
     #[must_use]
     fn session_id(&self) -> Option<u32> {

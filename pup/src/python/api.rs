@@ -429,7 +429,7 @@ impl SlashCommand for PySlashCommand {
 fn dispatch_async_command<T>(
     py: Python<'_>,
     cmd: impl FnOnce(oneshot::Sender<T>) -> Command,
-) -> FutureResult
+) -> FutureResult<'_>
 where
     T: for<'py> IntoPyObject<'py> + Send + 'static,
 {
@@ -473,7 +473,7 @@ pub(crate) mod pup {
     use crate::tui::{Constraint, Direction, Section};
 
     #[pyfunction]
-    fn config(py: Python<'_>) -> FutureResult {
+    fn config(py: Python<'_>) -> FutureResult<'_> {
         dispatch_async_command(py, Command::Config)
     }
 
@@ -493,27 +493,27 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn new_session(py: Python<'_>, character: Character) -> FutureResult {
+    fn new_session(py: Python<'_>, character: Character) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| Command::NewSession { character, tx })
     }
 
     #[pyfunction]
-    fn active_session(py: Python<'_>) -> FutureResult {
+    fn active_session(py: Python<'_>) -> FutureResult<'_> {
         dispatch_async_command(py, Command::ActiveSession)
     }
 
     #[pyfunction]
-    fn sessions(py: Python<'_>) -> FutureResult {
+    fn sessions(py: Python<'_>) -> FutureResult<'_> {
         dispatch_async_command(py, Command::Sessions)
     }
 
     #[pyfunction]
-    fn session(py: Python<'_>, id: u32) -> FutureResult {
+    fn session(py: Python<'_>, id: u32) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| Command::Session(id, tx))
     }
 
     #[pyfunction]
-    fn session_for_mud(py: Python<'_>, character: Character) -> FutureResult {
+    fn session_for_mud(py: Python<'_>, character: Character) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| Command::SessionForCharacter(character, tx))
     }
 
@@ -543,7 +543,7 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn tabs(py: Python<'_>) -> FutureResult {
+    fn tabs(py: Python<'_>) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| Command::Tab(TabAction::AllTabs { tx }))
     }
 

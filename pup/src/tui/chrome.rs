@@ -274,7 +274,7 @@ pub(crate) struct TabInfo {
 pub(crate) trait Tab: Debug + Send + Sync {
     fn title(&self, app: &AppData) -> String;
 
-    fn rendered_title(&self, app: &AppData) -> Line {
+    fn rendered_title(&self, app: &AppData) -> Line<'_> {
         Line::from(self.title(app))
     }
 

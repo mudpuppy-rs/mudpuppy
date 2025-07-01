@@ -82,7 +82,7 @@ impl Input {
             .collect();
     }
 
-    fn chars(&self) -> Chars {
+    fn chars(&self) -> Chars<'_> {
         self.line.sent.chars()
     }
 }
