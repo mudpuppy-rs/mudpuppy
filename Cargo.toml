@@ -31,7 +31,6 @@ happy-eyeballs = { version = "0.2", default-features = false }
 human-panic = "2"
 notify = "8"
 pretty_assertions = "1"
-# PyO3 0.25 blocked on pyo3-async-runtimes 0.25
 pyo3 = { version = "0.25", features = ["experimental-async", "py-clone"] }
 pyo3-async-runtimes = { version = "0.25", features = ["attributes", "tokio-runtime"] }
 pyo3-pylogger = "0.4"
