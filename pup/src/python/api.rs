@@ -10,11 +10,13 @@ use tokio::sync::oneshot;
 use crate::app::{AppData, SlashCommand, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
-use crate::session::{Alias, Character, EchoState, InputLine, OutputItem, PromptMode, Trigger};
+use crate::session::{
+    Alias, Buffer, Character, EchoState, InputLine, OutputItem, PromptMode, Trigger,
+};
 
 use super::{
-    APP, AliasCommand, Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand,
-    Result, TelnetCommand, TriggerCommand, require_coroutine,
+    APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
+    PromptCommand, Result, TelnetCommand, TriggerCommand, require_coroutine,
 };
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -143,6 +145,20 @@ impl Session {
                 tx,
             })
         })
+    }
+
+    fn add_buffer(&self, py: Python<'_>, buff: Py<Buffer>) -> Result {
+        dispatch_command(py, Command::Buffer(self.id, BufferCommand::Add(buff)))
+    }
+
+    fn get_buffer<'py>(&'py self, py: Python<'py>, name: String) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| {
+            Command::Buffer(self.id, BufferCommand::Get { name, tx })
+        })
+    }
+
+    fn get_buffers<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| Command::Buffer(self.id, BufferCommand::GetAll(tx)))
     }
 
     fn __str__(&self) -> String {

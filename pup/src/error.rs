@@ -89,6 +89,9 @@ pub(crate) enum ErrorKind {
 
     #[error("invalid tab id: {0}")]
     InvalidTabId(u32),
+
+    #[error("session ID {0} does not have a buffer with name {1}")]
+    NoSuchBufferName(u32, String),
 }
 
 // We implement From<PyErr> by hand in order to always collect a traceback.

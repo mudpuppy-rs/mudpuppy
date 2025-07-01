@@ -119,6 +119,19 @@ impl Tab for Character {
         )?;
 
         commandline::draw(f, &session.input, &sections)?;
+
+        for (name, buffer) in &session.extra_buffers {
+            let Some(output_section) = sections.get(name) else {
+                // TODO(XXX): fuse some kind of warning/error
+                continue;
+            };
+            Python::with_gil(|py| {
+                let mut buffer = buffer.borrow_mut(py);
+                // TODO(XXX): filtering settings.
+                buffer::draw(f, &mut buffer, None, |_| true, *output_section)
+            })?;
+        }
+
         Ok(())
     }
 

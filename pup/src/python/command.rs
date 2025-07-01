@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pyo3::{Py, Python};
+use strum::Display;
 use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument};
 
@@ -11,7 +12,7 @@ use crate::keyboard::KeyEvent;
 use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
-use crate::session::{Alias, Character, Input, InputLine, OutputItem, PromptMode, Trigger};
+use crate::session::{Alias, Buffer, Character, Input, InputLine, OutputItem, PromptMode, Trigger};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
@@ -57,6 +58,7 @@ pub(crate) enum Command {
     Trigger(u32, TriggerCommand),
     Alias(u32, AliasCommand),
     Tab(TabAction),
+    Buffer(u32, BufferCommand),
     Quit,
 }
 
@@ -161,6 +163,9 @@ impl Command {
                 } else {
                     debug!("No active session to output to");
                 }
+            }
+            Command::Buffer(id, cmd) => {
+                cmd.exec(app, id)?;
             }
             Command::Tab(_) => {
                 // Special case - handled at a higher level.
@@ -338,6 +343,54 @@ impl AliasCommand {
             AliasCommand::Get(tx) => {
                 let aliases = Python::with_gil(|_| session.aliases.clone());
                 let _ = tx.send(aliases);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Display)]
+pub(crate) enum BufferCommand {
+    Add(Py<Buffer>),
+    Get {
+        name: String,
+        tx: oneshot::Sender<Py<Buffer>>,
+    },
+    GetAll(oneshot::Sender<Vec<Py<Buffer>>>),
+}
+
+impl BufferCommand {
+    fn exec(self, app: &mut AppData, id: u32) -> Result<()> {
+        let session = app.session_mut(id)?;
+
+        match self {
+            BufferCommand::Add(buffer) => {
+                let name = Python::with_gil(|py| {
+                    let buff = buffer.borrow(py);
+                    buff.name.clone()
+                });
+                session.extra_buffers.insert(name, buffer);
+            }
+            BufferCommand::Get { name, tx } => {
+                let buffer = Python::with_gil(|py| {
+                    let buffer = session
+                        .extra_buffers
+                        .get(&name)
+                        .ok_or(ErrorKind::NoSuchBufferName(id, name))?;
+                    Ok::<_, Error>(buffer.clone_ref(py))
+                })?;
+                let _ = tx.send(buffer);
+            }
+            BufferCommand::GetAll(tx) => {
+                let buffers = Python::with_gil(|py| {
+                    session
+                        .extra_buffers
+                        .values()
+                        .map(|buff| buff.clone_ref(py))
+                        .collect::<Vec<_>>()
+                });
+                let _ = tx.send(buffers);
             }
         }
 

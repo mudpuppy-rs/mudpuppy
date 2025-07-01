@@ -6,7 +6,7 @@ mod input;
 mod prompt;
 mod trigger;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
 use futures::StreamExt;
@@ -38,6 +38,7 @@ pub(super) struct Session {
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
     pub(super) output: Buffer,
+    pub(super) extra_buffers: HashMap<String, Py<Buffer>>,
     pub(super) triggers: Vec<Py<Trigger>>,
     pub(super) aliases: Vec<Py<Alias>>,
 
@@ -64,6 +65,7 @@ impl Session {
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
             output: Buffer::new(OUTPUT_BUFFER_NAME.to_string())?,
+            extra_buffers: HashMap::default(),
             triggers: Vec::default(),
             aliases: Vec::default(),
 
