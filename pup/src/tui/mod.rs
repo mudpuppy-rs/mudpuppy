@@ -20,8 +20,8 @@ pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab};
 use crossterm::ExecutableCommand;
 use crossterm::event::{
-    Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode, KeyEvent, KeyEventKind,
-    KeyModifiers,
+    Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode as CrosstermKeyCode, KeyEvent as CrosstermKeyEvent,
+    KeyModifiers as CrosstermKeyModifiers,
 };
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
@@ -34,6 +34,7 @@ pub(super) use session::Character;
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 
 #[derive(Debug)]
 pub(super) struct Tui {
@@ -69,7 +70,7 @@ impl Tui {
                 let Some(tab_action) = self.crossterm_event(app, &event).await? else {
                     return Ok(())
                 };
-                self.handle_tab_action(app, tab_action)
+                self.handle_tab_action(app, tab_action).await
             }
         }
     }
@@ -93,81 +94,36 @@ impl Tui {
         app: &mut AppData,
         event: &CrosstermEvent,
     ) -> Result<Option<TabAction>, Error> {
+        // TODO(XXX): noisy logging per keystroke
         trace!(event=?event);
 
-        match event {
-            CrosstermEvent::Key(KeyEvent {
-                code: KeyCode::Enter,
-                kind: KeyEventKind::Press,
-                modifiers: KeyModifiers::NONE,
-                ..
-            }) if app.active_session.is_some() => {
-                // First, with an immutabe ref, check if the pending input is a cmd.
-                let is_cmd = Python::with_gil(|py| {
-                    // Safety: guard condition in match.
-                    let session = app.active_session().unwrap();
-                    session.input.borrow(py).value().sent.starts_with('/')
-                });
-                if is_cmd {
-                    let input = Python::with_gil(|py| {
-                        let session = app.active_session_mut().unwrap();
-                        // Safety: we know it must be Some("/") at least.
-                        session.input.borrow_mut(py).pop().unwrap()
-                    });
-                    // Safety: we know it starts with '/'.
-                    let line = input.sent.strip_prefix('/').unwrap();
-                    let mut parts = line.splitn(2, ' ');
-                    let cmd_name = parts.next().unwrap_or_default();
-                    let remaining = parts.next().unwrap_or_default();
-
-                    let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
-                        let message = format!("unknown slash command: {cmd_name}");
-                        let session = app.active_session_mut().unwrap();
-                        warn!(message);
-                        session.output.add(OutputItem::CommandResult {
-                            error: true,
-                            message,
-                        });
-                        return Ok(None);
-                    };
-
-                    debug!("executing slash command: {cmd_name} {remaining}");
-                    match cmd.execute(app, remaining.to_string()).await {
-                        Ok(Some(tab_action)) => {
-                            self.handle_tab_action(app, tab_action)?;
-                        }
-                        Err(e) => {
-                            let message = format!("error executing slash command {cmd_name}: {e}");
-                            let session = app.active_session_mut().unwrap();
-                            error!(message);
-                            session.output.add(OutputItem::CommandResult {
-                                error: true,
-                                message,
-                            });
-                        }
-                        _ => {}
-                    }
-
-                    return Ok(None);
+        if let CrosstermEvent::Key(key_event) = event {
+            if let Ok(key_event) = KeyEvent::try_from(key_event) {
+                if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
+                    return shortcut.execute(app, key_event).await;
                 }
             }
+        }
+        /*
+
+        match event {
             CrosstermEvent::Key(
-                KeyEvent {
-                    code: KeyCode::Esc,
+                CrosstermKeyEvent {
+                    code: CrosstermKeyCode::Esc,
                     kind: KeyEventKind::Press,
                     ..
                 }
-                | KeyEvent {
-                    code: KeyCode::Char('c'),
+                | CrosstermKeyEvent {
+                    code: CrosstermKeyCode::Char('c'),
                     kind: KeyEventKind::Press,
-                    modifiers: KeyModifiers::CONTROL,
+                    modifiers: CrosstermKeyModifiers::CONTROL,
                     ..
                 },
             ) => {
                 app.should_quit = true;
                 return Ok(None);
             }
-            CrosstermEvent::Key(KeyEvent {
+            CrosstermEvent::Key(CrosstermKeyEvent {
                 code: KeyCode::Char('n'),
                 kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::ALT,
@@ -177,7 +133,7 @@ impl Tui {
                     tab_id: self.chrome.active_tab_id(),
                 }));
             }
-            CrosstermEvent::Key(KeyEvent {
+            CrosstermEvent::Key(CrosstermKeyEvent {
                 code: KeyCode::Char('p'),
                 kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::ALT,
@@ -187,7 +143,7 @@ impl Tui {
                     tab_id: self.chrome.active_tab_id(),
                 }));
             }
-            CrosstermEvent::Key(KeyEvent {
+            CrosstermEvent::Key(CrosstermKeyEvent {
                 code: KeyCode::Char('n'),
                 kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::CONTROL,
@@ -210,101 +166,187 @@ impl Tui {
                 }));
             }
             _ => {}
-        }
+        } */
 
         self.chrome.active_tab().crossterm_event(app, event)
     }
 
-    pub(crate) fn handle_tab_action(
+    pub(crate) async fn handle_input_send(
         &mut self,
         app: &mut AppData,
-        tab_action: TabAction,
+    ) -> Result<Option<TabAction>, Error> {
+        let input = Python::with_gil(|py| {
+            let session = app.active_session_mut().unwrap();
+            // Safety: we know it must be Some("/") at least.
+            session.input.borrow_mut(py).pop().unwrap()
+        });
+        // Safety: we know it starts with '/'.
+        let line = input.sent.strip_prefix('/').unwrap();
+        let mut parts = line.splitn(2, ' ');
+        let cmd_name = parts.next().unwrap_or_default();
+        let remaining = parts.next().unwrap_or_default();
+
+        let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
+            let message = format!("unknown slash command: {cmd_name}");
+            let session = app.active_session_mut().unwrap();
+            warn!(message);
+            session.output.add(OutputItem::CommandResult {
+                error: true,
+                message,
+            });
+            return Ok(None);
+        };
+
+        debug!("executing slash command: {cmd_name} {remaining}");
+        Ok(match cmd.execute(app, remaining.to_string()).await {
+            Ok(Some(tab_action)) => Some(tab_action),
+            Err(e) => {
+                let message = format!("error executing slash command {cmd_name}: {e}");
+                let session = app.active_session_mut().unwrap();
+                error!(message);
+                session.output.add(OutputItem::CommandResult {
+                    error: true,
+                    message,
+                });
+                None
+            }
+            _ => None,
+        })
+    }
+
+    #[allow(clippy::too_many_lines)] // TODO(XXX): refactor.
+    pub(crate) async fn handle_tab_action(
+        &mut self,
+        app: &mut AppData,
+        mut tab_action: TabAction,
     ) -> Result<(), Error> {
-        match tab_action {
-            TabAction::Create { session } => {
-                info!(name = session.character.name, "creating session tab");
-                self.chrome.new_tab(Character::new(session));
-            }
-            TabAction::Next {} => {
-                info!("switching to next tab");
-                self.chrome.next_tab();
-                app.set_active_session(self.chrome.active_tab().session_id())?;
-            }
-            TabAction::Previous {} => {
-                info!("switching to previous tab");
-                self.chrome.previous_tab();
-                app.set_active_session(self.chrome.active_tab().session_id())?;
-            }
-            TabAction::Close { tab_id } => {
-                let id = match tab_id {
-                    None => {
-                        info!("closing active tab");
-                        self.chrome.active_tab_id()
-                    }
-                    Some(tab_id) => {
-                        info!(tab_id, "closing specific tab");
-                        tab_id
-                    }
-                };
-                let (_, Some(removed)) = self.chrome.close_tab(id) else {
-                    app.should_quit = true;
-                    return Ok(());
-                };
-                if let Some(session) = removed.session_id() {
-                    info!(session, "closing session");
-                    app.close_session(session)?;
+        // Loop is necessary to avoid recursion + pinning future in the (one) case where
+        // processing a tab action may produce another tab action to process. E.g. because
+        // we invoked a command for queued input.
+        loop {
+            let next_action = match tab_action {
+                TabAction::Create { session } => {
+                    info!(name = session.character.name, "creating session tab");
+                    self.chrome.new_tab(Character::new(session));
+                    None
                 }
-                app.set_active_session(self.chrome.active_tab().session_id())?;
-            }
-            TabAction::SwitchToSession { session: Some(id) } => {
-                info!(id, "switching to session tab");
-                self.chrome.switch_to_session(id)?;
-            }
-            TabAction::SwitchToSession { session: None } => {
-                info!("switching to character list");
-                self.chrome.switch_to_list();
-            }
-            TabAction::SwitchToTab { tab_id } => {
-                info!(tab_id, "switching to tab");
-                if let Err(err) = self.chrome.switch_to(tab_id) {
-                    warn!(?err, "failed to switch to tab");
+                TabAction::Next {} => {
+                    info!("switching to next tab");
+                    self.chrome.next_tab();
+                    app.set_active_session(self.chrome.active_tab().session_id())?;
+                    None
                 }
-            }
-            TabAction::Layout { tab_id, tx } => {
-                let section = self.chrome.get_tab(tab_id)?.layout();
-                let _ = tx.send(section);
-            }
-            TabAction::Title { tab_id, tx } => {
-                _ = tx.send(self.chrome.get_tab(tab_id)?.title(app));
-            }
-            TabAction::SetTitle { tab_id, title } => {
-                self.chrome
-                    .get_tab_mut(tab_id)?
-                    .set_title(app, title.as_str())?;
-            }
-            TabAction::MoveLeft { tab_id } => {
-                self.chrome.move_tab_left(tab_id)?;
-            }
-            TabAction::MoveRight { tab_id } => {
-                self.chrome.move_tab_right(tab_id)?;
-            }
-            TabAction::IdForSession { session_id, tx } => {
-                let tab_info = self
-                    .chrome
-                    .tab_for_session(session_id)
-                    .ok_or(ErrorKind::NoSuchSession(session_id))?;
-                let _ = tx.send(python::Tab { id: tab_info.id });
-            }
-            TabAction::AllTabs { tx } => {
-                let tabs = self
-                    .chrome
-                    .tabs()
-                    .iter()
-                    .map(|tab_info| python::Tab { id: tab_info.id })
-                    .collect();
-                let _ = tx.send(tabs);
-            }
+                TabAction::Previous {} => {
+                    info!("switching to previous tab");
+                    self.chrome.previous_tab();
+                    app.set_active_session(self.chrome.active_tab().session_id())?;
+                    None
+                }
+                TabAction::Close { tab_id } => {
+                    let id = match tab_id {
+                        None => {
+                            info!("closing active tab");
+                            self.chrome.active_tab_id()
+                        }
+                        Some(tab_id) => {
+                            info!(tab_id, "closing specific tab");
+                            tab_id
+                        }
+                    };
+                    let (_, Some(removed)) = self.chrome.close_tab(id) else {
+                        app.should_quit = true;
+                        return Ok(());
+                    };
+                    if let Some(session) = removed.session_id() {
+                        info!(session, "closing session");
+                        app.close_session(session)?;
+                    }
+                    app.set_active_session(self.chrome.active_tab().session_id())?;
+                    None
+                }
+                TabAction::SwitchToSession { session: Some(id) } => {
+                    info!(id, "switching to session tab");
+                    self.chrome.switch_to_session(id)?;
+                    None
+                }
+                TabAction::SwitchToSession { session: None } => {
+                    info!("switching to character list");
+                    self.chrome.switch_to_list();
+                    None
+                }
+                TabAction::SwitchToTab { tab_id } => {
+                    info!(tab_id, "switching to tab");
+                    if let Err(err) = self.chrome.switch_to(tab_id) {
+                        warn!(?err, "failed to switch to tab");
+                    }
+                    None
+                }
+                TabAction::Layout { tab_id, tx } => {
+                    let section = self.chrome.get_tab(tab_id)?.layout();
+                    let _ = tx.send(section);
+                    None
+                }
+                TabAction::Title { tab_id, tx } => {
+                    _ = tx.send(self.chrome.get_tab(tab_id)?.title(app));
+                    None
+                }
+                TabAction::SetTitle { tab_id, title } => {
+                    self.chrome
+                        .get_tab_mut(tab_id)?
+                        .set_title(app, title.as_str())?;
+                    None
+                }
+                TabAction::ProcessInput => {
+                    // TODO(XXX): Ugly right-ward drift...
+                    if let Some(active_session) = app.active_session() {
+                        // First, with an immutabe ref, check if the pending input is a cmd.
+                        let is_cmd = Python::with_gil(|py| {
+                            // Safety: guard condition in match.
+                            active_session.input.borrow(py).value().sent.starts_with('/')
+                        });
+                        if is_cmd {
+                            self.handle_input_send(app).await?
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                TabAction::MoveLeft { tab_id } => {
+                    self.chrome.move_tab_left(tab_id)?;
+                    None
+                }
+                TabAction::MoveRight { tab_id } => {
+                    self.chrome.move_tab_right(tab_id)?;
+                    None
+                }
+                TabAction::IdForSession { session_id, tx } => {
+                    let tab_info = self
+                        .chrome
+                        .tab_for_session(session_id)
+                        .ok_or(ErrorKind::NoSuchSession(session_id))?;
+                    let _ = tx.send(python::Tab { id: tab_info.id });
+                    None
+                }
+                TabAction::AllTabs { tx } => {
+                    let tabs = self
+                        .chrome
+                        .tabs()
+                        .iter()
+                        .map(|tab_info| python::Tab { id: tab_info.id })
+                        .collect();
+                    let _ = tx.send(tabs);
+                    None
+                }
+            };
+
+            match next_action {
+                          Some(action) => tab_action = action,
+                            None => break,
+                        }
         }
+
         Ok(())
     }
 }
@@ -345,4 +387,48 @@ fn init_tui_terminal(mouse_enabled: bool) -> Result<Terminal<CrosstermBackend<St
     // increase the cache size to avoid flickering for indeterminate layouts
     Layout::init_cache(NonZeroUsize::new(100).unwrap());
     Terminal::new(CrosstermBackend::new(out)).map_err(Into::into)
+}
+
+impl TryFrom<&CrosstermKeyEvent> for KeyEvent {
+    type Error = &'static str;
+
+    fn try_from(value: &CrosstermKeyEvent) -> Result<Self, Self::Error> {
+        Ok(KeyEvent{
+            code: match value.code {
+                CrosstermKeyCode::Backspace => KeyCode::Backspace,
+                CrosstermKeyCode::Enter => KeyCode::Enter,
+                CrosstermKeyCode::Left => KeyCode::Left,
+                CrosstermKeyCode::Right => KeyCode::Right,
+                CrosstermKeyCode::Up => KeyCode::Up,
+                CrosstermKeyCode::Down => KeyCode::Down,
+                CrosstermKeyCode::Home => KeyCode::Home,
+                CrosstermKeyCode::End => KeyCode::End,
+                CrosstermKeyCode::PageUp => KeyCode::PageUp,
+                CrosstermKeyCode::PageDown => KeyCode::PageDown,
+                CrosstermKeyCode::Tab | CrosstermKeyCode::BackTab => KeyCode::Tab,
+                CrosstermKeyCode::Delete => KeyCode::Delete,
+                CrosstermKeyCode::Insert => KeyCode::Insert,
+                CrosstermKeyCode::F(code) => KeyCode::F(code),
+                CrosstermKeyCode::Char(char) => KeyCode::Char(char),
+                CrosstermKeyCode::Null => return Err("Null key unsupported"),
+                CrosstermKeyCode::Esc => KeyCode::Esc,
+                CrosstermKeyCode::CapsLock => return Err("CapsLock key unsupported"),
+                CrosstermKeyCode::ScrollLock => return Err("ScrollLock key unsupported"),
+                CrosstermKeyCode::NumLock => return Err("NumLock key unsupported"),
+                CrosstermKeyCode::PrintScreen => return Err("PrintScreen key unsupported"),
+                CrosstermKeyCode::Pause => return Err("Pause key unsupported"),
+                CrosstermKeyCode::Menu => return Err("Menu key unsupported"),
+                CrosstermKeyCode::KeypadBegin => return Err("KeypadBegin key unsupported"),
+                CrosstermKeyCode::Media(_) => return Err("Media key unsupported"),
+                CrosstermKeyCode::Modifier(_) => return Err("Modifier key unsupported"),
+            },
+            modifiers: value.modifiers.into(),
+        })
+    }
+}
+
+impl From<CrosstermKeyModifiers> for KeyModifiers {
+    fn from(value: CrosstermKeyModifiers) -> Self {
+        KeyModifiers(value.bits())
+    }
 }

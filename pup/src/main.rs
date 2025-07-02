@@ -11,6 +11,7 @@ mod python;
 mod session;
 mod slash_command;
 mod tui;
+mod shortcut;
 
 use std::process::exit;
 

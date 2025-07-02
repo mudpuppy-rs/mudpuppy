@@ -21,6 +21,8 @@ use crate::session::{Character, Session};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
 use crate::{cli, python, slash_command};
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
+use crate::shortcut::{BuiltinShortcut, Shortcut};
 
 #[derive(Debug)]
 pub(super) struct App {
@@ -80,7 +82,7 @@ impl App {
                     match setup_result {
                         Ok(()) => {
                             info!("Python setup completed successfully");
-                            self.data.auto_connect(&mut self.frontend)?;
+                            self.data.auto_connect(&mut self.frontend).await?;
                         }
                         Err(e) => error!("Python setup task panicked: {e}"),
                     }
@@ -112,7 +114,7 @@ impl App {
                 Some(py_cmd) = py_rx.recv() => {
                     // TODO(XXX): feels awkward to have this layer handle UI related commands ad-hoc
                     if let python::Command::Tab(tab_action) = py_cmd {
-                        if let Err(err) =  self.frontend.tab_action(&mut self.data, tab_action) {
+                        if let Err(err) =  self.frontend.tab_action(&mut self.data, tab_action).await {
                             error!("python error: {err}");
                         }
                     } else {
@@ -152,6 +154,7 @@ pub(super) struct AppData {
     pub(super) sessions: HashMap<u32, Session>,
     pub(super) global_event_handlers: python::GlobalHandlers,
     pub(super) slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
+    pub(super) shortcuts: HashMap<KeyEvent, Arc<dyn Shortcut>>,
 
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
     python_event_tx: Option<UnboundedSender<(u32, python::Event)>>,
@@ -167,13 +170,23 @@ impl AppData {
             sessions: HashMap::new(),
             global_event_handlers: python::GlobalHandlers::default(),
             slash_commands: slash_command::builtin(),
+            shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
             python_event_tx: None,
         }
     }
-}
 
-impl AppData {
+    fn default_shortcuts() -> HashMap<KeyEvent, Arc<dyn Shortcut>> {
+        let mut shortcuts = HashMap::new();
+        shortcuts.insert(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), Arc::new(BuiltinShortcut{
+            name: "Transmit".to_string(),
+            handler: Box::new(|app: &mut AppData, event: KeyEvent|{
+                todo!()
+            })
+        }) as Arc<dyn Shortcut>);
+        shortcuts
+    }
+
     pub(crate) fn config(&self) -> Py<Config> {
         Python::with_gil(|py| self.config.clone_ref(py))
     }
@@ -286,9 +299,10 @@ impl AppData {
         Ok(())
     }
 
-    fn auto_connect(&mut self, fe: &mut Frontend) -> Result<(), Error> {
+    async fn auto_connect(&mut self, fe: &mut Frontend) -> Result<(), Error> {
         let auto_connect = self.args.connect.clone();
 
+        let mut sessions = Vec::with_capacity(auto_connect.len());
         Python::with_gil(|py| {
             trace!(?auto_connect, "auto-connecting");
             for char_name in &auto_connect {
@@ -306,10 +320,15 @@ impl AppData {
                 info!(character=?character, "auto-connecting");
                 let sesh = self.new_session(&character)?;
                 sesh.connect(py)?;
-                fe.tab_action(self, TabAction::Create { session: sesh })?;
+                sessions.push(sesh);
             }
             Ok::<(), Error>(())
-        })
+        })?;
+
+        for sesh in sessions {
+            fe.tab_action(self, TabAction::Create { session: sesh }).await?;
+        }
+        Ok(())
     }
 
     // TODO(XXX): Consider reloading python stuff automatically?
@@ -354,12 +373,12 @@ impl Frontend {
     }
 
     #[instrument(skip(self, app, action) fields(action=action.to_string()))]
-    fn tab_action(&mut self, app: &mut AppData, action: TabAction) -> Result<(), Error> {
+    async fn tab_action(&mut self, app: &mut AppData, action: TabAction) -> Result<(), Error> {
         let Frontend::Tui(tui) = self else {
             warn!(action=?action, "ignoring tab action in headless mode");
             return Ok(());
         };
-        tui.handle_tab_action(app, action)
+        tui.handle_tab_action(app, action).await
     }
 
     fn config_reloaded(&mut self, config: &Config) -> Result<(), Error> {
@@ -433,6 +452,7 @@ pub(crate) enum TabAction {
     AllTabs {
         tx: oneshot::Sender<Vec<python::Tab>>,
     },
+    ProcessInput,
 }
 
 static SESSION_ID: AtomicU32 = AtomicU32::new(0);

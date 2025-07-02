@@ -80,7 +80,7 @@ impl FromStr for KeyEvent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct KeyModifiers(u8);
+pub struct KeyModifiers(pub(crate) u8);
 
 impl KeyModifiers {
     pub(crate) const NONE: Self = KeyModifiers(0);
