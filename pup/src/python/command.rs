@@ -5,7 +5,7 @@ use strum::Display;
 use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument};
 
-use crate::app::{AppData, SlashCommand, TabAction, TabShortcut};
+use crate::app::{AppData, SlashCommand, TabAction};
 use crate::config::Config;
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
@@ -13,6 +13,7 @@ use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
 use crate::session::{Alias, Buffer, Character, Input, InputLine, OutputItem, PromptMode, Trigger};
+use crate::shortcut::TabShortcut;
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),

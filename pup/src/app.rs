@@ -19,7 +19,7 @@ use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
 use crate::python::GlobalEvent;
 use crate::session::{Character, Session};
-use crate::shortcut::Shortcut;
+use crate::shortcut::{Shortcut, TabShortcut};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
 use crate::{cli, python, slash_command};
@@ -441,19 +441,6 @@ impl From<Tui> for Frontend {
     fn from(t: Tui) -> Self {
         Frontend::Tui(t)
     }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
-pub(crate) enum TabShortcut {
-    Create { session: python::Session },
-    SwitchToNext,
-    SwitchToPrevious,
-    SwitchToList,
-    SwitchTo { tab_id: u32 },
-    SwitchToSession { session: u32 },
-    MoveLeft { tab_id: Option<u32> },
-    MoveRight { tab_id: Option<u32> },
-    Close { tab_id: Option<u32> },
 }
 
 #[derive(Debug, Display)]

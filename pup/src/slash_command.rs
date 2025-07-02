@@ -5,9 +5,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pyo3::Python;
 
-use crate::app::{AppData, TabAction, TabShortcut};
+use crate::app::{AppData, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::session::OutputItem;
+use crate::shortcut::TabShortcut;
 
 #[async_trait]
 pub(super) trait SlashCommand: Debug + Send + Sync {

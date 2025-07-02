@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use crossterm::event::Event as CrosstermEvent;
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -7,7 +6,8 @@ use ratatui::prelude::Line;
 use tracing::{debug, error, warn};
 
 use crate::app::{AppData, TabAction};
-use crate::error::{Error, ErrorKind};
+use crate::error::Error;
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::python::{self, Event};
 use crate::session::{OUTPUT_BUFFER_NAME, OutputItem};
 use crate::tui::{Constraint, Section, Tab, buffer, commandline};
@@ -17,6 +17,8 @@ pub(crate) struct Character {
     sesh: python::Session,
     tab_title: Option<String>,
     layout: Py<Section>,
+    // TODO(XXX): expose a way to customize.
+    pub(crate) transmit_key_event: KeyEvent,
 }
 
 impl Character {
@@ -25,6 +27,7 @@ impl Character {
             sesh,
             tab_title: None,
             layout: initial_layout(),
+            transmit_key_event: KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
         }
     }
 }
@@ -145,31 +148,16 @@ impl Tab for Character {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    async fn crossterm_event(
+    async fn key_event(
         &mut self,
         app: &mut AppData,
-        event: &CrosstermEvent,
+        key_event: &KeyEvent,
     ) -> Result<Option<TabAction>, Error> {
-        let CrosstermEvent::Key(key_event) = event else {
-            return Ok(None);
-        };
-
         // Pass events other than the enter key to the session input instance.
-        if !matches!(
-            key_event,
-            &crossterm::event::KeyEvent {
-                kind: crossterm::event::KeyEventKind::Press,
-                code: crossterm::event::KeyCode::Enter,
-                modifiers: crossterm::event::KeyModifiers::NONE,
-                ..
-            }
-        ) {
+        if key_event != &self.transmit_key_event {
             return Python::with_gil(|py| {
                 let mut input = app.session_mut(self.sesh.id)?.input.borrow_mut(py);
-                let key_event = key_event
-                    .try_into()
-                    .map_err(|e: &str| ErrorKind::Internal(e.to_string()))?;
-                input.key_event(&key_event);
+                input.key_event(key_event);
                 Ok(None)
             });
         }
@@ -180,42 +168,13 @@ impl Tab for Character {
             session.input.borrow_mut(py).pop().unwrap_or_default()
         });
 
-        // Handle command input.
+        // If the input line has the command prefix, dispatch the input line as a command.
         // TODO(XXX): configurable prefix.
         if let Some(line) = input.sent.strip_prefix('/') {
-            let mut parts = line.splitn(2, ' ');
-            let cmd_name = parts.next().unwrap_or_default();
-            let remaining = parts.next().unwrap_or_default();
-
-            let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
-                let message = format!("unknown slash command: {cmd_name}");
-                let session = app.active_session_mut().unwrap();
-                warn!(message);
-                session.output.add(OutputItem::CommandResult {
-                    error: true,
-                    message,
-                });
-                return Ok(None);
-            };
-
-            debug!("executing slash command: {cmd_name} {remaining}");
-            return Ok(match cmd.execute(app, remaining.to_string()).await {
-                Ok(Some(tab_action)) => Some(tab_action),
-                Err(e) => {
-                    let message = format!("error executing slash command {cmd_name}: {e}");
-                    let session = app.active_session_mut().unwrap();
-                    error!(message);
-                    session.output.add(OutputItem::CommandResult {
-                        error: true,
-                        message,
-                    });
-                    None
-                }
-                _ => None,
-            });
+            return dispatch_command(app, line).await;
         }
 
-        // Flush the input as sent session data (if connected).
+        // Otherwise, send the input line to the session (if connected).
         let session = app.active_session_mut().unwrap();
         if session.connected().is_some() {
             session.send_line(input, false).map(|()| None)
@@ -227,6 +186,39 @@ impl Tab for Character {
             Ok(None)
         }
     }
+}
+
+async fn dispatch_command(app: &mut AppData, input: &str) -> Result<Option<TabAction>, Error> {
+    let mut parts = input.splitn(2, ' ');
+    let cmd_name = parts.next().unwrap_or_default();
+    let remaining = parts.next().unwrap_or_default();
+
+    let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
+        let message = format!("unknown slash command: {cmd_name}");
+        let session = app.active_session_mut().unwrap();
+        warn!(message);
+        session.output.add(OutputItem::CommandResult {
+            error: true,
+            message,
+        });
+        return Ok(None);
+    };
+
+    debug!("executing slash command: {cmd_name} {remaining}");
+    Ok(match cmd.execute(app, remaining.to_string()).await {
+        Ok(Some(tab_action)) => Some(tab_action),
+        Ok(None) => None,
+        Err(e) => {
+            let message = format!("error executing slash command {cmd_name}: {e}");
+            let session = app.active_session_mut().unwrap();
+            error!(message);
+            session.output.add(OutputItem::CommandResult {
+                error: true,
+                message,
+            });
+            None
+        }
+    })
 }
 
 fn initial_layout() -> Py<Section> {

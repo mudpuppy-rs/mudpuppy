@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -8,10 +7,12 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use tracing::{debug, info};
 
-use crate::app::{AppData, TabAction, TabShortcut};
+use crate::app::{AppData, TabAction};
 use crate::config::{Config, config_file};
 use crate::error::Error;
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::session::Character;
+use crate::shortcut::TabShortcut;
 use crate::tui::{Constraint, Section, Tab};
 
 #[derive(Debug)]
@@ -104,37 +105,27 @@ impl Tab for CharacterMenu {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    async fn crossterm_event(
+    async fn key_event(
         &mut self,
         app: &mut AppData,
-        event: &Event,
+        key_event: &KeyEvent,
     ) -> Result<Option<TabAction>, Error> {
-        let Event::Key(key_event) = event else {
-            return Ok(None);
-        };
-
         match key_event {
-            crossterm::event::KeyEvent {
+            KeyEvent {
                 code: KeyCode::Up,
-                kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::NONE,
-                ..
             } => {
                 self.state.select_previous();
             }
-            crossterm::event::KeyEvent {
+            KeyEvent {
                 code: KeyCode::Down,
-                kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::NONE,
-                ..
             } => {
                 self.state.select_next();
             }
-            crossterm::event::KeyEvent {
+            KeyEvent {
                 code: KeyCode::Enter,
-                kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::NONE,
-                ..
             } => {
                 let Some(selected) = self.state.selected() else {
                     return Ok(None);

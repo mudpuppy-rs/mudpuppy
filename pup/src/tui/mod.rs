@@ -14,7 +14,7 @@ use std::panic;
 use crossterm::ExecutableCommand;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode as CrosstermKeyCode,
-    KeyEvent as CrosstermKeyEvent, KeyModifiers as CrosstermKeyModifiers,
+    KeyEvent as CrosstermKeyEvent, KeyEventKind, KeyModifiers as CrosstermKeyModifiers,
 };
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
@@ -25,11 +25,11 @@ use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
 
-use crate::app::{AppData, TabAction, TabShortcut};
+use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
-use crate::shortcut::Shortcut;
+use crate::shortcut::{Shortcut, TabShortcut};
 use crate::{cli, python};
 pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab};
@@ -96,27 +96,40 @@ impl Tui {
         // TODO(XXX): noisy logging per keystroke
         trace!(event=?event);
 
-        // Key events are checked against shortcuts.
-        if let CrosstermEvent::Key(key_event) = event {
-            if let Ok(key_event) = KeyEvent::try_from(key_event) {
-                // Try to execute the key event as a global shortcut first.
-                if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
-                    trace!(shortcut = shortcut.to_string(), "global shortcut matched");
-                    self.handle_shortcut(app, shortcut, key_event)?;
-                    return Ok(None);
-                }
-            }
+        // TODO(XXX): Mouse.
+        // TODO(XXX): Bracketed paste.
+        // TODO(XXX): Focus gained/lost ?
+
+        let CrosstermEvent::Key(key_event) = event else {
+            return Ok(None);
+        };
+
+        // We don't do anything special with release/repeat.
+        if key_event.kind != KeyEventKind::Press {
+            return Ok(None);
         }
 
-        // If it didn't match a shortcut, forward the event to the active tab.
-        self.chrome.active_tab().crossterm_event(app, event).await
+        // Not all native crossterm key events can be translated to our Python-friendly
+        // domain repr.
+        let Ok(key_event) = KeyEvent::try_from(key_event) else {
+            return Ok(None);
+        };
+
+        // Handle TUI-level shortcuts, these aren't specific to the active tab.
+        if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
+            trace!(shortcut = shortcut.to_string(), "global shortcut matched");
+            self.handle_shortcut(app, shortcut)?;
+            return Ok(None);
+        }
+
+        // Otherwise, forward the event to the active tab.
+        self.chrome.active_tab().key_event(app, &key_event).await
     }
 
     pub(crate) fn handle_shortcut(
         &mut self,
         app: &mut AppData,
         shortcut: Shortcut,
-        event: KeyEvent,
     ) -> Result<(), Error> {
         match shortcut {
             Shortcut::Tab(tab_action) => self.handle_tab_action(app, tab_action.into()),

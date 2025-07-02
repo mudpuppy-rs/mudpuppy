@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
+use crate::keyboard::KeyEvent;
 use crate::tui::{CharacterMenu, Section};
 
 #[derive(Debug)]
@@ -301,10 +302,10 @@ pub(crate) trait Tab: Debug + Send + Sync {
 
     fn layout(&self) -> Py<Section>;
 
-    async fn crossterm_event(
+    async fn key_event(
         &mut self,
         _app: &mut AppData,
-        _event: &crossterm::event::Event,
+        _key_event: &KeyEvent,
     ) -> Result<Option<TabAction>, Error> {
         Ok(None)
     }

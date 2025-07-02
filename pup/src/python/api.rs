@@ -7,17 +7,17 @@ use pyo3::{IntoPyObject, Py, PyObject, Python, pyclass, pymethods, pymodule};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
-use crate::app::{AppData, SlashCommand, TabAction, TabShortcut};
+use super::{
+    APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
+    PromptCommand, Result, TelnetCommand, TriggerCommand, require_coroutine,
+};
+use crate::app::{AppData, SlashCommand, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::session::{
     Alias, Buffer, Character, EchoState, InputLine, OutputItem, PromptMode, Trigger,
 };
-
-use super::{
-    APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
-    PromptCommand, Result, TelnetCommand, TriggerCommand, require_coroutine,
-};
+use crate::shortcut::TabShortcut;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[pyclass(frozen, eq, hash)]
