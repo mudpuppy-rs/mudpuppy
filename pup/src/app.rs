@@ -461,6 +461,10 @@ pub(crate) enum TabAction {
         tab_id: Option<u32>,
         title: String,
     },
+    AllShortcuts {
+        tab_id: Option<u32>,
+        tx: oneshot::Sender<HashMap<KeyEvent, String>>,
+    },
     TabForSession {
         session_id: Option<u32>,
         tx: oneshot::Sender<python::Tab>,

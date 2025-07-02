@@ -381,6 +381,16 @@ impl Tab {
         })
     }
 
+    fn shortcuts<'py>(&self, py: Python<'py>) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| {
+            TabAction::AllShortcuts {
+                tab_id: Some(self.id),
+                tx,
+            }
+            .into()
+        })
+    }
+
     fn set_title(&self, py: Python<'_>, title: String) -> Result {
         dispatch_command(
             py,
@@ -592,6 +602,11 @@ pub(crate) mod pup {
     #[pyfunction]
     fn tabs(py: Python<'_>) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| Command::Tab(TabAction::AllTabs { tx }))
+    }
+
+    #[pyfunction]
+    fn global_shortcuts(py: Python<'_>) -> FutureResult<'_> {
+        dispatch_async_command(py, Command::GlobalShortcuts)
     }
 
     #[pyfunction(signature = (*args, sep=None, end=None))]

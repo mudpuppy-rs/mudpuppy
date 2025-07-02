@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use pyo3::{Py, Python};
@@ -49,6 +50,7 @@ pub(crate) enum Command {
     Slash(Slash),
     AddGlobalEventHandler(python::GlobalHandler),
     AddEventHandler(python::SessionHandler),
+    GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
     Output {
         session: Option<u32>,
         item: OutputItem,
@@ -138,6 +140,14 @@ impl Command {
                             "session handler missing session".to_string(),
                         ))?;
                 app.session_mut(session_id)?.event_handlers.add(handler);
+            }
+            Command::GlobalShortcuts(tx) => {
+                let _ = tx.send(
+                    app.shortcuts
+                        .iter()
+                        .map(|(key_event, shortcut)| (*key_event, shortcut.to_string()))
+                        .collect(),
+                );
             }
             Command::Prompt(id, cmd) => {
                 cmd.exec(app, id)?;

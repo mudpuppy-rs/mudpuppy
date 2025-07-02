@@ -168,7 +168,17 @@ impl Tui {
                     .get_tab_mut(tab_id)?
                     .set_title(app, title.as_str())?;
             }
-
+            TabAction::AllShortcuts { tab_id, tx } => {
+                let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
+                let _ = tx.send(
+                    self.chrome
+                        .get_tab(tab_id)?
+                        .all_shortcuts(app)?
+                        .iter()
+                        .map(|(key_event, shortcut)| (*key_event, shortcut.to_string()))
+                        .collect(),
+                );
+            }
             TabAction::TabForSession { session_id, tx } => {
                 let session_id =
                     session_id.unwrap_or(app.active_session.ok_or(ErrorKind::NoActiveSession)?);
