@@ -178,7 +178,9 @@ impl Tab for Character {
             }
 
             let mut input = session.input.borrow_mut(py);
-            let key_event = key_event.try_into().map_err(|e: &str|ErrorKind::Internal(e.to_string()))?;
+            let key_event = key_event
+                .try_into()
+                .map_err(|e: &str| ErrorKind::Internal(e.to_string()))?;
             input.key_event(&key_event);
             Ok(None)
         })

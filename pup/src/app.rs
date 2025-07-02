@@ -15,14 +15,14 @@ use tracing::{Level, error, info, instrument, trace, warn};
 use crate::config::{self, Config};
 use crate::error::{Error, ErrorKind};
 use crate::headless::Headless;
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
 use crate::python::GlobalEvent;
 use crate::session::{Character, Session};
+use crate::shortcut::{BuiltinShortcut, Shortcut};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
 use crate::{cli, python, slash_command};
-use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
-use crate::shortcut::{BuiltinShortcut, Shortcut};
 
 #[derive(Debug)]
 pub(super) struct App {
@@ -178,12 +178,83 @@ impl AppData {
 
     fn default_shortcuts() -> HashMap<KeyEvent, Arc<dyn Shortcut>> {
         let mut shortcuts = HashMap::new();
-        shortcuts.insert(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), Arc::new(BuiltinShortcut{
-            name: "Transmit".to_string(),
-            handler: Box::new(|app: &mut AppData, event: KeyEvent|{
-                todo!()
-            })
-        }) as Arc<dyn Shortcut>);
+
+        let quit_shortcut = Arc::new(BuiltinShortcut {
+            name: "Quit".to_string(),
+            handler: Box::new(|_, app, _| {
+                app.should_quit = true;
+                Ok(None)
+            }),
+        }) as Arc<dyn Shortcut>;
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            quit_shortcut.clone(),
+        );
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            quit_shortcut,
+        );
+
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Char('n'), KeyModifiers::CONTROL),
+            Arc::new(BuiltinShortcut {
+                name: "Next Tab".to_string(),
+                handler: Box::new(|_, _, _| Ok(Some(TabAction::Next))),
+            }),
+        );
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+            Arc::new(BuiltinShortcut {
+                name: "Previous Tab".to_string(),
+                handler: Box::new(|_, _, _| Ok(Some(TabAction::Previous))),
+            }),
+        );
+
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT),
+            Arc::new(BuiltinShortcut {
+                name: "Move Tab Right".to_string(),
+                handler: Box::new(|tui, _, _| {
+                    Ok(Some(TabAction::MoveRight {
+                        tab_id: tui.chrome.active_tab_id(),
+                    }))
+                }),
+            }),
+        );
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT),
+            Arc::new(BuiltinShortcut {
+                name: "Move Tab Left".to_string(),
+                handler: Box::new(|tui, _, _| {
+                    Ok(Some(TabAction::MoveLeft {
+                        tab_id: tui.chrome.active_tab_id(),
+                    }))
+                }),
+            }),
+        );
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            Arc::new(BuiltinShortcut {
+                name: "Close Tab".to_string(),
+                handler: Box::new(|_, _, _| {
+                    Ok(Some(TabAction::Close {
+                        tab_id: None, // active tab.
+                    }))
+                }),
+            }),
+        );
+
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            Arc::new(BuiltinShortcut {
+                name: "Transmit".to_string(),
+                handler: Box::new(|_, _, _| {
+                    Ok(Some(TabAction::ProcessInput {
+                        tab_id: None, // active tab
+                    }))
+                }),
+            }),
+        );
         shortcuts
     }
 
@@ -326,7 +397,8 @@ impl AppData {
         })?;
 
         for sesh in sessions {
-            fe.tab_action(self, TabAction::Create { session: sesh }).await?;
+            fe.tab_action(self, TabAction::Create { session: sesh })
+                .await?;
         }
         Ok(())
     }
@@ -416,8 +488,8 @@ pub(crate) enum TabAction {
     Create {
         session: python::Session,
     },
-    Next {},
-    Previous {},
+    Next,
+    Previous,
     MoveLeft {
         tab_id: u32,
     },
@@ -452,7 +524,9 @@ pub(crate) enum TabAction {
     AllTabs {
         tx: oneshot::Sender<Vec<python::Tab>>,
     },
-    ProcessInput,
+    ProcessInput {
+        tab_id: Option<u32>,
+    },
 }
 
 static SESSION_ID: AtomicU32 = AtomicU32::new(0);

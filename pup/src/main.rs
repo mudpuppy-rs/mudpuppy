@@ -9,9 +9,9 @@ mod net;
 mod panic;
 mod python;
 mod session;
+mod shortcut;
 mod slash_command;
 mod tui;
-mod shortcut;
 
 use std::process::exit;
 

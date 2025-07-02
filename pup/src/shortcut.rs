@@ -1,15 +1,21 @@
-use std::fmt::{Debug, Formatter};
 use async_trait::async_trait;
+use std::fmt::{Debug, Formatter};
 
 use crate::app::{AppData, TabAction};
 use crate::error::Error;
 use crate::keyboard::KeyEvent;
+use crate::tui::Tui;
 
 #[async_trait]
 pub(super) trait Shortcut: Debug + Send + Sync {
     fn name(&self) -> String; // TODO(XXX): Cow?
 
-    async fn execute(&self, app: &mut AppData, event: KeyEvent) -> Result<Option<TabAction>, Error>;
+    async fn execute(
+        &self,
+        tui: &mut Tui,
+        app: &mut AppData,
+        event: KeyEvent,
+    ) -> Result<Option<TabAction>, Error>;
 }
 
 pub(super) struct BuiltinShortcut {
@@ -23,8 +29,13 @@ impl Shortcut for BuiltinShortcut {
         self.name.clone()
     }
 
-    async fn execute(&self, app: &mut AppData, event: KeyEvent) -> Result<Option<TabAction>, Error> {
-        (self.handler)(app, event)
+    async fn execute(
+        &self,
+        tui: &mut Tui,
+        app: &mut AppData,
+        event: KeyEvent,
+    ) -> Result<Option<TabAction>, Error> {
+        (self.handler)(tui, app, event)
     }
 }
 
@@ -37,4 +48,5 @@ impl Debug for BuiltinShortcut {
     }
 }
 
-pub(super) type BuiltinShortcutHandler = Box<dyn Fn(&mut AppData, KeyEvent) -> Result<Option<TabAction>, Error> + Send + Sync>;
+pub(super) type BuiltinShortcutHandler =
+    Box<dyn Fn(&mut Tui, &mut AppData, KeyEvent) -> Result<Option<TabAction>, Error> + Send + Sync>;

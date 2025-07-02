@@ -389,6 +389,25 @@ impl Tab {
         )
     }
 
+    #[allow(clippy::unused_self)]
+    fn switch_next(&self, py: Python<'_>) -> Result {
+        dispatch_command(py, Command::Tab(TabAction::Next))
+    }
+
+    #[allow(clippy::unused_self)]
+    fn switch_previous(&self, py: Python<'_>) -> Result {
+        dispatch_command(py, Command::Tab(TabAction::Previous))
+    }
+
+    fn process_input(&self, py: Python<'_>) -> Result {
+        dispatch_command(
+            py,
+            Command::Tab(TabAction::ProcessInput {
+                tab_id: Some(self.id),
+            }),
+        )
+    }
+
     fn move_left(&self, py: Python<'_>) -> Result {
         dispatch_command(py, Command::Tab(TabAction::MoveLeft { tab_id: self.id }))
     }

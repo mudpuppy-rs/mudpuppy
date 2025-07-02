@@ -14,14 +14,15 @@ use std::panic;
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::session::OutputItem;
 use crate::{cli, python};
 pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab};
 use crossterm::ExecutableCommand;
 use crossterm::event::{
-    Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode as CrosstermKeyCode, KeyEvent as CrosstermKeyEvent,
-    KeyModifiers as CrosstermKeyModifiers,
+    Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode as CrosstermKeyCode,
+    KeyEvent as CrosstermKeyEvent, KeyModifiers as CrosstermKeyModifiers,
 };
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
@@ -34,7 +35,6 @@ pub(super) use session::Character;
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
-use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 
 #[derive(Debug)]
 pub(super) struct Tui {
@@ -88,7 +88,6 @@ impl Tui {
         self.chrome.config_reloaded(config)
     }
 
-    #[allow(clippy::too_many_lines)] // TODO(XXX): pull out some helpers.
     async fn crossterm_event(
         &mut self,
         app: &mut AppData,
@@ -100,73 +99,11 @@ impl Tui {
         if let CrosstermEvent::Key(key_event) = event {
             if let Ok(key_event) = KeyEvent::try_from(key_event) {
                 if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
-                    return shortcut.execute(app, key_event).await;
+                    trace!(shortcut = shortcut.name(), "executing");
+                    return shortcut.execute(self, app, key_event).await;
                 }
             }
         }
-        /*
-
-        match event {
-            CrosstermEvent::Key(
-                CrosstermKeyEvent {
-                    code: CrosstermKeyCode::Esc,
-                    kind: KeyEventKind::Press,
-                    ..
-                }
-                | CrosstermKeyEvent {
-                    code: CrosstermKeyCode::Char('c'),
-                    kind: KeyEventKind::Press,
-                    modifiers: CrosstermKeyModifiers::CONTROL,
-                    ..
-                },
-            ) => {
-                app.should_quit = true;
-                return Ok(None);
-            }
-            CrosstermEvent::Key(CrosstermKeyEvent {
-                code: KeyCode::Char('n'),
-                kind: KeyEventKind::Press,
-                modifiers: KeyModifiers::ALT,
-                ..
-            }) => {
-                return Ok(Some(TabAction::MoveRight {
-                    tab_id: self.chrome.active_tab_id(),
-                }));
-            }
-            CrosstermEvent::Key(CrosstermKeyEvent {
-                code: KeyCode::Char('p'),
-                kind: KeyEventKind::Press,
-                modifiers: KeyModifiers::ALT,
-                ..
-            }) => {
-                return Ok(Some(TabAction::MoveLeft {
-                    tab_id: self.chrome.active_tab_id(),
-                }));
-            }
-            CrosstermEvent::Key(CrosstermKeyEvent {
-                code: KeyCode::Char('n'),
-                kind: KeyEventKind::Press,
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            }) => return Ok(Some(TabAction::Next {})),
-            CrosstermEvent::Key(KeyEvent {
-                code: KeyCode::Char('p'),
-                kind: KeyEventKind::Press,
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            }) => return Ok(Some(TabAction::Previous {})),
-            CrosstermEvent::Key(KeyEvent {
-                code: KeyCode::Char('x'),
-                kind: KeyEventKind::Press,
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            }) => {
-                return Ok(Some(TabAction::Close {
-                    tab_id: None, // active tab.
-                }));
-            }
-            _ => {}
-        } */
 
         self.chrome.active_tab().crossterm_event(app, event)
     }
@@ -214,7 +151,7 @@ impl Tui {
         })
     }
 
-    #[allow(clippy::too_many_lines)] // TODO(XXX): refactor.
+    #[allow(clippy::too_many_lines)] // TODO(XXX): refactor/revisit.
     pub(crate) async fn handle_tab_action(
         &mut self,
         app: &mut AppData,
@@ -230,13 +167,13 @@ impl Tui {
                     self.chrome.new_tab(Character::new(session));
                     None
                 }
-                TabAction::Next {} => {
+                TabAction::Next => {
                     info!("switching to next tab");
                     self.chrome.next_tab();
                     app.set_active_session(self.chrome.active_tab().session_id())?;
                     None
                 }
-                TabAction::Previous {} => {
+                TabAction::Previous => {
                     info!("switching to previous tab");
                     self.chrome.previous_tab();
                     app.set_active_session(self.chrome.active_tab().session_id())?;
@@ -296,19 +233,15 @@ impl Tui {
                         .set_title(app, title.as_str())?;
                     None
                 }
-                TabAction::ProcessInput => {
-                    // TODO(XXX): Ugly right-ward drift...
-                    if let Some(active_session) = app.active_session() {
-                        // First, with an immutabe ref, check if the pending input is a cmd.
-                        let is_cmd = Python::with_gil(|py| {
-                            // Safety: guard condition in match.
-                            active_session.input.borrow(py).value().sent.starts_with('/')
-                        });
-                        if is_cmd {
-                            self.handle_input_send(app).await?
-                        } else {
-                            None
-                        }
+                TabAction::ProcessInput { tab_id } => {
+                    let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
+                    let Some(session_id) = self.chrome.get_tab(tab_id)?.session_id() else {
+                        break;
+                    };
+                    let session = app.session(session_id)?;
+                    if Python::with_gil(|py| session.input.borrow(py).value().sent.starts_with('/'))
+                    {
+                        self.handle_input_send(app).await?
                     } else {
                         None
                     }
@@ -342,9 +275,9 @@ impl Tui {
             };
 
             match next_action {
-                          Some(action) => tab_action = action,
-                            None => break,
-                        }
+                Some(action) => tab_action = action,
+                None => break,
+            }
         }
 
         Ok(())
@@ -393,7 +326,7 @@ impl TryFrom<&CrosstermKeyEvent> for KeyEvent {
     type Error = &'static str;
 
     fn try_from(value: &CrosstermKeyEvent) -> Result<Self, Self::Error> {
-        Ok(KeyEvent{
+        Ok(KeyEvent {
             code: match value.code {
                 CrosstermKeyCode::Backspace => KeyCode::Backspace,
                 CrosstermKeyCode::Enter => KeyCode::Enter,
