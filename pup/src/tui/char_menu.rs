@@ -104,7 +104,7 @@ impl Tab for CharacterMenu {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    fn crossterm_event(
+    async fn crossterm_event(
         &mut self,
         app: &mut AppData,
         event: &Event,

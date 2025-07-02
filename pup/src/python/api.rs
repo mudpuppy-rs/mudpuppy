@@ -366,7 +366,8 @@ impl Tab {
             TabAction::Layout {
                 tab_id: self.id,
                 tx,
-            }.into()
+            }
+            .into()
         })
     }
 
@@ -375,7 +376,8 @@ impl Tab {
             TabAction::Title {
                 tab_id: self.id,
                 tx,
-            }.into()
+            }
+            .into()
         })
     }
 
@@ -404,21 +406,22 @@ impl Tab {
         dispatch_command(py, TabShortcut::SwitchToList)
     }
 
-    fn process_input(&self, py: Python<'_>) -> Result {
+    fn move_left(&self, py: Python<'_>) -> Result {
         dispatch_command(
             py,
-            TabShortcut::ProcessInput {
+            TabShortcut::MoveLeft {
                 tab_id: Some(self.id),
             },
         )
     }
 
-    fn move_left(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, TabShortcut::MoveLeft { tab_id: Some(self.id) })
-    }
-
     fn move_right(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, TabShortcut::MoveRight { tab_id: Some(self.id) })
+        dispatch_command(
+            py,
+            TabShortcut::MoveRight {
+                tab_id: Some(self.id),
+            },
+        )
     }
 
     fn close(&self, py: Python<'_>) -> Result {
@@ -482,7 +485,11 @@ where
 }
 
 fn dispatch_command(py: Python<'_>, cmd: impl Into<Command>) -> Result {
-    Ok(APP.get(py).unwrap().send(cmd.into()).map_err(ErrorKind::from)?)
+    Ok(APP
+        .get(py)
+        .unwrap()
+        .send(cmd.into())
+        .map_err(ErrorKind::from)?)
 }
 
 #[pymodule]

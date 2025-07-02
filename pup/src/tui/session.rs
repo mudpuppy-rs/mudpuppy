@@ -1,9 +1,10 @@
+use async_trait::async_trait;
 use crossterm::event::Event as CrosstermEvent;
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::prelude::Line;
-use tracing::debug;
+use tracing::{debug, error, warn};
 
 use crate::app::{AppData, TabAction};
 use crate::error::{Error, ErrorKind};
@@ -28,6 +29,7 @@ impl Character {
     }
 }
 
+#[async_trait]
 impl Tab for Character {
     fn title(&self, app: &AppData) -> String {
         if let Some(title) = &self.tab_title {
@@ -143,7 +145,7 @@ impl Tab for Character {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    fn crossterm_event(
+    async fn crossterm_event(
         &mut self,
         app: &mut AppData,
         event: &CrosstermEvent,
@@ -152,38 +154,78 @@ impl Tab for Character {
             return Ok(None);
         };
 
-        let session = app.session_mut(self.sesh.id)?;
-
-        Python::with_gil(|py| {
-            if let &crossterm::event::KeyEvent {
+        // Pass events other than the enter key to the session input instance.
+        if !matches!(
+            key_event,
+            &crossterm::event::KeyEvent {
                 kind: crossterm::event::KeyEventKind::Press,
                 code: crossterm::event::KeyCode::Enter,
                 modifiers: crossterm::event::KeyModifiers::NONE,
                 ..
-            } = key_event
-            {
-                let input = {
-                    let mut input = session.input.borrow_mut(py);
-                    input.pop().unwrap_or_default()
-                };
-                if session.connected().is_some() {
-                    session.send_line(input, false)?;
-                } else {
+            }
+        ) {
+            return Python::with_gil(|py| {
+                let mut input = app.session_mut(self.sesh.id)?.input.borrow_mut(py);
+                let key_event = key_event
+                    .try_into()
+                    .map_err(|e: &str| ErrorKind::Internal(e.to_string()))?;
+                input.key_event(&key_event);
+                Ok(None)
+            });
+        }
+
+        // Pop whatever input has been queued.
+        let input = Python::with_gil(|py| {
+            let session = app.active_session_mut().unwrap();
+            session.input.borrow_mut(py).pop().unwrap_or_default()
+        });
+
+        // Handle command input.
+        // TODO(XXX): configurable prefix.
+        if let Some(line) = input.sent.strip_prefix('/') {
+            let mut parts = line.splitn(2, ' ');
+            let cmd_name = parts.next().unwrap_or_default();
+            let remaining = parts.next().unwrap_or_default();
+
+            let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
+                let message = format!("unknown slash command: {cmd_name}");
+                let session = app.active_session_mut().unwrap();
+                warn!(message);
+                session.output.add(OutputItem::CommandResult {
+                    error: true,
+                    message,
+                });
+                return Ok(None);
+            };
+
+            debug!("executing slash command: {cmd_name} {remaining}");
+            return Ok(match cmd.execute(app, remaining.to_string()).await {
+                Ok(Some(tab_action)) => Some(tab_action),
+                Err(e) => {
+                    let message = format!("error executing slash command {cmd_name}: {e}");
+                    let session = app.active_session_mut().unwrap();
+                    error!(message);
                     session.output.add(OutputItem::CommandResult {
                         error: true,
-                        message: "Not connected".to_string(),
+                        message,
                     });
+                    None
                 }
-                return Ok(None);
-            }
+                _ => None,
+            });
+        }
 
-            let mut input = session.input.borrow_mut(py);
-            let key_event = key_event
-                .try_into()
-                .map_err(|e: &str| ErrorKind::Internal(e.to_string()))?;
-            input.key_event(&key_event);
+        // Flush the input as sent session data (if connected).
+        let session = app.active_session_mut().unwrap();
+        if session.connected().is_some() {
+            session.send_line(input, false).map(|()| None)
+        } else {
+            session.output.add(OutputItem::CommandResult {
+                error: true,
+                message: "Not connected".to_string(),
+            });
             Ok(None)
-        })
+        }
     }
 }
 

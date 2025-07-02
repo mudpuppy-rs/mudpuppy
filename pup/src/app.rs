@@ -19,7 +19,7 @@ use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
 use crate::python::GlobalEvent;
 use crate::session::{Character, Session};
-use crate::shortcut::{Shortcut};
+use crate::shortcut::Shortcut;
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
 use crate::{cli, python, slash_command};
@@ -198,18 +198,18 @@ impl AppData {
         );
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT),
-            TabShortcut::MoveRight { tab_id: None }.into()
+            TabShortcut::MoveRight { tab_id: None }.into(),
         );
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT),
-            TabShortcut::MoveLeft { tab_id: None }.into()
+            TabShortcut::MoveLeft { tab_id: None }.into(),
         );
 
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
-            TabShortcut::Close { tab_id: None }.into()
+            TabShortcut::Close { tab_id: None }.into(),
         );
-        
+
         /*
         shortcuts.insert(
             KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -445,30 +445,15 @@ impl From<Tui> for Frontend {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
 pub(crate) enum TabShortcut {
-    Create {
-        session: python::Session,
-    },
+    Create { session: python::Session },
     SwitchToNext,
     SwitchToPrevious,
     SwitchToList,
-    SwitchTo {
-        tab_id: u32,
-    },
-    SwitchToSession {
-        session: u32,
-    },
-    MoveLeft {
-        tab_id: Option<u32>,
-    },
-    MoveRight {
-        tab_id: Option<u32>,
-    },
-    Close {
-        tab_id: Option<u32>,
-    },
-    ProcessInput {
-        tab_id: Option<u32>,
-    },
+    SwitchTo { tab_id: u32 },
+    SwitchToSession { session: u32 },
+    MoveLeft { tab_id: Option<u32> },
+    MoveRight { tab_id: Option<u32> },
+    Close { tab_id: Option<u32> },
 }
 
 #[derive(Debug, Display)]

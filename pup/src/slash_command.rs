@@ -149,9 +149,12 @@ impl SlashCommand for Close {
         }
 
         // TODO(XXX): parse an optional tab id argument to use below.
-        Ok(Some(TabShortcut::Close {
-            tab_id: None, // active tab
-        }.into()))
+        Ok(Some(
+            TabShortcut::Close {
+                tab_id: None, // active tab
+            }
+            .into(),
+        ))
     }
 }
 
@@ -219,8 +222,6 @@ impl SlashCommand for Session {
         };
 
         app.set_active_session(Some(session))?;
-        Ok(Some(TabShortcut::SwitchToSession {
-            session
-        }.into()))
+        Ok(Some(TabShortcut::SwitchToSession { session }.into()))
     }
 }

@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-
+use async_trait::async_trait;
 use pyo3::Py;
 use ratatui::Frame;
 use ratatui::layout::Constraint::{Fill, Length};
@@ -7,6 +6,7 @@ use ratatui::layout::{Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Tabs};
+use std::fmt::Debug;
 
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
@@ -271,6 +271,8 @@ pub(crate) struct TabInfo {
     position: usize,
 }
 
+#[async_trait]
+
 pub(crate) trait Tab: Debug + Send + Sync {
     fn title(&self, app: &AppData) -> String;
 
@@ -299,7 +301,7 @@ pub(crate) trait Tab: Debug + Send + Sync {
 
     fn layout(&self) -> Py<Section>;
 
-    fn crossterm_event(
+    async fn crossterm_event(
         &mut self,
         _app: &mut AppData,
         _event: &crossterm::event::Event,
