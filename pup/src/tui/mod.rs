@@ -115,29 +115,31 @@ impl Tui {
             return Ok(None);
         };
 
-        // Handle TUI-level shortcuts, these aren't specific to the active tab.
+        // Handle app-level shortcuts, these aren't specific to the active tab.
         if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
             trace!(shortcut = shortcut.to_string(), "global shortcut matched");
-            self.handle_shortcut(app, shortcut)?;
-            return Ok(None);
+            return Ok(match shortcut {
+                Shortcut::Tab(tab_shortcut) => Some(tab_shortcut.into()),
+                Shortcut::Quit => {
+                    app.should_quit = true;
+                    None
+                }
+                _ => None,
+            });
+        }
+
+        let active_tab = self.chrome.active_tab();
+        if let Some(shortcut) = active_tab.lookup_shortcut(app, &key_event)? {
+            trace!(
+                shortcut = shortcut.to_string(),
+                active_tab = active_tab.title(app),
+                "tab shortcut matched"
+            );
+            return active_tab.shortcut(app, &shortcut).await;
         }
 
         // Otherwise, forward the event to the active tab.
-        self.chrome.active_tab().key_event(app, &key_event).await
-    }
-
-    pub(crate) fn handle_shortcut(
-        &mut self,
-        app: &mut AppData,
-        shortcut: Shortcut,
-    ) -> Result<(), Error> {
-        match shortcut {
-            Shortcut::Tab(tab_action) => self.handle_tab_action(app, tab_action.into()),
-            Shortcut::Quit => {
-                app.should_quit = true;
-                Ok(())
-            }
-        }
+        active_tab.key_event(app, &key_event).await
     }
 
     pub(crate) fn handle_tab_action(
@@ -147,7 +149,11 @@ impl Tui {
     ) -> Result<(), Error> {
         match tab_action {
             TabAction::Shortcut(tab_shortcut) => {
-                return self.handle_tab_shortcut(app, tab_shortcut);
+                return self.handle_tab_shortcut(app, &tab_shortcut);
+            }
+            TabAction::Create { session } => {
+                info!(name = session.character.name, "creating session tab");
+                self.chrome.new_tab(Character::new(session));
             }
             TabAction::Layout { tab_id, tx } => {
                 let section = self.chrome.get_tab(tab_id)?.layout();
@@ -189,13 +195,9 @@ impl Tui {
     pub(crate) fn handle_tab_shortcut(
         &mut self,
         app: &mut AppData,
-        tab_shortcut: TabShortcut,
+        tab_shortcut: &TabShortcut,
     ) -> Result<(), Error> {
         match tab_shortcut {
-            TabShortcut::Create { session } => {
-                info!(name = session.character.name, "creating session tab");
-                self.chrome.new_tab(Character::new(session));
-            }
             TabShortcut::SwitchToNext => {
                 info!("switching to next tab");
                 self.chrome.next_tab();
@@ -214,7 +216,7 @@ impl Tui {
                     }
                     Some(tab_id) => {
                         info!(tab_id, "closing specific tab");
-                        tab_id
+                        *tab_id
                     }
                 };
                 let (_, Some(removed)) = self.chrome.close_tab(id) else {
@@ -229,7 +231,7 @@ impl Tui {
             }
             TabShortcut::SwitchToSession { session } => {
                 info!(session, "switching to session tab");
-                self.chrome.switch_to_session(session)?;
+                self.chrome.switch_to_session(*session)?;
             }
             TabShortcut::SwitchToList => {
                 info!("switching to character list");
@@ -237,7 +239,7 @@ impl Tui {
             }
             TabShortcut::SwitchTo { tab_id } => {
                 info!(tab_id, "switching to tab");
-                if let Err(err) = self.chrome.switch_to(tab_id) {
+                if let Err(err) = self.chrome.switch_to(*tab_id) {
                     warn!(?err, "failed to switch to tab");
                 }
             }

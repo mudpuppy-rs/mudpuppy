@@ -92,7 +92,7 @@ impl SlashCommand for NewSession {
             message: format!("{character}"),
         });
         active_sess.connect()?;
-        Ok(Some(TabShortcut::Create { session }.into()))
+        Ok(Some(TabAction::Create { session }))
     }
 }
 

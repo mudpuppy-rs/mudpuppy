@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
@@ -7,9 +9,10 @@ use tracing::{debug, error, warn};
 
 use crate::app::{AppData, TabAction};
 use crate::error::Error;
-use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
+use crate::keyboard::KeyEvent;
 use crate::python::{self, Event};
 use crate::session::{OUTPUT_BUFFER_NAME, OutputItem};
+use crate::shortcut::{InputShortcut, Shortcut};
 use crate::tui::{Constraint, Section, Tab, buffer, commandline};
 
 #[derive(Debug)]
@@ -17,8 +20,6 @@ pub(crate) struct Character {
     sesh: python::Session,
     tab_title: Option<String>,
     layout: Py<Section>,
-    // TODO(XXX): expose a way to customize.
-    pub(crate) transmit_key_event: KeyEvent,
 }
 
 impl Character {
@@ -27,7 +28,6 @@ impl Character {
             sesh,
             tab_title: None,
             layout: initial_layout(),
-            transmit_key_event: KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
         }
     }
 }
@@ -148,18 +148,33 @@ impl Tab for Character {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    async fn key_event(
+    fn all_shortcuts(&self, app: &AppData) -> Result<HashMap<KeyEvent, Shortcut>, Error> {
+        Ok(app.session(self.sesh.id)?.shortcuts.clone())
+    }
+
+    fn lookup_shortcut(
+        &self,
+        app: &AppData,
+        key_event: &KeyEvent,
+    ) -> Result<Option<Shortcut>, Error> {
+        Ok(app.session(self.sesh.id)?.shortcuts.get(key_event).cloned())
+    }
+
+    async fn shortcut(
         &mut self,
         app: &mut AppData,
-        key_event: &KeyEvent,
+        shortcut: &Shortcut,
     ) -> Result<Option<TabAction>, Error> {
-        // Pass events other than the enter key to the session input instance.
-        if key_event != &self.transmit_key_event {
-            return Python::with_gil(|py| {
-                let mut input = app.session_mut(self.sesh.id)?.input.borrow_mut(py);
-                input.key_event(key_event);
-                Ok(None)
-            });
+        match shortcut {
+            Shortcut::SessionInput(InputShortcut::Send) => {}
+            Shortcut::SessionInput(shortcut) => {
+                return Python::with_gil(|py| {
+                    let mut input = app.session_mut(self.sesh.id)?.input.borrow_mut(py);
+                    input.shortcut(shortcut);
+                    Ok(None)
+                });
+            }
+            _ => return Ok(None),
         }
 
         // Pop whatever input has been queued.
@@ -185,6 +200,18 @@ impl Tab for Character {
             });
             Ok(None)
         }
+    }
+
+    async fn key_event(
+        &mut self,
+        app: &mut AppData,
+        key_event: &KeyEvent,
+    ) -> Result<Option<TabAction>, Error> {
+        Python::with_gil(|py| {
+            let mut input = app.session_mut(self.sesh.id)?.input.borrow_mut(py);
+            input.key_event(key_event);
+            Ok(None)
+        })
     }
 }
 

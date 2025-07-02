@@ -2,11 +2,14 @@ use std::fmt::Debug;
 
 use strum::Display;
 
-use crate::python;
-
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
 pub(crate) enum Shortcut {
+    #[strum(to_string = "Tab({0})")]
     Tab(TabShortcut),
+    #[strum(to_string = "Menu({0})")]
+    Menu(MenuShortcut),
+    #[strum(to_string = "SessionInput({0})")]
+    SessionInput(InputShortcut),
     Quit,
 }
 
@@ -16,9 +19,20 @@ impl From<TabShortcut> for Shortcut {
     }
 }
 
+impl From<MenuShortcut> for Shortcut {
+    fn from(shortcut: MenuShortcut) -> Self {
+        Self::Menu(shortcut)
+    }
+}
+
+impl From<InputShortcut> for Shortcut {
+    fn from(shortcut: InputShortcut) -> Self {
+        Self::SessionInput(shortcut)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
 pub(crate) enum TabShortcut {
-    Create { session: python::Session },
     SwitchToNext,
     SwitchToPrevious,
     SwitchToList,
@@ -27,4 +41,28 @@ pub(crate) enum TabShortcut {
     MoveLeft { tab_id: Option<u32> },
     MoveRight { tab_id: Option<u32> },
     Close { tab_id: Option<u32> },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+pub(crate) enum MenuShortcut {
+    Up,
+    Down,
+    Connect,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+pub(crate) enum InputShortcut {
+    Send,
+    CursorLeft,
+    CursorRight,
+    CursorToStart,
+    CursorToEnd,
+    CursorWordLeft,
+    CursorWordRight,
+    DeletePrev,
+    DeleteNext,
+    CursorDeleteWordLeft,
+    CursorDeleteWordRight,
+    CursorDeleteToEnd,
+    Reset,
 }

@@ -6,12 +6,14 @@ use ratatui::layout::{Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Tabs};
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
+use crate::shortcut::Shortcut;
 use crate::tui::{CharacterMenu, Section};
 
 #[derive(Debug)]
@@ -273,7 +275,6 @@ pub(crate) struct TabInfo {
 }
 
 #[async_trait]
-
 pub(crate) trait Tab: Debug + Send + Sync {
     fn title(&self, app: &AppData) -> String;
 
@@ -301,6 +302,22 @@ pub(crate) trait Tab: Debug + Send + Sync {
     }
 
     fn layout(&self) -> Py<Section>;
+
+    fn all_shortcuts(&self, _app: &AppData) -> Result<HashMap<KeyEvent, Shortcut>, Error>;
+
+    fn lookup_shortcut(
+        &self,
+        _app: &AppData,
+        _key_event: &KeyEvent,
+    ) -> Result<Option<Shortcut>, Error>;
+
+    async fn shortcut(
+        &mut self,
+        _app: &mut AppData,
+        _shortcut: &Shortcut,
+    ) -> Result<Option<TabAction>, Error> {
+        Ok(None)
+    }
 
     async fn key_event(
         &mut self,

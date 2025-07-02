@@ -357,7 +357,7 @@ impl AppData {
         })?;
 
         for sesh in sessions {
-            fe.tab_action(self, TabShortcut::Create { session: sesh }.into())
+            fe.tab_action(self, TabAction::Create { session: sesh })
                 .await?;
         }
         Ok(())
@@ -446,6 +446,9 @@ impl From<Tui> for Frontend {
 #[derive(Debug, Display)]
 pub(crate) enum TabAction {
     Shortcut(TabShortcut),
+    Create {
+        session: python::Session,
+    },
     Layout {
         tab_id: u32,
         tx: oneshot::Sender<Py<Section>>, // Leaking TUI bits here :-/

@@ -5,14 +5,15 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
-use tracing::{debug, info};
+use std::collections::HashMap;
+use tracing::{debug, error, info};
 
 use crate::app::{AppData, TabAction};
 use crate::config::{Config, config_file};
 use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::session::Character;
-use crate::shortcut::TabShortcut;
+use crate::shortcut::{MenuShortcut, Shortcut};
 use crate::tui::{Constraint, Section, Tab};
 
 #[derive(Debug)]
@@ -21,6 +22,7 @@ pub(crate) struct CharacterMenu {
     state: ListState,
     characters: Vec<Character>,
     layout: Py<Section>,
+    shortcuts: HashMap<KeyEvent, Shortcut>,
 }
 
 impl CharacterMenu {
@@ -30,6 +32,7 @@ impl CharacterMenu {
             state: ListState::default(),
             characters: Vec::default(),
             layout: initial_layout(),
+            shortcuts: default_shortcuts(),
         };
         ml.load(config);
         ml
@@ -105,48 +108,54 @@ impl Tab for CharacterMenu {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    async fn key_event(
+    fn all_shortcuts(&self, _: &AppData) -> Result<HashMap<KeyEvent, Shortcut>, Error> {
+        Ok(self.shortcuts.clone())
+    }
+
+    fn lookup_shortcut(
+        &self,
+        _app: &AppData,
+        key_event: &KeyEvent,
+    ) -> Result<Option<Shortcut>, Error> {
+        Ok(self.shortcuts.get(key_event).cloned())
+    }
+
+    async fn shortcut(
         &mut self,
         app: &mut AppData,
-        key_event: &KeyEvent,
+        shortcut: &Shortcut,
     ) -> Result<Option<TabAction>, Error> {
-        match key_event {
-            KeyEvent {
-                code: KeyCode::Up,
-                modifiers: KeyModifiers::NONE,
-            } => {
+        let Shortcut::Menu(shortcut) = shortcut else {
+            return Ok(None);
+        };
+
+        match shortcut {
+            MenuShortcut::Up => {
                 self.state.select_previous();
+                Ok(None)
             }
-            KeyEvent {
-                code: KeyCode::Down,
-                modifiers: KeyModifiers::NONE,
-            } => {
+            MenuShortcut::Down => {
                 self.state.select_next();
+                Ok(None)
             }
-            KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::NONE,
-            } => {
+            MenuShortcut::Connect => {
                 let Some(selected) = self.state.selected() else {
                     return Ok(None);
                 };
-                if selected >= self.characters.len() {
+                let Some(character) = self.characters.get(selected) else {
+                    error!(
+                        "selected character index {selected} out of bounds (len: {})",
+                        self.characters.len()
+                    );
                     return Ok(None);
-                }
+                };
 
-                let selected = self.characters.get(selected).unwrap();
-                info!("creating session for {selected}");
-                let session = app.new_session(selected)?;
-
-                // TODO(XXX): update to not require GIL.
+                info!("creating session for {character}");
+                let session = app.new_session(character)?;
                 Python::with_gil(|py| session.connect(py))?;
-
-                return Ok(Some(TabShortcut::Create { session }.into()));
+                Ok(Some(TabAction::Create { session }))
             }
-            _ => {}
         }
-
-        Ok(None)
     }
 }
 
@@ -177,6 +186,32 @@ fn initial_layout() -> Py<Section> {
         Py::new(py, root)
     })
     .unwrap() // Safety: no chance for duplicate sections.
+}
+
+fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
+    HashMap::from([
+        (
+            KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+            },
+            MenuShortcut::Up.into(),
+        ),
+        (
+            KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+            },
+            MenuShortcut::Down.into(),
+        ),
+        (
+            KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+            },
+            MenuShortcut::Connect.into(),
+        ),
+    ])
 }
 
 const CHAR_LIST_SECTION_ROOT_NAME: &str = "Character List Tab";

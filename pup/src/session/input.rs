@@ -8,8 +8,8 @@ use strum::Display;
 use tracing::info;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::keyboard::KeyCode::{Backspace, Char, Delete, End, Home, Left, Right};
-use crate::keyboard::{KeyEvent, KeyModifiers};
+use crate::keyboard::{KeyCode, KeyEvent};
+use crate::shortcut::InputShortcut;
 
 #[derive(Debug, Clone)]
 #[pyclass]
@@ -31,37 +31,56 @@ impl Input {
         })
     }
 
-    // TODO(XXX): support customizing these bindings...
     pub(crate) fn key_event(&mut self, key_event: &KeyEvent) {
         let KeyEvent {
-            code, modifiers, ..
-        } = key_event;
+            code: KeyCode::Char(c),
+            ..
+        } = key_event
+        else {
+            return;
+        };
+        self.insert(*c);
+    }
 
-        match (code, *modifiers) {
-            (Backspace, KeyModifiers::NONE) | (Char('h'), KeyModifiers::CONTROL) => {
-                self.delete_prev();
+    pub(crate) fn shortcut(&mut self, shortcut: &InputShortcut) {
+        match shortcut {
+            InputShortcut::Send => {}
+            InputShortcut::CursorLeft => {
+                self.cursor_left();
             }
-            (Delete, KeyModifiers::NONE) => self.delete_next(),
-            (Left, KeyModifiers::NONE) | (Char('b'), KeyModifiers::CONTROL) => self.cursor_left(),
-            (Left, KeyModifiers::CONTROL) | (Char('b'), KeyModifiers::META) => {
+            InputShortcut::CursorRight => {
+                self.cursor_right();
+            }
+            InputShortcut::CursorToStart => {
+                self.cursor_start();
+            }
+            InputShortcut::CursorToEnd => {
+                self.cursor_end();
+            }
+            InputShortcut::CursorWordLeft => {
                 self.cursor_word_left();
             }
-            (Right, KeyModifiers::NONE) | (Char('f'), KeyModifiers::CONTROL) => self.cursor_right(),
-            (Right, KeyModifiers::CONTROL) | (Char('f'), KeyModifiers::META) => {
+            InputShortcut::CursorWordRight => {
                 self.cursor_word_right();
             }
-            (Char('u'), KeyModifiers::CONTROL) => self.reset(),
-
-            (Char('w'), KeyModifiers::CONTROL) | (Char('d') | Backspace, KeyModifiers::META) => {
+            InputShortcut::DeletePrev => {
+                self.delete_prev();
+            }
+            InputShortcut::DeleteNext => {
+                self.delete_next();
+            }
+            InputShortcut::CursorDeleteWordLeft => {
                 self.delete_word_left();
             }
-
-            (Delete, KeyModifiers::CONTROL) => self.delete_word_right(),
-            (Char('k'), KeyModifiers::CONTROL) => self.delete_to_end(),
-            (Char('a'), KeyModifiers::CONTROL) | (Home, KeyModifiers::NONE) => self.cursor_start(),
-            (Char('e'), KeyModifiers::CONTROL) | (End, KeyModifiers::NONE) => self.cursor_end(),
-            (Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => self.insert(*c),
-            (_, _) => {}
+            InputShortcut::CursorDeleteWordRight => {
+                self.delete_word_right();
+            }
+            InputShortcut::CursorDeleteToEnd => {
+                self.delete_to_end();
+            }
+            InputShortcut::Reset => {
+                self.reset();
+            }
         }
     }
 

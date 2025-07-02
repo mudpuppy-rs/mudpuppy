@@ -18,11 +18,12 @@ use tokio_util::bytes::Bytes;
 use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::error::{Error, ErrorKind};
-use crate::keyboard::KeyEvent;
+use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation as TelnetNegotiation};
 use crate::net::{connection, telnet};
 use crate::python;
 
+use crate::shortcut::{InputShortcut, Shortcut};
 pub(crate) use alias::*;
 pub(crate) use buffer::*;
 pub(crate) use character::*;
@@ -41,6 +42,7 @@ pub(super) struct Session {
     pub(super) extra_buffers: HashMap<String, Py<Buffer>>,
     pub(super) triggers: Vec<Py<Trigger>>,
     pub(super) aliases: Vec<Py<Alias>>,
+    pub(super) shortcuts: HashMap<KeyEvent, Shortcut>,
 
     state: ConnectionState,
     telnet_state: telnet::negotiation::Table,
@@ -68,6 +70,7 @@ impl Session {
             extra_buffers: HashMap::default(),
             triggers: Vec::default(),
             aliases: Vec::default(),
+            shortcuts: default_shortcuts(),
 
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),
@@ -554,4 +557,170 @@ fn initial_telnet_state() -> telnet::negotiation::Table {
     // TODO(XXX): GA?
 
     telnet::negotiation::Table::from([ECHO, EOR, GMCP])
+}
+
+#[allow(clippy::too_many_lines)]
+fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
+    // ENTER -> Send input
+    HashMap::from([
+        (
+            KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::Send.into(),
+        ),
+        // BACKSPACE or Ctrl-h -> Delete prev char
+        (
+            KeyEvent {
+                code: KeyCode::Backspace,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::DeletePrev.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('h'),
+            },
+            InputShortcut::DeletePrev.into(),
+        ),
+        // DELETE -> Delete next char
+        (
+            KeyEvent {
+                code: KeyCode::Delete,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::DeleteNext.into(),
+        ),
+        // LEFT or Ctrl-b -> Cursor left
+        (
+            KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::CursorLeft.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('b'),
+            },
+            InputShortcut::CursorLeft.into(),
+        ),
+        // Ctrl-LEFT or Alt-b -> Cursor word left
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Left,
+            },
+            InputShortcut::CursorWordLeft.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char('b'),
+            },
+            InputShortcut::CursorWordLeft.into(),
+        ),
+        // RIGHT or Ctrl-f -> Cursor right
+        (
+            KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::CursorRight.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('f'),
+            },
+            InputShortcut::CursorRight.into(),
+        ),
+        // Ctrl-RIGHT or Alt-f -> Cursor word right
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Right,
+            },
+            InputShortcut::CursorWordRight.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char('f'),
+            },
+            InputShortcut::CursorWordRight.into(),
+        ),
+        // CTRL-u -> Reset
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('u'),
+            },
+            InputShortcut::Reset.into(),
+        ),
+        // Alt-BACKSPACE or CTRL-w -> Delete word left
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Backspace,
+            },
+            InputShortcut::CursorDeleteWordLeft.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('w'),
+            },
+            InputShortcut::CursorDeleteWordLeft.into(),
+        ),
+        // Ctrl-DELETE -> Delete word right
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Delete,
+            },
+            InputShortcut::CursorDeleteWordRight.into(),
+        ),
+        // Ctrl-k -> Delete to end
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('k'),
+            },
+            InputShortcut::CursorDeleteToEnd.into(),
+        ),
+        // HOME or Ctrl-a -> Cursor start
+        (
+            KeyEvent {
+                code: KeyCode::Home,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::CursorToStart.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('a'),
+            },
+            InputShortcut::CursorToStart.into(),
+        ),
+        // END or Ctrl-e -> Cursor end
+        (
+            KeyEvent {
+                code: KeyCode::End,
+                modifiers: KeyModifiers::NONE,
+            },
+            InputShortcut::CursorToEnd.into(),
+        ),
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char('e'),
+            },
+            InputShortcut::CursorToEnd.into(),
+        ),
+    ])
 }
