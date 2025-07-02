@@ -19,7 +19,7 @@ use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
 use crate::python::GlobalEvent;
 use crate::session::{Character, Session};
-use crate::shortcut::{BuiltinShortcut, Shortcut};
+use crate::shortcut::{Shortcut};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
 use crate::{cli, python, slash_command};
@@ -154,7 +154,7 @@ pub(super) struct AppData {
     pub(super) sessions: HashMap<u32, Session>,
     pub(super) global_event_handlers: python::GlobalHandlers,
     pub(super) slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
-    pub(super) shortcuts: HashMap<KeyEvent, Arc<dyn Shortcut>>,
+    pub(super) shortcuts: HashMap<KeyEvent, Shortcut>,
 
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
     python_event_tx: Option<UnboundedSender<(u32, python::Event)>>,
@@ -176,85 +176,45 @@ impl AppData {
         }
     }
 
-    fn default_shortcuts() -> HashMap<KeyEvent, Arc<dyn Shortcut>> {
+    fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
         let mut shortcuts = HashMap::new();
 
-        let quit_shortcut = Arc::new(BuiltinShortcut {
-            name: "Quit".to_string(),
-            handler: Box::new(|_, app, _| {
-                app.should_quit = true;
-                Ok(None)
-            }),
-        }) as Arc<dyn Shortcut>;
-        shortcuts.insert(
-            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-            quit_shortcut.clone(),
-        );
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
-            quit_shortcut,
+            Shortcut::Quit,
+        );
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            Shortcut::Quit,
         );
 
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('n'), KeyModifiers::CONTROL),
-            Arc::new(BuiltinShortcut {
-                name: "Next Tab".to_string(),
-                handler: Box::new(|_, _, _| Ok(Some(TabAction::Next))),
-            }),
+            TabShortcut::SwitchToNext.into(),
         );
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
-            Arc::new(BuiltinShortcut {
-                name: "Previous Tab".to_string(),
-                handler: Box::new(|_, _, _| Ok(Some(TabAction::Previous))),
-            }),
+            TabShortcut::SwitchToPrevious.into(),
         );
-
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT),
-            Arc::new(BuiltinShortcut {
-                name: "Move Tab Right".to_string(),
-                handler: Box::new(|tui, _, _| {
-                    Ok(Some(TabAction::MoveRight {
-                        tab_id: tui.chrome.active_tab_id(),
-                    }))
-                }),
-            }),
+            TabShortcut::MoveRight { tab_id: None }.into()
         );
         shortcuts.insert(
             KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT),
-            Arc::new(BuiltinShortcut {
-                name: "Move Tab Left".to_string(),
-                handler: Box::new(|tui, _, _| {
-                    Ok(Some(TabAction::MoveLeft {
-                        tab_id: tui.chrome.active_tab_id(),
-                    }))
-                }),
-            }),
-        );
-        shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
-            Arc::new(BuiltinShortcut {
-                name: "Close Tab".to_string(),
-                handler: Box::new(|_, _, _| {
-                    Ok(Some(TabAction::Close {
-                        tab_id: None, // active tab.
-                    }))
-                }),
-            }),
+            TabShortcut::MoveLeft { tab_id: None }.into()
         );
 
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-            Arc::new(BuiltinShortcut {
-                name: "Transmit".to_string(),
-                handler: Box::new(|_, _, _| {
-                    Ok(Some(TabAction::ProcessInput {
-                        tab_id: None, // active tab
-                    }))
-                }),
-            }),
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            TabShortcut::Close { tab_id: None }.into()
         );
+        
+        /*
+        shortcuts.insert(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            TabShortcut::ProcessInput { tab_id: None }.into()
+        )*/
         shortcuts
     }
 
@@ -397,7 +357,7 @@ impl AppData {
         })?;
 
         for sesh in sessions {
-            fe.tab_action(self, TabAction::Create { session: sesh })
+            fe.tab_action(self, TabShortcut::Create { session: sesh }.into())
                 .await?;
         }
         Ok(())
@@ -450,7 +410,7 @@ impl Frontend {
             warn!(action=?action, "ignoring tab action in headless mode");
             return Ok(());
         };
-        tui.handle_tab_action(app, action).await
+        tui.handle_tab_action(app, action)
     }
 
     fn config_reloaded(&mut self, config: &Config) -> Result<(), Error> {
@@ -483,28 +443,37 @@ impl From<Tui> for Frontend {
     }
 }
 
-#[derive(Debug, Display)]
-pub(crate) enum TabAction {
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+pub(crate) enum TabShortcut {
     Create {
         session: python::Session,
     },
-    Next,
-    Previous,
-    MoveLeft {
+    SwitchToNext,
+    SwitchToPrevious,
+    SwitchToList,
+    SwitchTo {
         tab_id: u32,
     },
+    SwitchToSession {
+        session: u32,
+    },
+    MoveLeft {
+        tab_id: Option<u32>,
+    },
     MoveRight {
-        tab_id: u32,
+        tab_id: Option<u32>,
     },
     Close {
         tab_id: Option<u32>,
     },
-    SwitchToTab {
-        tab_id: u32,
+    ProcessInput {
+        tab_id: Option<u32>,
     },
-    SwitchToSession {
-        session: Option<u32>,
-    },
+}
+
+#[derive(Debug, Display)]
+pub(crate) enum TabAction {
+    Shortcut(TabShortcut),
     Layout {
         tab_id: u32,
         tx: oneshot::Sender<Py<Section>>, // Leaking TUI bits here :-/
@@ -514,19 +483,22 @@ pub(crate) enum TabAction {
         tx: oneshot::Sender<String>,
     },
     SetTitle {
-        tab_id: u32,
+        tab_id: Option<u32>,
         title: String,
     },
-    IdForSession {
-        session_id: u32,
+    TabForSession {
+        session_id: Option<u32>,
         tx: oneshot::Sender<python::Tab>,
     },
     AllTabs {
         tx: oneshot::Sender<Vec<python::Tab>>,
     },
-    ProcessInput {
-        tab_id: Option<u32>,
-    },
+}
+
+impl From<TabShortcut> for TabAction {
+    fn from(tab_shortcut: TabShortcut) -> Self {
+        Self::Shortcut(tab_shortcut)
+    }
 }
 
 static SESSION_ID: AtomicU32 = AtomicU32::new(0);

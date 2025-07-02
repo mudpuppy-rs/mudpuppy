@@ -148,11 +148,11 @@ impl Tab for Character {
         app: &mut AppData,
         event: &CrosstermEvent,
     ) -> Result<Option<TabAction>, Error> {
-        let session = app.session_mut(self.sesh.id)?;
-
         let CrosstermEvent::Key(key_event) = event else {
             return Ok(None);
         };
+
+        let session = app.session_mut(self.sesh.id)?;
 
         Python::with_gil(|py| {
             if let &crossterm::event::KeyEvent {

@@ -11,7 +11,7 @@ use std::io::{IsTerminal, Stdout, stdout};
 use std::num::NonZeroUsize;
 use std::panic;
 
-use crate::app::{AppData, TabAction};
+use crate::app::{AppData, TabAction, TabShortcut};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
@@ -35,6 +35,7 @@ pub(super) use session::Character;
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
+use crate::shortcut::Shortcut;
 
 #[derive(Debug)]
 pub(super) struct Tui {
@@ -67,10 +68,10 @@ impl Tui {
             }
             // Terminal event.
             Some(Ok(event)) = self.event_stream.next().fuse() => {
-                let Some(tab_action) = self.crossterm_event(app, &event).await? else {
+                let Some(tab_action) = self.crossterm_event(app, &event)? else {
                     return Ok(())
                 };
-                self.handle_tab_action(app, tab_action).await
+                self.handle_tab_action(app, tab_action)
             }
         }
     }
@@ -88,7 +89,7 @@ impl Tui {
         self.chrome.config_reloaded(config)
     }
 
-    async fn crossterm_event(
+    fn crossterm_event(
         &mut self,
         app: &mut AppData,
         event: &CrosstermEvent,
@@ -96,16 +97,30 @@ impl Tui {
         // TODO(XXX): noisy logging per keystroke
         trace!(event=?event);
 
+        // Key events are checked against shortcuts.
         if let CrosstermEvent::Key(key_event) = event {
             if let Ok(key_event) = KeyEvent::try_from(key_event) {
+                // Try to execute the key event as a global shortcut first.
                 if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
-                    trace!(shortcut = shortcut.name(), "executing");
-                    return shortcut.execute(self, app, key_event).await;
+                    trace!(shortcut = shortcut.to_string(), "global shortcut matched");
+                    self.handle_shortcut(app, shortcut, key_event)?;
+                    return Ok(None)
                 }
             }
         }
 
+        // If it didn't match a shortcut, forward the event to the active tab.
         self.chrome.active_tab().crossterm_event(app, event)
+    }
+
+    pub(crate) fn handle_shortcut(&mut self, app: &mut AppData, shortcut: Shortcut, event: KeyEvent) -> Result<(), Error> {
+        match shortcut {
+            Shortcut::Tab(tab_action) => self.handle_tab_action(app, tab_action.into()),
+            Shortcut::Quit => {
+                app.should_quit = true;
+                Ok(())
+            }
+        }
     }
 
     pub(crate) async fn handle_input_send(
@@ -151,116 +166,34 @@ impl Tui {
         })
     }
 
-    #[allow(clippy::too_many_lines)] // TODO(XXX): refactor/revisit.
-    pub(crate) async fn handle_tab_action(
+    pub(crate) fn handle_tab_action(
         &mut self,
         app: &mut AppData,
-        mut tab_action: TabAction,
+        tab_action: TabAction,
     ) -> Result<(), Error> {
-        // Loop is necessary to avoid recursion + pinning future in the (one) case where
-        // processing a tab action may produce another tab action to process. E.g. because
-        // we invoked a command for queued input.
-        loop {
-            let next_action = match tab_action {
-                TabAction::Create { session } => {
-                    info!(name = session.character.name, "creating session tab");
-                    self.chrome.new_tab(Character::new(session));
-                    None
-                }
-                TabAction::Next => {
-                    info!("switching to next tab");
-                    self.chrome.next_tab();
-                    app.set_active_session(self.chrome.active_tab().session_id())?;
-                    None
-                }
-                TabAction::Previous => {
-                    info!("switching to previous tab");
-                    self.chrome.previous_tab();
-                    app.set_active_session(self.chrome.active_tab().session_id())?;
-                    None
-                }
-                TabAction::Close { tab_id } => {
-                    let id = match tab_id {
-                        None => {
-                            info!("closing active tab");
-                            self.chrome.active_tab_id()
-                        }
-                        Some(tab_id) => {
-                            info!(tab_id, "closing specific tab");
-                            tab_id
-                        }
-                    };
-                    let (_, Some(removed)) = self.chrome.close_tab(id) else {
-                        app.should_quit = true;
-                        return Ok(());
-                    };
-                    if let Some(session) = removed.session_id() {
-                        info!(session, "closing session");
-                        app.close_session(session)?;
-                    }
-                    app.set_active_session(self.chrome.active_tab().session_id())?;
-                    None
-                }
-                TabAction::SwitchToSession { session: Some(id) } => {
-                    info!(id, "switching to session tab");
-                    self.chrome.switch_to_session(id)?;
-                    None
-                }
-                TabAction::SwitchToSession { session: None } => {
-                    info!("switching to character list");
-                    self.chrome.switch_to_list();
-                    None
-                }
-                TabAction::SwitchToTab { tab_id } => {
-                    info!(tab_id, "switching to tab");
-                    if let Err(err) = self.chrome.switch_to(tab_id) {
-                        warn!(?err, "failed to switch to tab");
-                    }
-                    None
-                }
+        match tab_action {
+                TabAction::Shortcut(tab_shortcut) => return self.handle_tab_shortcut(app, tab_shortcut),
                 TabAction::Layout { tab_id, tx } => {
                     let section = self.chrome.get_tab(tab_id)?.layout();
                     let _ = tx.send(section);
-                    None
                 }
                 TabAction::Title { tab_id, tx } => {
                     _ = tx.send(self.chrome.get_tab(tab_id)?.title(app));
-                    None
                 }
                 TabAction::SetTitle { tab_id, title } => {
+                    let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
                     self.chrome
                         .get_tab_mut(tab_id)?
                         .set_title(app, title.as_str())?;
-                    None
                 }
-                TabAction::ProcessInput { tab_id } => {
-                    let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
-                    let Some(session_id) = self.chrome.get_tab(tab_id)?.session_id() else {
-                        break;
-                    };
-                    let session = app.session(session_id)?;
-                    if Python::with_gil(|py| session.input.borrow(py).value().sent.starts_with('/'))
-                    {
-                        self.handle_input_send(app).await?
-                    } else {
-                        None
-                    }
-                }
-                TabAction::MoveLeft { tab_id } => {
-                    self.chrome.move_tab_left(tab_id)?;
-                    None
-                }
-                TabAction::MoveRight { tab_id } => {
-                    self.chrome.move_tab_right(tab_id)?;
-                    None
-                }
-                TabAction::IdForSession { session_id, tx } => {
+
+                TabAction::TabForSession { session_id, tx } => {
+                    let session_id = session_id.unwrap_or(app.active_session.ok_or(ErrorKind::NoActiveSession)?);
                     let tab_info = self
                         .chrome
                         .tab_for_session(session_id)
                         .ok_or(ErrorKind::NoSuchSession(session_id))?;
                     let _ = tx.send(python::Tab { id: tab_info.id });
-                    None
                 }
                 TabAction::AllTabs { tx } => {
                     let tabs = self
@@ -270,13 +203,88 @@ impl Tui {
                         .map(|tab_info| python::Tab { id: tab_info.id })
                         .collect();
                     let _ = tx.send(tabs);
-                    None
                 }
-            };
+            }
 
-            match next_action {
-                Some(action) => tab_action = action,
-                None => break,
+        Ok(())
+    }
+
+    pub(crate) fn handle_tab_shortcut(
+        &mut self,
+        app: &mut AppData,
+        tab_shortcut: TabShortcut,
+    ) -> Result<(), Error> {
+        match tab_shortcut {
+            TabShortcut::Create { session } => {
+                info!(name = session.character.name, "creating session tab");
+                self.chrome.new_tab(Character::new(session));
+            }
+            TabShortcut::SwitchToNext => {
+                info!("switching to next tab");
+                self.chrome.next_tab();
+                app.set_active_session(self.chrome.active_tab().session_id())?;
+            }
+            TabShortcut::SwitchToPrevious => {
+                info!("switching to previous tab");
+                self.chrome.previous_tab();
+                app.set_active_session(self.chrome.active_tab().session_id())?;
+            }
+            TabShortcut::Close { tab_id } => {
+                let id = match tab_id {
+                    None => {
+                        info!("closing active tab");
+                        self.chrome.active_tab_id()
+                    }
+                    Some(tab_id) => {
+                        info!(tab_id, "closing specific tab");
+                        tab_id
+                    }
+                };
+                let (_, Some(removed)) = self.chrome.close_tab(id) else {
+                    app.should_quit = true;
+                    return Ok(());
+                };
+                if let Some(session) = removed.session_id() {
+                    info!(session, "closing session");
+                    app.close_session(session)?;
+                }
+                app.set_active_session(self.chrome.active_tab().session_id())?;
+            }
+            TabShortcut::SwitchToSession { session } => {
+                info!(session, "switching to session tab");
+                self.chrome.switch_to_session(session)?;
+            }
+            TabShortcut::SwitchToList => {
+                info!("switching to character list");
+                self.chrome.switch_to_list();
+            }
+            TabShortcut::SwitchTo { tab_id } => {
+                info!(tab_id, "switching to tab");
+                if let Err(err) = self.chrome.switch_to(tab_id) {
+                    warn!(?err, "failed to switch to tab");
+                }
+            }
+            TabShortcut::ProcessInput { tab_id } => {
+                /*
+                let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
+                let Some(session_id) = self.chrome.get_tab(tab_id)?.session_id() else {
+                    break;
+                };
+                let session = app.session(session_id)?;
+                if Python::with_gil(|py| session.input.borrow(py).value().sent.starts_with('/'))
+                {
+                    self.handle_input_send(app).await?
+                } else {
+                    None
+                }*/
+            }
+            TabShortcut::MoveLeft { tab_id } => {
+                let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
+                self.chrome.move_tab_left(tab_id)?;
+            }
+            TabShortcut::MoveRight { tab_id } => {
+                let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
+                self.chrome.move_tab_right(tab_id)?;
             }
         }
 

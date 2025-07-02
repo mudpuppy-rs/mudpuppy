@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pyo3::Python;
 
-use crate::app::{AppData, TabAction};
+use crate::app::{AppData, TabAction, TabShortcut};
 use crate::error::{Error, ErrorKind};
 use crate::session::OutputItem;
 
@@ -91,7 +91,7 @@ impl SlashCommand for NewSession {
             message: format!("{character}"),
         });
         active_sess.connect()?;
-        Ok(Some(TabAction::Create { session }))
+        Ok(Some(TabShortcut::Create { session }.into()))
     }
 }
 
@@ -149,9 +149,9 @@ impl SlashCommand for Close {
         }
 
         // TODO(XXX): parse an optional tab id argument to use below.
-        Ok(Some(TabAction::Close {
+        Ok(Some(TabShortcut::Close {
             tab_id: None, // active tab
-        }))
+        }.into()))
     }
 }
 
@@ -219,8 +219,8 @@ impl SlashCommand for Session {
         };
 
         app.set_active_session(Some(session))?;
-        Ok(Some(TabAction::SwitchToSession {
-            session: Some(session),
-        }))
+        Ok(Some(TabShortcut::SwitchToSession {
+            session
+        }.into()))
     }
 }

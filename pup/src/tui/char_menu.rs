@@ -8,7 +8,7 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use tracing::{debug, info};
 
-use crate::app::{AppData, TabAction};
+use crate::app::{AppData, TabAction, TabShortcut};
 use crate::config::{Config, config_file};
 use crate::error::Error;
 use crate::session::Character;
@@ -104,35 +104,38 @@ impl Tab for CharacterMenu {
         Python::with_gil(|py| self.layout.clone_ref(py))
     }
 
-    // TODO(XXX): key bindings lookup
     fn crossterm_event(
         &mut self,
         app: &mut AppData,
         event: &Event,
     ) -> Result<Option<TabAction>, Error> {
-        match event {
-            Event::Key(crossterm::event::KeyEvent {
+        let Event::Key(key_event) = event else {
+            return Ok(None);
+        };
+
+        match key_event {
+            crossterm::event::KeyEvent {
                 code: KeyCode::Up,
                 kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::NONE,
                 ..
-            }) => {
+            } => {
                 self.state.select_previous();
             }
-            Event::Key(crossterm::event::KeyEvent {
+            crossterm::event::KeyEvent {
                 code: KeyCode::Down,
                 kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::NONE,
                 ..
-            }) => {
+            } => {
                 self.state.select_next();
             }
-            Event::Key(crossterm::event::KeyEvent {
+            crossterm::event::KeyEvent {
                 code: KeyCode::Enter,
                 kind: KeyEventKind::Press,
                 modifiers: KeyModifiers::NONE,
                 ..
-            }) => {
+            } => {
                 let Some(selected) = self.state.selected() else {
                     return Ok(None);
                 };
@@ -147,7 +150,7 @@ impl Tab for CharacterMenu {
                 // TODO(XXX): update to not require GIL.
                 Python::with_gil(|py| session.connect(py))?;
 
-                return Ok(Some(TabAction::Create { session }));
+                return Ok(Some(TabShortcut::Create { session }.into()));
             }
             _ => {}
         }

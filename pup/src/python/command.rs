@@ -5,7 +5,7 @@ use strum::Display;
 use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument};
 
-use crate::app::{AppData, SlashCommand, TabAction};
+use crate::app::{AppData, SlashCommand, TabAction, TabShortcut};
 use crate::config::Config;
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
@@ -174,6 +174,18 @@ impl Command {
         }
 
         Ok(false)
+    }
+}
+
+impl From<TabAction> for Command {
+    fn from(action: TabAction) -> Self {
+        Self::Tab(action)
+    }
+}
+
+impl From<TabShortcut> for Command {
+    fn from(shortcut: TabShortcut) -> Self {
+        Self::from(TabAction::from(shortcut))
     }
 }
 

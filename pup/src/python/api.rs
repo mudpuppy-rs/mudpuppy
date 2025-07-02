@@ -7,7 +7,7 @@ use pyo3::{IntoPyObject, Py, PyObject, Python, pyclass, pymethods, pymodule};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
-use crate::app::{AppData, SlashCommand, TabAction};
+use crate::app::{AppData, SlashCommand, TabAction, TabShortcut};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::session::{
@@ -140,8 +140,8 @@ impl Session {
 
     fn tab<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
         dispatch_async_command(py, |tx| {
-            Command::Tab(TabAction::IdForSession {
-                session_id: self.id,
+            Command::Tab(TabAction::TabForSession {
+                session_id: Some(self.id),
                 tx,
             })
         })
@@ -358,70 +358,75 @@ pub(crate) struct Tab {
 #[pymethods]
 impl Tab {
     fn set_active(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, Command::Tab(TabAction::SwitchToTab { tab_id: self.id }))
+        dispatch_command(py, TabShortcut::SwitchTo { tab_id: self.id })
     }
 
     fn layout<'py>(&self, py: Python<'py>) -> FutureResult<'py> {
         dispatch_async_command(py, |tx| {
-            Command::Tab(TabAction::Layout {
+            TabAction::Layout {
                 tab_id: self.id,
                 tx,
-            })
+            }.into()
         })
     }
 
     fn title<'py>(&self, py: Python<'py>) -> FutureResult<'py> {
         dispatch_async_command(py, |tx| {
-            Command::Tab(TabAction::Title {
+            TabAction::Title {
                 tab_id: self.id,
                 tx,
-            })
+            }.into()
         })
     }
 
     fn set_title(&self, py: Python<'_>, title: String) -> Result {
         dispatch_command(
             py,
-            Command::Tab(TabAction::SetTitle {
-                tab_id: self.id,
+            TabAction::SetTitle {
+                tab_id: Some(self.id),
                 title,
-            }),
+            },
         )
     }
 
     #[allow(clippy::unused_self)]
     fn switch_next(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, Command::Tab(TabAction::Next))
+        dispatch_command(py, TabShortcut::SwitchToNext)
     }
 
     #[allow(clippy::unused_self)]
     fn switch_previous(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, Command::Tab(TabAction::Previous))
+        dispatch_command(py, TabShortcut::SwitchToPrevious)
+    }
+
+    #[allow(clippy::unused_self)]
+    fn switch_to_list(&self, py: Python<'_>) -> Result {
+        dispatch_command(py, TabShortcut::SwitchToList)
     }
 
     fn process_input(&self, py: Python<'_>) -> Result {
         dispatch_command(
             py,
-            Command::Tab(TabAction::ProcessInput {
+            TabShortcut::ProcessInput {
                 tab_id: Some(self.id),
-            }),
+            },
         )
     }
 
     fn move_left(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, Command::Tab(TabAction::MoveLeft { tab_id: self.id }))
+        dispatch_command(py, TabShortcut::MoveLeft { tab_id: Some(self.id) })
     }
 
     fn move_right(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, Command::Tab(TabAction::MoveRight { tab_id: self.id }))
+        dispatch_command(py, TabShortcut::MoveRight { tab_id: Some(self.id) })
     }
 
     fn close(&self, py: Python<'_>) -> Result {
         dispatch_command(
             py,
-            Command::Tab(TabAction::Close {
+            TabShortcut::Close {
                 tab_id: Some(self.id),
-            }),
+            },
         )
     }
 }
@@ -476,8 +481,8 @@ where
     })
 }
 
-fn dispatch_command(py: Python<'_>, cmd: Command) -> Result {
-    Ok(APP.get(py).unwrap().send(cmd).map_err(ErrorKind::from)?)
+fn dispatch_command(py: Python<'_>, cmd: impl Into<Command>) -> Result {
+    Ok(APP.get(py).unwrap().send(cmd.into()).map_err(ErrorKind::from)?)
 }
 
 #[pymodule]

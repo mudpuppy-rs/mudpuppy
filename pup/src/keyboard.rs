@@ -17,6 +17,7 @@ pub(crate) struct KeyEvent {
 }
 
 impl KeyEvent {
+    // TODO(XXX): reverse arg order.
     #[must_use]
     pub(crate) fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
         Self { code, modifiers }
