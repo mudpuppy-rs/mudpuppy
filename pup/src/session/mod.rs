@@ -23,7 +23,7 @@ use crate::net::telnet::codec::{Item as TelnetItem, Negotiation as TelnetNegotia
 use crate::net::{connection, telnet};
 use crate::python;
 
-use crate::shortcut::{InputShortcut, Shortcut};
+use crate::shortcut::{InputShortcut, ScrollShortcut, Shortcut};
 pub(crate) use alias::*;
 pub(crate) use buffer::*;
 pub(crate) use character::*;
@@ -39,6 +39,7 @@ pub(super) struct Session {
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
     pub(super) output: Buffer,
+    pub(super) scrollback: Buffer,
     pub(super) extra_buffers: HashMap<String, Py<Buffer>>,
     pub(super) triggers: Vec<Py<Trigger>>,
     pub(super) aliases: Vec<Py<Alias>>,
@@ -61,12 +62,20 @@ impl Session {
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
     ) -> Result<Self, Error> {
+        let mut scrollback = Buffer::new(SCROLL_BUFFER_NAME.to_string())?;
+        // TODO(XXX): scrollbar border settings.
+        scrollback.border_left = true;
+        scrollback.border_right = true;
+        scrollback.border_bottom = true;
+        scrollback.scrollbar = Scrollbar::Always;
+
         Ok(Self {
             id,
             event_handlers: python::SessionHandlers::default(),
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
             output: Buffer::new(OUTPUT_BUFFER_NAME.to_string())?,
+            scrollback,
             extra_buffers: HashMap::default(),
             triggers: Vec::default(),
             aliases: Vec::default(),
@@ -551,6 +560,8 @@ pub(super) enum ConnectionState {
 
 pub(super) const OUTPUT_BUFFER_NAME: &str = "MUD Output";
 
+pub(super) const SCROLL_BUFFER_NAME: &str = "Scrollback";
+
 // TODO(XXX): Use config/MUD to determine this?
 fn initial_telnet_state() -> telnet::negotiation::Table {
     use telnet::option::{ECHO, EOR, GMCP};
@@ -562,8 +573,8 @@ fn initial_telnet_state() -> telnet::negotiation::Table {
 
 #[allow(clippy::too_many_lines)]
 fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
-    // ENTER -> Send input
     HashMap::from([
+        // ENTER -> Send input
         (
             KeyEvent {
                 code: KeyCode::Enter,
@@ -722,6 +733,38 @@ fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
                 code: KeyCode::Char('e'),
             },
             InputShortcut::CursorToEnd.into(),
+        ),
+        // PAGE-UP -> Scroll up
+        (
+            KeyEvent {
+                code: KeyCode::PageUp,
+                modifiers: KeyModifiers::NONE,
+            },
+            ScrollShortcut::Up.into(),
+        ),
+        // PAGE-DOWN -> Scroll down
+        (
+            KeyEvent {
+                code: KeyCode::PageDown,
+                modifiers: KeyModifiers::NONE,
+            },
+            ScrollShortcut::Down.into(),
+        ),
+        // SHIFT-HOME -> Scroll top
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::SHIFT,
+                code: KeyCode::Home,
+            },
+            ScrollShortcut::Top.into(),
+        ),
+        // SHIFT-END -> Scroll bottom
+        (
+            KeyEvent {
+                modifiers: KeyModifiers::SHIFT,
+                code: KeyCode::End,
+            },
+            ScrollShortcut::Bottom.into(),
         ),
     ])
 }

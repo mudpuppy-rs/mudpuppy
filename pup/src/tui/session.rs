@@ -3,16 +3,17 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Direction, Layout, Margin, Rect};
 use ratatui::prelude::Line;
+use ratatui::widgets::Clear;
 use tracing::{debug, error, info, warn};
 
 use crate::app::{AppData, TabAction};
 use crate::error::Error;
 use crate::keyboard::KeyEvent;
 use crate::python::{self, Event};
-use crate::session::{OUTPUT_BUFFER_NAME, OutputItem};
-use crate::shortcut::{InputShortcut, Shortcut};
+use crate::session::{Buffer, OUTPUT_BUFFER_NAME, OutputItem};
+use crate::shortcut::{InputShortcut, ScrollShortcut, Shortcut};
 use crate::tui::{Constraint, Section, Tab, buffer, commandline};
 
 #[derive(Debug)]
@@ -105,6 +106,19 @@ impl Tab for Character {
             session.output.dimensions = output_dimensions;
         }
 
+        // If we're scrolling and there was new data received, move the scroll position
+        // up by the amount of new data so that the scroll window remains at the same
+        // point relative to where it was before the new data was received.
+        //
+        // We do this _before_ drawing the output buffer because the act of draining the
+        // new data to draw will clear the new data count.
+        let new_data = session.output.new_data();
+        if session.scrollback.scroll_pos != 0 && new_data > 0 {
+            session
+                .scrollback
+                .scroll_up(u16::try_from(new_data).unwrap_or(u16::MAX));
+        }
+
         // TODO(XXX): held prompt setting.
         let prompt = if session.prompt.content().is_empty() {
             None
@@ -117,11 +131,21 @@ impl Tab for Character {
         buffer::draw(
             f,
             &mut session.output,
+            None,
             prompt.as_ref(),
             // TODO(XXX): filtering settings.
             |item| !matches!(item, OutputItem::Prompt { .. }),
             *output_section,
         )?;
+
+        if session.scrollback.scroll_pos != 0 {
+            draw_scrollback(
+                f,
+                *output_section,
+                &mut session.scrollback,
+                &mut session.output,
+            )?;
+        }
 
         commandline::draw(f, &session.input, &sections)?;
 
@@ -133,7 +157,7 @@ impl Tab for Character {
             Python::with_gil(|py| {
                 let mut buffer = buffer.borrow_mut(py);
                 // TODO(XXX): filtering settings.
-                buffer::draw(f, &mut buffer, None, |_| true, *output_section)
+                buffer::draw(f, &mut buffer, None, None, |_| true, *output_section)
             })?;
         }
 
@@ -194,6 +218,24 @@ impl Tab for Character {
                     input.shortcut(shortcut);
                     Ok(None)
                 });
+            }
+            Shortcut::Scroll(shortcut) => {
+                let scroll_lines = 5; // TODO(XXX): Setting for scroll lines
+                let scrollback = &mut app.session_mut(self.sesh.id)?.scrollback;
+                match shortcut {
+                    ScrollShortcut::Up => {
+                        scrollback.scroll_up(scroll_lines);
+                    }
+                    ScrollShortcut::Down => {
+                        scrollback.scroll_down(scroll_lines);
+                    }
+                    ScrollShortcut::Top => {
+                        scrollback.scroll_max();
+                    }
+                    ScrollShortcut::Bottom => {
+                        scrollback.scroll_bottom();
+                    }
+                }
             }
             _ => return Ok(None),
         }
@@ -267,6 +309,43 @@ async fn dispatch_command(app: &mut AppData, input: &str) -> Result<Option<TabAc
             None
         }
     })
+}
+
+fn draw_scrollback(
+    f: &mut Frame,
+    output_area: Rect,
+    scrollback: &mut Buffer,
+    output: &mut Buffer,
+) -> Result<(), Error> {
+    // Create a sub area of the overall buffer area where we can draw the scroll window.
+    // We don't create this as a fixed layout section because we want it sized relative
+    // to the existing fixed `MudBuffer` output section.
+    let area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            ratatui::layout::Constraint::Percentage(70), // TODO(XXX): scrollback percentage setting.
+            ratatui::layout::Constraint::Min(1),
+        ])
+        .split(output_area)[0];
+
+    // Render the scrollback content and the scrollbar inside a viewport offset within the
+    // overall area.
+    let viewport = area.inner(Margin {
+        vertical: 0,   // TODO(XXX): scrollback margin vertical setting.
+        horizontal: 6, // TODO(XXX): scrollback margin horizontal setting.
+    });
+    // Make sure to clear the viewport first - we're drawing on top of the already rendered
+    // normal buffer content.
+    f.render_widget(Clear, viewport);
+
+    buffer::draw(
+        f,
+        scrollback,
+        Some(output),
+        None,
+        |_| true, // TODO(XXX): filtering
+        viewport,
+    )
 }
 
 fn initial_layout() -> Py<Section> {

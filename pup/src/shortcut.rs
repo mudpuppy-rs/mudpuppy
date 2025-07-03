@@ -20,6 +20,8 @@ pub(crate) enum Shortcut {
     Menu(MenuShortcut),
     #[strum(to_string = "SessionInput({0})")]
     SessionInput(InputShortcut),
+    #[strum(to_string = "Scroll({0})")]
+    Scroll(ScrollShortcut),
     #[strum(to_string = "PythonShortcut({0})")] // TODO(XXX): improve PythonShortcut to_string
     Python(PythonShortcut),
     Quit {},
@@ -40,6 +42,12 @@ impl From<MenuShortcut> for Shortcut {
 impl From<InputShortcut> for Shortcut {
     fn from(shortcut: InputShortcut) -> Self {
         Self::SessionInput(shortcut)
+    }
+}
+
+impl From<ScrollShortcut> for Shortcut {
+    fn from(shortcut: ScrollShortcut) -> Self {
+        Self::Scroll(shortcut)
     }
 }
 
@@ -86,6 +94,15 @@ pub(crate) enum InputShortcut {
     CursorDeleteWordRight,
     CursorDeleteToEnd,
     Reset,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+#[pyclass(frozen, eq, hash)]
+pub(crate) enum ScrollShortcut {
+    Up,
+    Down,
+    Top,
+    Bottom,
 }
 
 #[derive(Debug, Clone)]

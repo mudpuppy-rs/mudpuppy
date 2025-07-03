@@ -19,6 +19,7 @@ use crate::tui::reflow::{LineComposer, LineTruncator, WordWrapper, WrappedLine};
 pub fn draw<Filter>(
     f: &mut Frame<'_>,
     buffer: &mut Buffer,
+    data_buffer: Option<&mut Buffer>,
     prompt: Option<&OutputItem>,
     filter: Filter,
     area: Rect,
@@ -34,7 +35,9 @@ where
     // Clamp the scroll position within valid range if needed (and update the max_scroll).
     // We do this here because we need to know the size of the area available for rendering
     // to know how many items can be displayed.
-    let max_scroll = buffer
+    let max_scroll = data_buffer
+        .as_ref()
+        .unwrap_or(&buffer)
         .len()
         .saturating_sub(area_inside_buffer_borders(buffer, area, false).height as usize);
     buffer.max_scroll = max_scroll;
@@ -59,6 +62,7 @@ where
     render_visible(
         f,
         buffer,
+        data_buffer,
         prompt,
         filter,
         area_inside_buffer_borders(buffer, area, draw_scrollbar),
@@ -138,6 +142,7 @@ fn buffer_borders(buff: &Buffer) -> Borders {
 fn render_visible<Filter>(
     f: &mut Frame<'_>,
     buffer: &mut Buffer,
+    data_buffer: Option<&mut Buffer>,
     prompt: Option<&OutputItem>,
     filter: Filter,
     area: Rect,
@@ -149,7 +154,8 @@ where
     let direction = buffer.direction;
     let line_wrap = buffer.line_wrap;
 
-    let items = HeldPromptIterator::new(buffer.take_received().iter(), prompt);
+    let items =
+        HeldPromptIterator::new(data_buffer.unwrap_or(buffer).take_received().iter(), prompt);
 
     let items: Box<dyn Iterator<Item = &'_ OutputItem> + '_> = match direction {
         BufferDirection::TopToBottom => Box::new(items),
@@ -157,7 +163,6 @@ where
     };
 
     let items = items.skip(scroll_pos).filter(filter);
-    let buf = f.buffer_mut();
 
     let mut pos = match direction {
         BufferDirection::TopToBottom => 0,
@@ -222,6 +227,7 @@ where
 
                 let (symbol, width) = simplify_complex_emoji(symbol);
 
+                let buf = f.buffer_mut();
                 buf[(area.left() + x, area.top() + y)]
                     .set_symbol(&symbol)
                     .set_style(style);
