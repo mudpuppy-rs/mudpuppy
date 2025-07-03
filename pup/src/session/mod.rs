@@ -214,7 +214,8 @@ impl Session {
         let Ok(connected_handle) = self.connected_handle() else {
             return Ok(());
         };
-        connected_handle.send(connection::Action::Flush)
+        let _ = connected_handle.send(connection::Action::Flush);
+        Ok(())
     }
 
     #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]

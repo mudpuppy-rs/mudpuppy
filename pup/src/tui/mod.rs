@@ -95,7 +95,7 @@ impl Tui {
         event: &CrosstermEvent,
     ) -> Result<Option<TabAction>, Error> {
         // Uncomment for VERY VERBOSE logging :)
-        // trace!(event=?event);
+        trace!(event=?event);
 
         // TODO(XXX): Mouse.
         // TODO(XXX): Bracketed paste.

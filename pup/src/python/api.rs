@@ -545,8 +545,8 @@ pub(crate) mod pup {
     use crate::python::{Dimensions, Event, EventType, GlobalEvent, GlobalEventType};
     #[pymodule_export]
     use crate::session::{
-        Alias, Buffer, BufferDirection, Character, EchoState, InputLine, Markup, Mud, MudLine,
-        OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger, Input,
+        Alias, Buffer, BufferDirection, Character, EchoState, Input, InputLine, Markup, Mud,
+        MudLine, OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger,
     };
     #[pymodule_export]
     use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};
