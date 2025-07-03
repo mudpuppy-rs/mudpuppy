@@ -13,6 +13,7 @@ use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
+use crate::python;
 use crate::shortcut::Shortcut;
 use crate::tui::{CharacterMenu, Section};
 
@@ -103,7 +104,7 @@ impl Chrome {
     pub(crate) fn tab_for_session(&self, session_id: u32) -> Option<&TabInfo> {
         self.tabs
             .iter()
-            .find(|tab_info| tab_info.tab.session_id() == Some(session_id))
+            .find(|tab_info| tab_info.tab.session().map(|s| s.id) == Some(session_id))
     }
 
     pub(crate) fn new_tab(&mut self, tab: impl Tab + 'static) -> u32 {
@@ -198,7 +199,7 @@ impl Chrome {
         match self
             .tabs
             .iter()
-            .find(|t| t.tab.session_id() == Some(session_id))
+            .find(|t| t.tab.session().map(|s| s.id) == Some(session_id))
         {
             Some(tab_info) => {
                 self.active_tab_id = tab_info.id;
@@ -294,7 +295,7 @@ pub(crate) trait Tab: Debug + Send + Sync {
         tab_content: Rect,
     ) -> Result<(), Error>;
 
-    fn session_id(&self) -> Option<u32> {
+    fn session(&self) -> Option<python::Session> {
         None
     }
 

@@ -28,6 +28,12 @@ pub(crate) struct Session {
     pub(crate) character: Character,
 }
 
+impl From<Session> for u32 {
+    fn from(sesh: Session) -> Self {
+        sesh.id
+    }
+}
+
 #[pymethods]
 impl Session {
     pub(crate) fn connect<'py>(&'py self, py: Python<'py>) -> Result {
@@ -543,7 +549,7 @@ pub(crate) mod pup {
         OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger,
     };
     #[pymodule_export]
-    use crate::shortcut::{InputShortcut, MenuShortcut, Shortcut, TabShortcut};
+    use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};
     #[pymodule_export]
     use crate::tui::{Constraint, Direction, Section};
 

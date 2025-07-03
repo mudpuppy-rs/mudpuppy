@@ -140,8 +140,8 @@ impl Tab for Character {
         Ok(())
     }
 
-    fn session_id(&self) -> Option<u32> {
-        Some(self.sesh.id)
+    fn session(&self) -> Option<python::Session> {
+        Some(self.sesh.clone())
     }
 
     fn layout(&self) -> Py<Section> {

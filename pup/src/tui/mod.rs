@@ -18,6 +18,7 @@ use crossterm::event::{
 };
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
+use pyo3::Python;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Layout;
@@ -116,7 +117,9 @@ impl Tui {
         };
 
         // Handle app-level shortcuts, these aren't specific to the active tab.
-        if let Some(shortcut) = app.shortcuts.get(&key_event).cloned() {
+        // Note: taking the GIL to allow cloning the PyObject in PythonShortcut.
+        let shortcut = Python::with_gil(|_| app.shortcuts.get(&key_event).cloned());
+        if let Some(shortcut) = shortcut {
             trace!(shortcut = shortcut.to_string(), "global shortcut matched");
             return Ok(match shortcut {
                 Shortcut::Tab(tab_shortcut) => Some(tab_shortcut.into()),
@@ -124,16 +127,28 @@ impl Tui {
                     app.should_quit = true;
                     None
                 }
+                Shortcut::Python(shortcut) => {
+                    shortcut.execute(
+                        python::Tab {
+                            id: self.chrome.active_tab_id(),
+                        },
+                        self.chrome.active_tab().session(),
+                        &key_event,
+                    )?;
+                    None
+                }
                 _ => None,
             });
         }
 
         let active_tab = self.chrome.active_tab();
-        if let Some(shortcut) = active_tab.lookup_shortcut(app, &key_event)? {
+        // Note: taking the GIL to allow cloning the PyObject in PythonShortcut.
+        let shortcut = Python::with_gil(|_| active_tab.lookup_shortcut(app, &key_event))?;
+        if let Some(shortcut) = shortcut {
             trace!(
                 shortcut = shortcut.to_string(),
                 active_tab = active_tab.title(app),
-                session = ?active_tab.session_id(),
+                session = ?active_tab.session(),
                 "tab shortcut matched"
             );
             if matches!(shortcut, Shortcut::Quit {}) {
@@ -225,12 +240,12 @@ impl Tui {
             TabShortcut::SwitchToNext {} => {
                 info!("switching to next tab");
                 self.chrome.next_tab();
-                app.set_active_session(self.chrome.active_tab().session_id())?;
+                app.set_active_session(self.chrome.active_tab().session().map(|s| s.id))?;
             }
             TabShortcut::SwitchToPrevious {} => {
                 info!("switching to previous tab");
                 self.chrome.previous_tab();
-                app.set_active_session(self.chrome.active_tab().session_id())?;
+                app.set_active_session(self.chrome.active_tab().session().map(|s| s.id))?;
             }
             TabShortcut::Close { tab_id } => {
                 let id = match tab_id {
@@ -247,11 +262,11 @@ impl Tui {
                     app.should_quit = true;
                     return Ok(());
                 };
-                if let Some(session) = removed.session_id() {
+                if let Some(session) = removed.session().map(|s| s.id) {
                     info!(session, "closing session");
                     app.close_session(session)?;
                 }
-                app.set_active_session(self.chrome.active_tab().session_id())?;
+                app.set_active_session(self.chrome.active_tab().session().map(|s| s.id))?;
             }
             TabShortcut::SwitchToSession { session } => {
                 info!(session, "switching to session tab");
