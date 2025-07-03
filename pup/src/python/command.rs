@@ -14,7 +14,7 @@ use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
 use crate::session::{Alias, Buffer, Character, Input, InputLine, OutputItem, PromptMode, Trigger};
-use crate::shortcut::TabShortcut;
+use crate::shortcut::{Shortcut, TabShortcut};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
@@ -51,6 +51,12 @@ pub(crate) enum Command {
     AddGlobalEventHandler(python::GlobalHandler),
     AddEventHandler(python::SessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
+    SetGlobalShortcut(KeyEvent, Shortcut),
+    SetShortcut {
+        session: u32,
+        key_event: KeyEvent,
+        shortcut: Shortcut,
+    },
     Output {
         session: Option<u32>,
         item: OutputItem,
@@ -148,6 +154,18 @@ impl Command {
                         .map(|(key_event, shortcut)| (*key_event, shortcut.to_string()))
                         .collect(),
                 );
+            }
+            Command::SetGlobalShortcut(key_event, shortcut) => {
+                app.shortcuts.insert(key_event, shortcut);
+            }
+            Command::SetShortcut {
+                session,
+                key_event,
+                shortcut,
+            } => {
+                app.session_mut(session)?
+                    .shortcuts
+                    .insert(key_event, shortcut);
             }
             Command::Prompt(id, cmd) => {
                 cmd.exec(app, id)?;

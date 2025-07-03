@@ -403,17 +403,17 @@ impl Tab {
 
     #[allow(clippy::unused_self)]
     fn switch_next(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, TabShortcut::SwitchToNext)
+        dispatch_command(py, TabShortcut::SwitchToNext {})
     }
 
     #[allow(clippy::unused_self)]
     fn switch_previous(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, TabShortcut::SwitchToPrevious)
+        dispatch_command(py, TabShortcut::SwitchToPrevious {})
     }
 
     #[allow(clippy::unused_self)]
     fn switch_to_list(&self, py: Python<'_>) -> Result {
-        dispatch_command(py, TabShortcut::SwitchToList)
+        dispatch_command(py, TabShortcut::SwitchToList {})
     }
 
     fn move_left(&self, py: Python<'_>) -> Result {
@@ -527,6 +527,8 @@ pub(crate) mod pup {
         OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger,
     };
     #[pymodule_export]
+    use crate::shortcut::{InputShortcut, MenuShortcut, Shortcut, TabShortcut};
+    #[pymodule_export]
     use crate::tui::{Constraint, Direction, Section};
 
     #[pyfunction]
@@ -607,6 +609,11 @@ pub(crate) mod pup {
     #[pyfunction]
     fn global_shortcuts(py: Python<'_>) -> FutureResult<'_> {
         dispatch_async_command(py, Command::GlobalShortcuts)
+    }
+
+    #[pyfunction]
+    fn set_global_shortcut(py: Python<'_>, key_event: KeyEvent, shortcut: Shortcut) -> Result {
+        dispatch_command(py, Command::SetGlobalShortcut(key_event, shortcut))
     }
 
     #[pyfunction(signature = (*args, sep=None, end=None))]

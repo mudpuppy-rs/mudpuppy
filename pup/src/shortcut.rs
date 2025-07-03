@@ -1,8 +1,10 @@
 use std::fmt::Debug;
 
+use pyo3::pyclass;
 use strum::Display;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+#[pyclass(frozen, eq, hash)]
 pub(crate) enum Shortcut {
     #[strum(to_string = "Tab({0})")]
     Tab(TabShortcut),
@@ -10,7 +12,7 @@ pub(crate) enum Shortcut {
     Menu(MenuShortcut),
     #[strum(to_string = "SessionInput({0})")]
     SessionInput(InputShortcut),
-    Quit,
+    Quit {},
 }
 
 impl From<TabShortcut> for Shortcut {
@@ -32,10 +34,11 @@ impl From<InputShortcut> for Shortcut {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+#[pyclass(frozen, eq, hash)]
 pub(crate) enum TabShortcut {
-    SwitchToNext,
-    SwitchToPrevious,
-    SwitchToList,
+    SwitchToNext {},
+    SwitchToPrevious {},
+    SwitchToList {},
     SwitchTo { tab_id: u32 },
     SwitchToSession { session: u32 },
     MoveLeft { tab_id: Option<u32> },
@@ -44,6 +47,7 @@ pub(crate) enum TabShortcut {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+#[pyclass(frozen, eq, hash)]
 pub(crate) enum MenuShortcut {
     Up,
     Down,
@@ -51,6 +55,7 @@ pub(crate) enum MenuShortcut {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+#[pyclass(frozen, eq, hash)]
 pub(crate) enum InputShortcut {
     Send,
     CursorLeft,

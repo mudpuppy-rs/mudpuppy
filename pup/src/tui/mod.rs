@@ -120,7 +120,7 @@ impl Tui {
             trace!(shortcut = shortcut.to_string(), "global shortcut matched");
             return Ok(match shortcut {
                 Shortcut::Tab(tab_shortcut) => Some(tab_shortcut.into()),
-                Shortcut::Quit => {
+                Shortcut::Quit {} => {
                     app.should_quit = true;
                     None
                 }
@@ -208,12 +208,12 @@ impl Tui {
         tab_shortcut: &TabShortcut,
     ) -> Result<(), Error> {
         match tab_shortcut {
-            TabShortcut::SwitchToNext => {
+            TabShortcut::SwitchToNext {} => {
                 info!("switching to next tab");
                 self.chrome.next_tab();
                 app.set_active_session(self.chrome.active_tab().session_id())?;
             }
-            TabShortcut::SwitchToPrevious => {
+            TabShortcut::SwitchToPrevious {} => {
                 info!("switching to previous tab");
                 self.chrome.previous_tab();
                 app.set_active_session(self.chrome.active_tab().session_id())?;
@@ -243,7 +243,7 @@ impl Tui {
                 info!(session, "switching to session tab");
                 self.chrome.switch_to_session(*session)?;
             }
-            TabShortcut::SwitchToList => {
+            TabShortcut::SwitchToList {} => {
                 info!("switching to character list");
                 self.chrome.switch_to_list();
             }
