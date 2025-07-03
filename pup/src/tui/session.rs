@@ -220,22 +220,8 @@ impl Tab for Character {
                 });
             }
             Shortcut::Scroll(shortcut) => {
-                let scroll_lines = 5; // TODO(XXX): Setting for scroll lines
-                let scrollback = &mut app.session_mut(self.sesh.id)?.scrollback;
-                match shortcut {
-                    ScrollShortcut::Up => {
-                        scrollback.scroll_up(scroll_lines);
-                    }
-                    ScrollShortcut::Down => {
-                        scrollback.scroll_down(scroll_lines);
-                    }
-                    ScrollShortcut::Top => {
-                        scrollback.scroll_max();
-                    }
-                    ScrollShortcut::Bottom => {
-                        scrollback.scroll_bottom();
-                    }
-                }
+                scroll_shortcut(&mut app.session_mut(self.sesh.id)?.scrollback, shortcut);
+                return Ok(None);
             }
             _ => return Ok(None),
         }
@@ -275,6 +261,24 @@ impl Tab for Character {
             input.key_event(key_event);
             Ok(None)
         })
+    }
+}
+
+fn scroll_shortcut(scrollback: &mut Buffer, shortcut: &ScrollShortcut) {
+    let scroll_lines = 5; // TODO(XXX): Setting for scroll lines
+    match shortcut {
+        ScrollShortcut::Up => {
+            scrollback.scroll_up(scroll_lines);
+        }
+        ScrollShortcut::Down => {
+            scrollback.scroll_down(scroll_lines);
+        }
+        ScrollShortcut::Top => {
+            scrollback.scroll_max();
+        }
+        ScrollShortcut::Bottom => {
+            scrollback.scroll_bottom();
+        }
     }
 }
 
