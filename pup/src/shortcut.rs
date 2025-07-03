@@ -92,6 +92,8 @@ pub(crate) enum InputShortcut {
 #[pyclass(frozen, eq, hash)]
 pub(crate) struct PythonShortcut {
     label: String,
+    // async def example(key_event: KeyEvent, active_sesh: Optional[Session], active_tab: Tab):
+    //   pass
     awaitable: PyObject,
 }
 
@@ -109,7 +111,7 @@ impl PythonShortcut {
             let awaitable = self
                 .awaitable
                 .bind(py)
-                .call1((active_tab, active_sesh, *key_event))?;
+                .call1((*key_event, active_sesh, active_tab))?;
             pyo3_async_runtimes::tokio::into_future(awaitable)
         })?;
 
