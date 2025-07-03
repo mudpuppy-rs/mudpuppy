@@ -17,7 +17,7 @@ use crate::keyboard::KeyEvent;
 use crate::session::{
     Alias, Buffer, Character, EchoState, InputLine, OutputItem, PromptMode, Trigger,
 };
-use crate::shortcut::TabShortcut;
+use crate::shortcut::{Shortcut, TabShortcut};
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[pyclass(frozen, eq, hash)]
@@ -389,6 +389,22 @@ impl Tab {
             }
             .into()
         })
+    }
+
+    fn set_shortcut(
+        &self,
+        py: Python<'_>,
+        key_event: KeyEvent,
+        shortcut: Option<Shortcut>,
+    ) -> Result {
+        dispatch_command(
+            py,
+            TabAction::SetShortcut {
+                tab_id: Some(self.id),
+                key_event,
+                shortcut,
+            },
+        )
     }
 
     fn set_title(&self, py: Python<'_>, title: String) -> Result {

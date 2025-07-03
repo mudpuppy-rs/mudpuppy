@@ -311,6 +311,13 @@ pub(crate) trait Tab: Debug + Send + Sync {
         _key_event: &KeyEvent,
     ) -> Result<Option<Shortcut>, Error>;
 
+    fn set_shortcut(
+        &mut self,
+        _app: &mut AppData,
+        _key_event: &KeyEvent,
+        _shortcut: Option<Shortcut>,
+    ) -> Result<(), Error>;
+
     async fn shortcut(
         &mut self,
         _app: &mut AppData,

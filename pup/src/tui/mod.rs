@@ -179,6 +179,15 @@ impl Tui {
                         .collect(),
                 );
             }
+            TabAction::SetShortcut {
+                tab_id,
+                key_event,
+                shortcut,
+            } => {
+                let tab_id = tab_id.unwrap_or(self.chrome.active_tab_id());
+                let tab = self.chrome.get_tab_mut(tab_id)?;
+                tab.set_shortcut(app, &key_event, shortcut)?;
+            }
             TabAction::TabForSession { session_id, tx } => {
                 let session_id =
                     session_id.unwrap_or(app.active_session.ok_or(ErrorKind::NoActiveSession)?);

@@ -5,7 +5,7 @@ use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::prelude::Line;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::app::{AppData, TabAction};
 use crate::error::Error;
@@ -158,6 +158,27 @@ impl Tab for Character {
         key_event: &KeyEvent,
     ) -> Result<Option<Shortcut>, Error> {
         Ok(app.session(self.sesh.id)?.shortcuts.get(key_event).cloned())
+    }
+
+    fn set_shortcut(
+        &mut self,
+        app: &mut AppData,
+        key_event: &KeyEvent,
+        shortcut: Option<Shortcut>,
+    ) -> Result<(), Error> {
+        let shortcuts = &mut app.session_mut(self.sesh.id)?.shortcuts;
+        match shortcut {
+            None => {
+                if let Some((key_event, shortcut)) = shortcuts.remove_entry(key_event) {
+                    info!(key_event=?key_event, shortcut=shortcut.to_string(), "shortcut removed");
+                }
+            }
+            Some(shortcut) => {
+                info!(key_event=?key_event, shortcut=shortcut.to_string(), "shortcut added");
+                shortcuts.insert(*key_event, shortcut);
+            }
+        }
+        Ok(())
     }
 
     async fn shortcut(

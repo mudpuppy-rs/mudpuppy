@@ -120,6 +120,26 @@ impl Tab for CharacterMenu {
         Ok(self.shortcuts.get(key_event).cloned())
     }
 
+    fn set_shortcut(
+        &mut self,
+        _app: &mut AppData,
+        key_event: &KeyEvent,
+        shortcut: Option<Shortcut>,
+    ) -> Result<(), Error> {
+        match shortcut {
+            None => {
+                if let Some((key_event, shortcut)) = self.shortcuts.remove_entry(key_event) {
+                    info!(key_event=?key_event, shortcut=shortcut.to_string(), "shortcut removed");
+                }
+            }
+            Some(shortcut) => {
+                info!(key_event=?key_event, shortcut=shortcut.to_string(), "shortcut added");
+                self.shortcuts.insert(*key_event, shortcut);
+            }
+        }
+        Ok(())
+    }
+
     async fn shortcut(
         &mut self,
         app: &mut AppData,

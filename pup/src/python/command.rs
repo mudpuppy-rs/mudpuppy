@@ -52,11 +52,6 @@ pub(crate) enum Command {
     AddEventHandler(python::SessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
     SetGlobalShortcut(KeyEvent, Shortcut),
-    SetShortcut {
-        session: u32,
-        key_event: KeyEvent,
-        shortcut: Shortcut,
-    },
     Output {
         session: Option<u32>,
         item: OutputItem,
@@ -157,15 +152,6 @@ impl Command {
             }
             Command::SetGlobalShortcut(key_event, shortcut) => {
                 app.shortcuts.insert(key_event, shortcut);
-            }
-            Command::SetShortcut {
-                session,
-                key_event,
-                shortcut,
-            } => {
-                app.session_mut(session)?
-                    .shortcuts
-                    .insert(key_event, shortcut);
             }
             Command::Prompt(id, cmd) => {
                 cmd.exec(app, id)?;
