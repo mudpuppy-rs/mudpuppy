@@ -94,8 +94,8 @@ impl Tui {
         app: &mut AppData,
         event: &CrosstermEvent,
     ) -> Result<Option<TabAction>, Error> {
-        // TODO(XXX): noisy logging per keystroke
-        trace!(event=?event);
+        // Uncomment for VERY VERBOSE logging :)
+        // trace!(event=?event);
 
         // TODO(XXX): Mouse.
         // TODO(XXX): Bracketed paste.
@@ -116,31 +116,23 @@ impl Tui {
             return Ok(None);
         };
 
-        // Handle app-level shortcuts, these aren't specific to the active tab.
+        // Handle app-level shortcuts, these aren't specific to the active tab and so we
+        // either process them or discard them. They aren't forwarded to the active tab.
         // Note: taking the GIL to allow cloning the PyObject in PythonShortcut.
         let shortcut = Python::with_gil(|_| app.shortcuts.get(&key_event).cloned());
         if let Some(shortcut) = shortcut {
-            trace!(shortcut = shortcut.to_string(), "global shortcut matched");
-            return Ok(match shortcut {
-                Shortcut::Tab(tab_shortcut) => Some(tab_shortcut.into()),
-                Shortcut::Quit {} => {
-                    app.should_quit = true;
-                    None
-                }
-                Shortcut::Python(shortcut) => {
-                    shortcut.execute(
-                        python::Tab {
-                            id: self.chrome.active_tab_id(),
-                        },
-                        self.chrome.active_tab().session(),
-                        &key_event,
-                    )?;
-                    None
-                }
-                _ => None,
-            });
+            trace!(
+                shortcut = shortcut.to_string(),
+                key_event = key_event.to_string(),
+                "global shortcut matched"
+            );
+            return self
+                .process_shortcut(app, shortcut, &key_event, false)
+                .await;
         }
 
+        // Handle tab-level shortcuts. These are forwarded to the active tab if we don't handle
+        // them ourselves (e.g. quit, python shortcuts).
         let active_tab = self.chrome.active_tab();
         // Note: taking the GIL to allow cloning the PyObject in PythonShortcut.
         let shortcut = Python::with_gil(|_| active_tab.lookup_shortcut(app, &key_event))?;
@@ -148,18 +140,47 @@ impl Tui {
             trace!(
                 shortcut = shortcut.to_string(),
                 active_tab = active_tab.title(app),
-                session = ?active_tab.session(),
+                session = active_tab
+                    .session()
+                    .map_or("None".to_string(), |s| s.id.to_string()),
                 "tab shortcut matched"
             );
-            if matches!(shortcut, Shortcut::Quit {}) {
-                app.should_quit = true;
-                return Ok(None);
-            }
-            return active_tab.shortcut(app, &shortcut).await;
+            return self.process_shortcut(app, shortcut, &key_event, true).await;
         }
 
-        // Otherwise, forward the event to the active tab.
+        // Otherwise, forward the crossterm event to the active tab.
         active_tab.key_event(app, &key_event).await
+    }
+
+    pub(crate) async fn process_shortcut(
+        &mut self,
+        app: &mut AppData,
+        shortcut: Shortcut,
+        key_event: &KeyEvent,
+        forward_to_tab: bool,
+    ) -> Result<Option<TabAction>, Error> {
+        Ok(match shortcut {
+            Shortcut::Quit {} => {
+                app.should_quit = true;
+                None
+            }
+            Shortcut::Python(shortcut) => {
+                shortcut.execute(
+                    python::Tab {
+                        id: self.chrome.active_tab_id(),
+                    },
+                    self.chrome.active_tab().session(),
+                    key_event,
+                )?;
+                None
+            }
+            Shortcut::Tab(tab_shortcut) => Some(tab_shortcut.into()),
+            _ if forward_to_tab => {
+                let active_tab = self.chrome.active_tab();
+                return active_tab.shortcut(app, &shortcut).await;
+            }
+            _ => None,
+        })
     }
 
     pub(crate) fn handle_tab_action(
