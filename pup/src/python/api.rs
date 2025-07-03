@@ -546,7 +546,7 @@ pub(crate) mod pup {
     #[pymodule_export]
     use crate::session::{
         Alias, Buffer, BufferDirection, Character, EchoState, InputLine, Markup, Mud, MudLine,
-        OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger,
+        OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger, Input,
     };
     #[pymodule_export]
     use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};

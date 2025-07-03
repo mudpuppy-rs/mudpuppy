@@ -67,6 +67,15 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
         )
         .map(|_| ())?;
 
+        trace!("loading built-in history.py");
+        PyModule::from_code(
+            py,
+            c_str!(include_str!("history.py")),
+            c_str!("history.py"),
+            c_str!("history"),
+        )
+            .map(|_| ())?;
+
         if args.headless {
             trace!("loading built-in headless.py");
             let module = PyModule::from_code(
