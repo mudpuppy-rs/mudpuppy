@@ -274,6 +274,7 @@ pub(crate) struct TabInfo {
     position: usize,
 }
 
+// TODO(XXX): pull out some common bits, like shortcuts - everything is duplicating hashmap code.
 #[async_trait]
 pub(crate) trait Tab: Debug + Send + Sync {
     fn title(&self, app: &AppData) -> String;

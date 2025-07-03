@@ -133,8 +133,13 @@ impl Tui {
             trace!(
                 shortcut = shortcut.to_string(),
                 active_tab = active_tab.title(app),
+                session = ?active_tab.session_id(),
                 "tab shortcut matched"
             );
+            if matches!(shortcut, Shortcut::Quit {}) {
+                app.should_quit = true;
+                return Ok(None);
+            }
             return active_tab.shortcut(app, &shortcut).await;
         }
 
