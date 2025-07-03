@@ -198,6 +198,28 @@ pub(super) fn require_coroutine(
     }
 }
 
+pub(super) fn label_for_coroutine(py: Python<'_>, callback: &PyObject) -> Option<String> {
+    // TODO(XXX): possible optimization - cache ref to this fn?
+    let getmodule = py.import("inspect").ok()?.getattr("getmodule").ok()?;
+
+    let module = getmodule.call1((callback,)).ok()?;
+    let module_name = module
+        .getattr("__name__")
+        .ok()?
+        .str()
+        .map(|pystr| pystr.to_string())
+        .unwrap_or("unknown".to_string());
+    let callback = callback.bind(py);
+    let callback_qualname = callback
+        .getattr("__qualname__")
+        .ok()?
+        .str()
+        .map(|pystr| pystr.to_string())
+        .unwrap_or("unknown".to_string());
+
+    Some(format!("{module_name}.{callback_qualname}"))
+}
+
 pub(super) type PyFuture = Pin<Box<dyn StdFuture<Output = PyResult<PyObject>> + Send + 'static>>;
 
 pub(crate) static APP: GILOnceCell<UnboundedSender<Command>> = GILOnceCell::new();

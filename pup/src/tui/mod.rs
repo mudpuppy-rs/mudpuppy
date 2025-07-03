@@ -122,8 +122,8 @@ impl Tui {
         let shortcut = Python::with_gil(|_| app.shortcuts.get(&key_event).cloned());
         if let Some(shortcut) = shortcut {
             trace!(
-                shortcut = shortcut.to_string(),
                 key_event = key_event.to_string(),
+                shortcut = shortcut.to_string(),
                 "global shortcut matched"
             );
             return self
@@ -138,6 +138,7 @@ impl Tui {
         let shortcut = Python::with_gil(|_| active_tab.lookup_shortcut(app, &key_event))?;
         if let Some(shortcut) = shortcut {
             trace!(
+                key_event = key_event.to_string(),
                 shortcut = shortcut.to_string(),
                 active_tab = active_tab.title(app),
                 session = active_tab

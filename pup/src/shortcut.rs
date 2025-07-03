@@ -1,14 +1,15 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-use crate::error::Error;
-use crate::keyboard::KeyEvent;
-use crate::python;
-use crate::python::require_coroutine;
 use pyo3::types::PyAnyMethods;
 use pyo3::{PyObject, Python, pyclass, pymethods};
 use strum::Display;
 use tracing::error;
+
+use crate::error::Error;
+use crate::keyboard::KeyEvent;
+use crate::python;
+use crate::python::{label_for_coroutine, require_coroutine};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
 #[pyclass(frozen, eq, hash)]
@@ -19,7 +20,7 @@ pub(crate) enum Shortcut {
     Menu(MenuShortcut),
     #[strum(to_string = "SessionInput({0})")]
     SessionInput(InputShortcut),
-    #[strum(to_string = "PythonShortcut")] // TODO(XXX): improve PythonShortcut to_string
+    #[strum(to_string = "PythonShortcut({0})")] // TODO(XXX): improve PythonShortcut to_string
     Python(PythonShortcut),
     Quit {},
 }
@@ -90,6 +91,7 @@ pub(crate) enum InputShortcut {
 #[derive(Debug, Clone)]
 #[pyclass(frozen, eq, hash)]
 pub(crate) struct PythonShortcut {
+    label: String,
     awaitable: PyObject,
 }
 
@@ -134,7 +136,16 @@ impl PythonShortcut {
     #[new]
     fn new(py: Python<'_>, awaitable: PyObject) -> Result<Self, Error> {
         require_coroutine(py, "PythonShortcut", &awaitable)?;
-        Ok(Self { awaitable })
+        Ok(Self {
+            label: label_for_coroutine(py, &awaitable).unwrap_or("unknown".to_string()),
+            awaitable,
+        })
+    }
+}
+
+impl Display for PythonShortcut {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
     }
 }
 
