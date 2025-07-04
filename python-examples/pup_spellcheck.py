@@ -69,7 +69,7 @@ class Spellchecker:
             logging.warning(msg)
             sesh.output(OutputItem.failed_command_result(msg))
 
-    async def input_changed(self, _sesh: Session, ev: Event):
+    async def input_changed(self, sesh: Session, ev: Event):
         assert isinstance(ev, Event.InputChanged)
 
         input = ev.input
@@ -81,9 +81,9 @@ class Spellchecker:
         markup = input.markup()
         markup.clear()
 
-        await self.spellcheck_input(line, markup)
+        await self.spellcheck_input(sesh, line, markup)
 
-    async def spellcheck_input(self, line: InputLine, markup: Markup):
+    async def spellcheck_input(self, sesh: Session, line: InputLine, markup: Markup):
         if self.dictionary is None:
             logging.warning("dictionary was None")
             return
@@ -96,7 +96,7 @@ class Spellchecker:
             clean_part = part.strip(".,!?;:'\"`[]{}()\\/<>~!@#$%^&*_-+=").lower()
             if start == 0 and part.startswith("/"):
                 # If the first part is a slash command, highlight it specially instead of spellchecking.
-                await self.highlight_cmd(markup, part)
+                await self.highlight_cmd(sesh, markup, part)
             elif not self.dictionary.lookup(clean_part):
                 # logging.debug(f"misspelled word: {clean_part} ({start}, {end})")
                 markup.add(start, cformat("<bold><red>"))
@@ -104,9 +104,9 @@ class Spellchecker:
 
             start = end + 1  # Offset by 1 to account for the space between words.
 
-    async def highlight_cmd(self, markup: Markup, cmd: str):
+    async def highlight_cmd(self, sesh: Session, markup: Markup, cmd: str):
         # Check if the command is valid.
-        exists = await pup.slash_command_exists(cmd[1:])
+        exists = await sesh.slash_command_exists(cmd[1:])
 
         # Add the appropriate markup to the command part.
         markup.add(0, cformat("<bold><green>") if exists else cformat("<bold><red>"))

@@ -47,7 +47,7 @@ pub(crate) enum Command {
         session: u32,
         tx: oneshot::Sender<Py<Input>>,
     },
-    Slash(Slash),
+    Slash(u32, Slash),
     AddNewSessionHandler(python::NewSessionHandler),
     AddEventHandler(python::SessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
@@ -125,8 +125,8 @@ impl Command {
                 })?;
                 let _ = tx.send(input);
             }
-            Command::Slash(cmd) => {
-                cmd.exec(app);
+            Command::Slash(session, cmd) => {
+                cmd.exec(session, app)?;
             }
             Command::AddNewSessionHandler(handler) => {
                 app.new_session_handlers.push(handler);
@@ -211,18 +211,20 @@ pub(crate) enum Slash {
 }
 
 impl Slash {
-    fn exec(self, app: &mut AppData) {
+    fn exec(self, session: u32, app: &mut AppData) -> Result {
+        let slash_commands = &mut app.session_mut(session)?.slash_commands;
         match self {
             Slash::Add(cmd) => {
-                app.slash_commands.insert(cmd.name(), Arc::new(cmd));
+                slash_commands.insert(cmd.name(), Arc::new(cmd));
             }
             Slash::Remove(name) => {
-                app.slash_commands.retain(|c, _| *c != name);
+                slash_commands.retain(|c, _| *c != name);
             }
             Slash::Exists(name, tx) => {
-                let _ = tx.send(app.slash_commands.contains_key(&name));
+                let _ = tx.send(slash_commands.contains_key(&name));
             }
         }
+        Ok(())
     }
 }
 

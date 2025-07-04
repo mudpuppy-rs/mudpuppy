@@ -7,10 +7,7 @@ use pyo3::{IntoPyObject, Py, PyObject, Python, pyclass, pymethods, pymodule};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
-use super::{
-    APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
-    PromptCommand, Result, TelnetCommand, TriggerCommand, require_coroutine,
-};
+use super::{APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand, Result, TelnetCommand, TriggerCommand, require_coroutine, Slash};
 use crate::app::{AppData, SlashCommand, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
@@ -165,6 +162,21 @@ impl Session {
 
     fn get_buffers<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
         dispatch_async_command(py, |tx| Command::Buffer(self.id, BufferCommand::GetAll(tx)))
+    }
+
+    fn add_slash_command(&self, py: Python<'_>, name: String, callback: PyObject) -> Result {
+        dispatch_command(
+            py,
+            Command::Slash(self.id, Slash::Add(PySlashCommand::new(py, name, callback)?)),
+        )
+    }
+
+    fn slash_command_exists<'py>(&'py self, py: Python<'py>, name: String) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| Command::Slash(self.id, Slash::Exists(name, tx)))
+    }
+
+    fn remove_slash_command<'py>(&'py self, py: Python<'py>, name: String) -> Result {
+        dispatch_command(py, Command::Slash(self.id, Slash::Remove(name)))
     }
 
     fn __str__(&self) -> String {
@@ -532,10 +544,10 @@ pub(crate) mod pup {
     use pyo3::{Bound, PyObject, Python, pyfunction};
 
     use super::{
-        Command, FutureResult, PySlashCommand, Result, dispatch_async_command, dispatch_command,
+        Command, FutureResult, Result, dispatch_async_command, dispatch_command,
     };
     use crate::app::TabAction;
-    use crate::python::{NewSessionHandler, Slash};
+    use crate::python::{NewSessionHandler};
 
     #[pymodule_export]
     use super::{Gmcp, Prompt, Session, Tab, Telnet};
@@ -604,24 +616,6 @@ pub(crate) mod pup {
             py,
             Command::AddNewSessionHandler(NewSessionHandler::new(py, awaitable)?),
         )
-    }
-
-    #[pyfunction]
-    fn add_slash_command(py: Python<'_>, name: String, callback: PyObject) -> Result {
-        dispatch_command(
-            py,
-            Command::Slash(Slash::Add(PySlashCommand::new(py, name, callback)?)),
-        )
-    }
-
-    #[pyfunction]
-    fn slash_command_exists(py: Python<'_>, name: String) -> FutureResult<'_> {
-        dispatch_async_command(py, |tx| Command::Slash(Slash::Exists(name, tx)))
-    }
-
-    #[pyfunction]
-    fn remove_slash_command(py: Python<'_>, name: String) -> Result {
-        dispatch_command(py, Command::Slash(Slash::Remove(name)))
     }
 
     #[pyfunction]

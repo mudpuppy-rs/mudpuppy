@@ -6,13 +6,13 @@ mod input;
 mod prompt;
 mod trigger;
 
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use pyo3::types::PyModule;
 use pyo3::{Py, Python};
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::bytes::Bytes;
 use tracing::{Level, debug, error, info, instrument, trace, warn};
@@ -21,8 +21,9 @@ use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation as TelnetNegotiation};
 use crate::net::{connection, telnet};
-use crate::python;
+use crate::{python, slash_command};
 
+use crate::app::SlashCommand;
 use crate::shortcut::{InputShortcut, ScrollShortcut, Shortcut};
 pub(crate) use alias::*;
 pub(crate) use buffer::*;
@@ -44,6 +45,7 @@ pub(super) struct Session {
     pub(super) triggers: Vec<Py<Trigger>>,
     pub(super) aliases: Vec<Py<Alias>>,
     pub(super) shortcuts: HashMap<KeyEvent, Shortcut>,
+    pub(super) slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
 
     state: ConnectionState,
     telnet_state: telnet::negotiation::Table,
@@ -87,6 +89,7 @@ impl Session {
             triggers: Vec::default(),
             aliases: Vec::default(),
             shortcuts: default_shortcuts(),
+            slash_commands: slash_command::builtin(),
 
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),

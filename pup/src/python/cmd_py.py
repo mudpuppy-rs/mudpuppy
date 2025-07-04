@@ -2,7 +2,6 @@ import logging
 import inspect
 import contextlib
 import io
-import asyncio
 
 import pup
 from pup import Session, OutputItem
@@ -77,9 +76,8 @@ async def run_task(code: str, session: Session):
     except Exception as e:
         session.output(OutputItem.failed_command_result(f"Error running code: {e}"))
 
+async def on_new_session(sesh: Session):
+    sesh.add_slash_command("py", run_task)
 
-async def run(code: str, session: Session):
-    asyncio.create_task(run_task(code, session))
-
-
-pup.add_slash_command("py", run_task)
+logging.debug("module loaded")
+pup.new_session_handler(on_new_session)

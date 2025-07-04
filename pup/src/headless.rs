@@ -1,13 +1,17 @@
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin, stdin};
 use tracing::{debug, error, trace, warn};
 
-use crate::app::AppData;
+use crate::app::{AppData, SlashCommand};
 use crate::error::{Error, ErrorKind};
 use crate::session::{EchoState, InputLine};
+use crate::slash_command;
 
 #[derive(Debug)]
 pub(super) struct Headless {
     stdin: Lines<BufReader<Stdin>>,
+    slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
 }
 
 impl Headless {
@@ -15,6 +19,7 @@ impl Headless {
         trace!("configuring headless mode stdin reader");
         Self {
             stdin: BufReader::new(stdin()).lines(),
+            slash_commands: slash_command::builtin(),
         }
     }
 
@@ -35,7 +40,7 @@ impl Headless {
             let cmd_name = parts.next().unwrap_or_default();
             let remaining = parts.next().unwrap_or_default();
 
-            let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
+            let Some(cmd) = self.slash_commands.get(cmd_name).cloned() else {
                 warn!("unknown slash command: {cmd_name}");
                 eprintln!("unknown slash command: {cmd_name}");
                 return Ok(());

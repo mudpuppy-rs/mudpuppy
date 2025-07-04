@@ -287,29 +287,39 @@ async fn dispatch_command(app: &mut AppData, input: &str) -> Result<Option<TabAc
     let cmd_name = parts.next().unwrap_or_default();
     let remaining = parts.next().unwrap_or_default();
 
-    let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
-        let message = format!("unknown slash command: {cmd_name}");
-        let session = app.active_session_mut().unwrap();
-        warn!(message);
-        session.output.add(OutputItem::CommandResult {
-            error: true,
-            message,
-        });
-        return Ok(None);
+    let cmd = {
+        let Some(active_session) = app.active_session_mut() else {
+            return Ok(None);
+        };
+
+        let Some(cmd) = active_session.slash_commands.get(cmd_name).cloned() else {
+            let message = format!("unknown slash command: {cmd_name}");
+            warn!(message);
+            active_session.output.add(OutputItem::CommandResult {
+                error: true,
+                message,
+            });
+            return Ok(None);
+        };
+        cmd
     };
 
     debug!("executing slash command: {cmd_name} {remaining}");
-    Ok(match cmd.execute(app, remaining.to_string()).await {
+    let res = cmd.execute(app, remaining.to_string()).await;
+    let output = app.active_session_mut().map(|sesh| &mut sesh.output);
+
+    Ok(match res {
         Ok(Some(tab_action)) => Some(tab_action),
         Ok(None) => None,
         Err(e) => {
             let message = format!("error executing slash command {cmd_name}: {e}");
-            let session = app.active_session_mut().unwrap();
             error!(message);
-            session.output.add(OutputItem::CommandResult {
-                error: true,
-                message,
-            });
+            if let Some(output) = output {
+                output.add(OutputItem::CommandResult {
+                    error: true,
+                    message,
+                });
+            }
             None
         }
     })

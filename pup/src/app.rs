@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::StreamExt;
@@ -17,12 +16,12 @@ use crate::error::{Error, ErrorKind};
 use crate::headless::Headless;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
-use crate::python::{Event, NewSessionHandler};
+use crate::python::NewSessionHandler;
 use crate::session::{Character, Session};
 use crate::shortcut::{Shortcut, TabShortcut};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
-use crate::{cli, python, slash_command};
+use crate::{cli, python};
 
 #[derive(Debug)]
 pub(super) struct App {
@@ -153,7 +152,6 @@ pub(super) struct AppData {
     pub(super) active_session: Option<u32>,
     pub(super) sessions: HashMap<u32, Session>,
     pub(super) new_session_handlers: Vec<NewSessionHandler>,
-    pub(super) slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
     pub(super) shortcuts: HashMap<KeyEvent, Shortcut>,
 
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
@@ -169,7 +167,6 @@ impl AppData {
             active_session: None,
             sessions: HashMap::new(),
             new_session_handlers: Vec::new(),
-            slash_commands: slash_command::builtin(),
             shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
             python_event_tx: None,
@@ -303,7 +300,7 @@ impl AppData {
         for (id, sesh) in &self.sessions {
             sesh.event_handlers.session_event(
                 *id,
-                &Event::ActiveSessionChanged {
+                &python::Event::ActiveSessionChanged {
                     changed_from: mk_session(from),
                     changed_to: mk_session(session_id),
                 },
@@ -382,7 +379,7 @@ impl AppData {
         for (id, sesh) in &self.sessions {
             sesh.event_handlers.session_event(
                 *id,
-                &Event::ConfigReloaded {
+                &python::Event::ConfigReloaded {
                     config: self.config(),
                 },
             )?;
