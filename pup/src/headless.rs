@@ -24,6 +24,7 @@ impl Headless {
         };
         if let Err(e) = self.stdin(app, line).await {
             error!("stdin error: {e}");
+            eprintln!("{e}");
         }
         Ok(())
     }
@@ -36,12 +37,14 @@ impl Headless {
 
             let Some(cmd) = app.slash_commands.get(cmd_name).cloned() else {
                 warn!("unknown slash command: {cmd_name}");
+                eprintln!("unknown slash command: {cmd_name}");
                 return Ok(());
             };
 
             debug!("executing slash command: {cmd_name} {remaining}");
             if let Some(action) = cmd.execute(app, remaining.to_string()).await? {
                 warn!("ignoring tab action in headless mode: {action:?}");
+                eprintln!("ignoring tab action in headless mode: {action:?}");
             }
         } else if let Some(active_session) = app.active_session {
             debug!("sending stdin line: {line}");
@@ -56,6 +59,7 @@ impl Headless {
             )?;
         } else {
             warn!("no active session to send line to");
+            eprintln!("no active session to send line to");
         }
 
         Ok(())

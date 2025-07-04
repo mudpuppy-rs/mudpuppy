@@ -463,17 +463,11 @@ impl InputLine {
 
 impl Display for InputLine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("> ")?;
-
         if self.echo == EchoState::Password {
             return f.write_str(&"*".repeat(self.sent.len()));
         }
 
-        if let Some(original) = &self.original {
-            write!(f, "{} ({})", &self.sent, original)
-        } else {
-            f.write_str(&self.sent)
-        }
+        write!(f, "{}", &self.sent)
     }
 }
 
