@@ -20,25 +20,26 @@ async def print_global_event(ev: Event):
 
 
 async def print_session_event(sesh: Session, ev: Event):
-    if isinstance(ev, Event.Line):
+    if isinstance(ev, Event.Line) or isinstance(ev, Event.InputLine):
         return
-    elif isinstance(ev, Event.InputLine):
-        if ev.line.original is not None:
-            print(f"[E] {sesh}: > {ev.line.sent} ({ev.line.original})")
-        else:
-            print(f"[E] {sesh}: > {ev.line.sent}")
-    else:
-        print(f"[E] {sesh}: {ev}")
+    print(f"[E] {sesh}: {ev}")
 
 
 async def print_line(sesh: Session, ev: Event):
     print(f"[L] {sesh}: {ev.line}")
+    
+async def print_input(sesh: Session, ev: Event):
+    if ev.line.original is not None:
+        print(f"[E] {sesh}: > {ev.line.sent} ({ev.line.original})")
+    else:
+        print(f"[E] {sesh}: > {ev.line.sent}")
 
 
 async def new_session(ev: Event):
     logging.debug(f"configuring session {ev.session}")
     ev.session.add_event_handler(EventType.All, print_session_event)
     ev.session.add_event_handler(EventType.Line, print_line)
+    ev.session.add_event_handler(EventType.InputLine, print_input)
 
 
 async def setup():
