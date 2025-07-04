@@ -9,6 +9,7 @@ NAWS_OPTION = 31
 
 enabled_sessions: Set[Session] = set()
 
+
 async def on_new_session(sesh: Session):
     logging.debug(f"{sesh} setting up telnet NAWS handlers")
     sesh.add_event_handler(EventType.SessionConnected, connected)
@@ -26,9 +27,11 @@ async def connected(sesh: Session, _: Event):
     logging.debug(f"{sesh} requesting telnet NAWS option")
     sesh.telnet().request_enable_option(NAWS_OPTION)
 
+
 async def disconnected(sesh: Session, _: Event):
     logging.debug(f"{sesh} disconnected")
     enabled_sessions.remove(sesh)
+
 
 async def telnet_option_enabled(sesh: Session, ev: Event):
     # Ignore other options being enabled
@@ -37,11 +40,13 @@ async def telnet_option_enabled(sesh: Session, ev: Event):
     logging.debug(f"{sesh} option enabled")
     enabled_sessions.add(sesh)
 
+
 async def telnet_option_disabled(sesh: Session, ev: Event):
     if ev.option != NAWS_OPTION:
         return
     logging.debug(f"{sesh} option disabled")
     enabled_sessions.remove(sesh)
+
 
 async def buffer_resized(sesh: Session, ev: Event):
     # TODO(XXX): const for this?
@@ -49,7 +54,7 @@ async def buffer_resized(sesh: Session, ev: Event):
     if ev.name != "MUD Output":
         return
 
-    if not sesh in enabled_sessions:
+    if sesh not in enabled_sessions:
         logging.debug(f"{sesh} ignoring resize - NAWS not enabled")
         return
 

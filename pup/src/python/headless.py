@@ -13,6 +13,7 @@ print("[G] Welcome to MudPuppy (headless)")
 
 # TODO(XXX): figure out new output rendering to stdout.
 
+
 async def print_session_event(sesh: Session, ev: Event):
     if isinstance(ev, Event.Line) or isinstance(ev, Event.InputLine):
         return
@@ -21,6 +22,7 @@ async def print_session_event(sesh: Session, ev: Event):
 
 async def print_line(sesh: Session, ev: Event):
     print(f"[L] {sesh}: {ev.line}")
+
 
 async def print_input(sesh: Session, ev: Event):
     if ev.line.original is not None:
