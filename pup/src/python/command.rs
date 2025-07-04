@@ -207,6 +207,7 @@ impl From<TabShortcut> for Command {
 pub(crate) enum Slash {
     Add(PySlashCommand),
     Remove(String),
+    Exists(String, oneshot::Sender<bool>),
 }
 
 impl Slash {
@@ -217,6 +218,9 @@ impl Slash {
             }
             Slash::Remove(name) => {
                 app.slash_commands.retain(|c, _| *c != name);
+            }
+            Slash::Exists(name, tx) => {
+                let _ = tx.send(app.slash_commands.contains_key(&name));
             }
         }
     }

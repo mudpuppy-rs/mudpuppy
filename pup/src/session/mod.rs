@@ -73,7 +73,9 @@ impl Session {
             id,
             event_handlers: python::SessionHandlers::default(),
             prompt: Prompt::new(id, python_event_tx.clone()),
-            input: Python::with_gil(|py| Py::new(py, Input::new(py)?))?,
+            input: Python::with_gil(|py| {
+                Py::new(py, Input::new(py, id, python_event_tx.clone())?)
+            })?,
             output: Buffer::new(OUTPUT_BUFFER_NAME.to_string())?,
             scrollback,
             extra_buffers: HashMap::default(),

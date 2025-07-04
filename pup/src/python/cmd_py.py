@@ -5,7 +5,7 @@ import io
 import asyncio
 
 import pup
-from pup import GlobalEventType, GlobalEvent, Session, Tab, OutputItem
+from pup import Session, OutputItem
 
 import history
 

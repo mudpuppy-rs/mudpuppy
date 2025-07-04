@@ -5,30 +5,51 @@ use std::{iter, mem};
 
 use pyo3::{Py, PyErr, Python, pyclass, pymethods};
 use strum::Display;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::keyboard::{KeyCode, KeyEvent};
+use crate::python;
 use crate::shortcut::InputShortcut;
 
 #[derive(Debug, Clone)]
 #[pyclass]
 pub(crate) struct Input {
+    session: u32,
     line: InputLine,
     echo: EchoState,
     cursor: usize,
     #[pyo3(get, set)]
     markup: Py<Markup>,
+    py_event_tx: UnboundedSender<(u32, python::Event)>,
 }
 
 impl Input {
-    pub(crate) fn new(py: Python<'_>) -> Result<Self, PyErr> {
+    pub(crate) fn new(
+        py: Python<'_>,
+        session: u32,
+        py_event_tx: UnboundedSender<(u32, python::Event)>,
+    ) -> Result<Self, PyErr> {
         Ok(Self {
+            session,
             line: InputLine::default(),
             echo: EchoState::default(),
             cursor: 0,
             markup: Py::new(py, Markup::default())?,
+            py_event_tx,
         })
+    }
+
+    pub(crate) fn value_changed(&self) {
+        let input = Python::with_gil(|_| self.clone());
+        let _ = self.py_event_tx.send((
+            self.session,
+            python::Event::InputChanged {
+                line: self.line.clone(),
+                input,
+            },
+        ));
     }
 
     pub(crate) fn key_event(&mut self, key_event: &KeyEvent) {
@@ -40,6 +61,7 @@ impl Input {
             return;
         };
         self.insert(*c);
+        self.value_changed();
     }
 
     pub(crate) fn shortcut(&mut self, shortcut: &InputShortcut) {
@@ -152,6 +174,7 @@ impl Input {
         self.line.original = None;
         self.line.echo = EchoState::default();
         self.cursor = 0;
+        self.value_changed();
     }
 
     pub(crate) fn pop(&mut self) -> Option<InputLine> {
@@ -161,13 +184,15 @@ impl Input {
 
         self.cursor = 0;
 
-        Some(InputLine {
+        let result = Some(InputLine {
             sent: mem::take(&mut self.line.sent),
             // Reset the current echo state back to the telnet-level state.
             echo: mem::replace(&mut self.line.echo, self.echo),
             original: None,
             scripted: false,
-        })
+        });
+        self.value_changed();
+        result
     }
 
     #[must_use]
@@ -182,6 +207,7 @@ impl Input {
     pub(crate) fn set_value(&mut self, value: InputLine) {
         self.line = value;
         self.cursor = self.line.sent.chars().count();
+        self.value_changed();
     }
 
     pub(crate) fn set_telnet_echo(&mut self, echo: EchoState) {
@@ -207,6 +233,7 @@ impl Input {
                 .collect();
         }
         self.cursor += 1;
+        self.value_changed();
     }
 
     pub(crate) fn delete_prev(&mut self) {
@@ -215,6 +242,7 @@ impl Input {
         }
         self.cursor -= 1;
         self.drop_index(self.cursor);
+        self.value_changed();
     }
 
     pub(crate) fn delete_next(&mut self) {
@@ -222,6 +250,7 @@ impl Input {
             return;
         }
         self.drop_index(self.cursor);
+        self.value_changed();
     }
 
     pub(crate) fn delete_word_left(&mut self) {
@@ -236,6 +265,7 @@ impl Input {
             .chain(self.chars().skip(self.cursor))
             .collect();
         self.cursor = rev_len;
+        self.value_changed();
     }
 
     pub(crate) fn delete_word_right(&mut self) {
@@ -252,10 +282,12 @@ impl Input {
                     .skip_while(|c| !c.is_alphanumeric()),
             )
             .collect();
+        self.value_changed();
     }
 
     pub(crate) fn delete_to_end(&mut self) {
         self.line.sent = self.chars().take(self.cursor).collect();
+        self.value_changed();
     }
 
     pub(crate) fn cursor_left(&mut self) {

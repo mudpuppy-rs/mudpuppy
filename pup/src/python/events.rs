@@ -15,7 +15,7 @@ use crate::config::Config;
 use crate::error::{Error, ErrorKind};
 use crate::net::connection;
 use crate::python::{self, require_coroutine};
-use crate::session::{InputLine, MudLine, PromptMode};
+use crate::session::{Input, InputLine, MudLine, PromptMode};
 
 #[derive(Debug, Clone, Display)]
 #[pyclass]
@@ -98,6 +98,8 @@ pub(crate) enum Event {
     PromptModeChanged { from: PromptMode, to: PromptMode },
     #[strum(to_string = "received line: {line}")]
     Line { line: MudLine },
+    #[strum(to_string = "buffered input line changed:{line}")]
+    InputChanged { line: InputLine, input: Input },
     #[strum(to_string = "sent line: {line}")]
     InputLine { line: InputLine },
     #[strum(to_string = "buffer {name} resized from {from} to {to}")]
@@ -129,6 +131,7 @@ impl Event {
             Event::PromptChanged { .. } => EventType::PromptChanged,
             Event::PromptModeChanged { .. } => EventType::PromptModeChanged,
             Event::Line { .. } => EventType::Line,
+            Event::InputChanged { .. } => EventType::InputChanged,
             Event::InputLine { .. } => EventType::InputLine,
             Event::BufferResized { .. } => EventType::BufferResized,
             Event::GmcpEnabled { .. } => EventType::GmcpEnabled,
@@ -197,6 +200,7 @@ pub(crate) enum EventType {
     PromptChanged,
     PromptModeChanged,
     Line,
+    InputChanged,
     InputLine,
     BufferResized,
     GmcpEnabled,
@@ -350,11 +354,11 @@ pub(crate) type SessionHandlers = Handlers<Event, EventType>;
 
 impl SessionHandlers {
     pub(crate) fn session_event(&self, session_id: u32, event: &Event) -> python::Result {
-        if event.r#type() != EventType::Line {
+        if event.r#type() != EventType::Line && event.r#type() != EventType::InputChanged {
             trace!(session_id, event=?event);
         }
         self.emit(&event.r#type(), event, |handler, event| {
-            let event = event.clone();
+            let event = Python::with_gil(|_|event.clone());
             let session = handler.session.clone().ok_or(ErrorKind::Internal(
                 "event handler missing session".to_string(),
             ))?;

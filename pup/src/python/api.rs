@@ -619,6 +619,11 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
+    fn slash_command_exists(py: Python<'_>, name: String) -> FutureResult<'_> {
+        dispatch_async_command(py, |tx| Command::Slash(Slash::Exists(name, tx)))
+    }
+
+    #[pyfunction]
     fn remove_slash_command(py: Python<'_>, name: String) -> Result {
         dispatch_command(py, Command::Slash(Slash::Remove(name)))
     }
