@@ -173,7 +173,7 @@ impl Tab for Character {
     }
 
     fn all_shortcuts(&self, app: &AppData) -> Result<HashMap<KeyEvent, Shortcut>, Error> {
-        Ok(app.session(self.sesh.id)?.shortcuts.clone())
+        Python::with_gil(|_| Ok(app.session(self.sesh.id)?.shortcuts.clone()))
     }
 
     fn lookup_shortcut(
@@ -181,7 +181,7 @@ impl Tab for Character {
         app: &AppData,
         key_event: &KeyEvent,
     ) -> Result<Option<Shortcut>, Error> {
-        Ok(app.session(self.sesh.id)?.shortcuts.get(key_event).cloned())
+        Python::with_gil(|_| Ok(app.session(self.sesh.id)?.shortcuts.get(key_event).cloned()))
     }
 
     fn set_shortcut(

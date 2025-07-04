@@ -76,6 +76,15 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
         )
         .map(|_| ())?;
 
+        trace!("loading built-in cmd_py.py");
+        PyModule::from_code(
+            py,
+            c_str!(include_str!("cmd_py.py")),
+            c_str!("cmd_py.py"),
+            c_str!("cmd_py"),
+        )
+        .map(|_| ())?;
+
         if args.headless {
             trace!("loading built-in headless.py");
             let module = PyModule::from_code(
