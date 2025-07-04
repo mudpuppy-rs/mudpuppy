@@ -452,6 +452,16 @@ impl InputLine {
             .collect()
     }
 
+    // Clones the InputLine, but replaces sent with original.
+    fn clone_with_original(&self) -> Self {
+        Self {
+            sent: self.original.clone().unwrap_or_default(),
+            original: Some(self.sent.clone()),
+            echo: self.echo,
+            scripted: self.scripted,
+        }
+    }
+
     fn __str__(&self) -> String {
         format!("{self}")
     }

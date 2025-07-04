@@ -98,13 +98,13 @@ class Spellchecker:
                 # If the first part is a slash command, highlight it specially instead of spellchecking.
                 self.highlight_cmd(markup, part)
             elif not self.dictionary.lookup(clean_part):
-                logging.debug(f"misspelled word: {clean_part} ({start}, {end})")
+                # logging.debug(f"misspelled word: {clean_part} ({start}, {end})")
                 markup.add(start, cformat("<bold><red>"))
                 markup.add(end, cformat("<reset>"))
 
             start = end + 1  # Offset by 1 to account for the space between words.
 
-    def highlight_cmd(self, cmd: str, markup: Markup):
+    def highlight_cmd(self, markup: Markup, cmd: str):
         # Check if the command is valid.
         exists = pup.slash_command_exists(cmd[1:])
 
