@@ -6,7 +6,6 @@ from pup import (
     Session,
     EventType,
     Event,
-    Input,
     InputLine,
     OutputItem,
     EchoState,
