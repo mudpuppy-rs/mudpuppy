@@ -24,6 +24,7 @@
             cargo-deb
             python3
             python3Packages.pdoc
+            python3Packages.spylls
             ruff
             pyright
             tokio-console
@@ -108,6 +109,18 @@
           devShells.default = self'.devShells.nightly;
 
           packages.mudpuppy = (rustPackage [ ]);
+          packages.pup = (pkgs.makeRustPlatform {
+            cargo = pkgs.rust-bin.stable.latest.minimal;
+            rustc = pkgs.rust-bin.stable.latest.minimal;
+          }).buildRustPackage {
+            inherit (mudpuppyCargoToml.package) name version;
+            src = ./.;
+            buildAndTestSubdir = "pup";
+            cargoLock.lockFile = ./Cargo.lock;
+            buildFeatures = [ ];
+            buildInputs = runtimeDeps;
+            nativeBuildInputs = buildDeps;
+          };
 
           devShells.nightly = (mkDevShell rustNightly);
           devShells.stable = (mkDevShell
