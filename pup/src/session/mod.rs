@@ -62,12 +62,17 @@ impl Session {
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
     ) -> Result<Self, Error> {
+        // TODO(XXX): output wrap settings.
+        let mut output = Buffer::new(OUTPUT_BUFFER_NAME.to_string())?;
+        output.line_wrap = true;
+
         let mut scrollback = Buffer::new(SCROLL_BUFFER_NAME.to_string())?;
         // TODO(XXX): scrollbar border settings.
         scrollback.border_left = true;
         scrollback.border_right = true;
         scrollback.border_bottom = true;
         scrollback.scrollbar = Scrollbar::Always;
+        scrollback.line_wrap = output.line_wrap;
 
         Ok(Self {
             id,
@@ -76,7 +81,7 @@ impl Session {
             input: Python::with_gil(|py| {
                 Py::new(py, Input::new(py, id, python_event_tx.clone())?)
             })?,
-            output: Buffer::new(OUTPUT_BUFFER_NAME.to_string())?,
+            output,
             scrollback,
             extra_buffers: HashMap::default(),
             triggers: Vec::default(),

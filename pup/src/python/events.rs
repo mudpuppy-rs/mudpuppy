@@ -358,7 +358,7 @@ impl SessionHandlers {
             trace!(session_id, event=?event);
         }
         self.emit(&event.r#type(), event, |handler, event| {
-            let event = Python::with_gil(|_|event.clone());
+            let event = Python::with_gil(|_| event.clone());
             let session = handler.session.clone().ok_or(ErrorKind::Internal(
                 "event handler missing session".to_string(),
             ))?;
