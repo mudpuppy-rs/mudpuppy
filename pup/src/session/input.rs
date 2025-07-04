@@ -61,7 +61,6 @@ impl Input {
             return;
         };
         self.insert(*c);
-        self.value_changed();
     }
 
     pub(crate) fn shortcut(&mut self, shortcut: &InputShortcut) {
