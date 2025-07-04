@@ -58,6 +58,7 @@ class Spellchecker:
             from spylls.hunspell import Dictionary  # type: ignore
 
             self.dictionary = Dictionary.from_files(dictionary)
+            sesh.add_event_handler(EventType.InputChanged, self.input_changed)
         except ImportError:
             msg = """
             'spylls' is not in the PYTHONPATH. Spellchecking will be disabled. Perhaps you need to 'pip install spylls'?
@@ -68,8 +69,6 @@ class Spellchecker:
             msg = f"dictionary '{dictionary}' could not be loaded"  # TODO(XXX): advice.
             logging.warning(msg)
             sesh.output(OutputItem.failed_command_result(msg))
-
-        sesh.add_event_handler(EventType.InputChanged, self.input_changed)
 
     async def input_changed(self, _sesh: Session, ev: Event):
         assert isinstance(ev, Event.InputChanged)
