@@ -3,8 +3,6 @@ from typing import Optional
 
 import pup
 from pup import (
-    GlobalEventType,
-    GlobalEvent,
     Session,
     KeyEvent,
     Shortcut,
@@ -15,9 +13,7 @@ from pup import (
 )
 
 
-async def add_shortcut(ev: GlobalEvent):
-    assert isinstance(ev, GlobalEvent.NewSession)
-
+async def add_shortcut(sesh: Session):
     async def global_send(
         _: KeyEvent, active_sesh: Optional[Session], _active_tab: Tab
     ):
@@ -34,10 +30,10 @@ async def add_shortcut(ev: GlobalEvent):
             session.send_line(input_line)
 
     # Set a shortcut for the session's tab that invokes global_send()
-    tab: Tab = await ev.session.tab()
+    tab: Tab = await sesh.tab()
     tab.set_shortcut(KeyEvent("alt-="), Shortcut.Python(PythonShortcut(global_send)))
 
 
 logging.debug("module loaded")
 # For every new session, add a shortcut.
-pup.add_global_event_handler(GlobalEventType.NewSession, add_shortcut)
+pup.new_session_handler(add_shortcut)

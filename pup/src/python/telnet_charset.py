@@ -1,6 +1,6 @@
 import logging
 import pup
-from pup import Session, GlobalEvent, GlobalEventType, Event, EventType
+from pup import Session, Event, EventType
 
 CHARSET_OPTION = 42
 REQUEST = 1
@@ -9,14 +9,13 @@ REJECTED = 3
 
 ACCEPTED_ENCODINGS = [b"UTF-8", b"ASCII", b"US-ASCII"]
 
-async def on_new_session(event: GlobalEvent):
-    sesh = event.session
+async def on_new_session(sesh: Session):
     logging.debug(f"{sesh} setting up telnet charset handlers")
     sesh.add_event_handler(EventType.SessionConnected, enable_charset)
     sesh.add_event_handler(EventType.TelnetSubnegotiation, telnet_subnegotiation)
 
 logging.debug("module loaded")
-pup.add_global_event_handler(GlobalEventType.NewSession, on_new_session)
+pup.new_session_handler(on_new_session)
 
 async def enable_charset(sesh: Session, _: Event):
     logging.debug(f"{sesh} requesting telnet charset option")

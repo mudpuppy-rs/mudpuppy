@@ -14,68 +14,51 @@ use tracing::{error, trace};
 use crate::config::Config;
 use crate::error::{Error, ErrorKind};
 use crate::net::connection;
-use crate::python::{self, require_coroutine};
+use crate::python::{self, label_for_coroutine, require_coroutine};
 use crate::session::{Input, InputLine, MudLine, PromptMode};
 
-#[derive(Debug, Clone, Display)]
-#[pyclass]
-pub(crate) enum GlobalEvent {
-    #[strum(to_string = "config reloaded")]
-    ConfigReloaded { config: Py<Config> },
-    #[strum(to_string = "new session: {session}")]
-    NewSession { session: python::Session },
-    #[strum(to_string = "active session changed from {changed_from:?} to {changed_to:?}")]
-    ActiveSessionChanged {
-        // Note: tempting to name these fields 'from' and 'to', but Python
-        //  has 'from' as a reserved word, and it makes life hard.
-        changed_from: Option<python::Session>,
-        changed_to: Option<python::Session>,
-    },
+#[derive(Debug)]
+pub(crate) struct NewSessionHandler {
+    label: String,
+    awaitable: PyObject,
 }
 
-#[pymethods]
-impl GlobalEvent {
-    fn r#type(&self) -> GlobalEventType {
-        match self {
-            GlobalEvent::ConfigReloaded { .. } => GlobalEventType::ConfigReloaded,
-            GlobalEvent::NewSession { .. } => GlobalEventType::NewSession,
-            GlobalEvent::ActiveSessionChanged { .. } => GlobalEventType::ActiveSessionChanged,
-        }
+impl NewSessionHandler {
+    pub(super) fn new(py: Python<'_>, awaitable: PyObject) -> python::Result<Self> {
+        require_coroutine(py, "NewSessionHandler", &awaitable)?;
+        Ok(Self {
+            label: label_for_coroutine(py, &awaitable).unwrap_or("unknown".to_string()),
+            awaitable,
+        })
     }
 
-    fn __str__(&self) -> String {
-        self.to_string()
-    }
+    pub(crate) fn execute(&self, sesh: python::Session) -> Result<(), Error> {
+        let future = Python::with_gil(|py| {
+            let awaitable = self.awaitable.bind(py).call1((sesh,))?;
+            pyo3_async_runtimes::tokio::into_future(awaitable)
+        })?;
 
-    fn __repr__(&self) -> String {
-        format!("{self:?}")
-    }
-}
+        let label = self.label.clone();
+        tokio::spawn(async move {
+            if let Err(err) = future.await {
+                // Note: Error::from() to collect backtrace from PyErr.
+                error!(
+                    "NewSessionHandler {label} callback error: {}",
+                    Error::from(err)
+                );
+            }
+            Ok::<_, Error>(())
+        });
 
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Display)]
-#[pyclass(eq, eq_int)]
-pub(crate) enum GlobalEventType {
-    All,
-    ConfigReloaded,
-    NewSession,
-    ActiveSessionChanged,
-}
-
-#[pymethods]
-#[allow(clippy::trivially_copy_pass_by_ref)]
-impl GlobalEventType {
-    fn __str__(&self) -> String {
-        self.to_string()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("{self:?}")
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, Display)]
 #[pyclass]
 pub(crate) enum Event {
+    #[strum(to_string = "config reloaded")]
+    ConfigReloaded { config: Py<Config> },
     #[strum(to_string = "closed")]
     SessionClosed {},
     #[strum(to_string = "connecting")]
@@ -84,6 +67,11 @@ pub(crate) enum Event {
     SessionConnected { info: connection::Info },
     #[strum(to_string = "disconnected")]
     SessionDisconnected {},
+    #[strum(to_string = "active session changed from {changed_from:?} to {changed_to:?}")]
+    ActiveSessionChanged {
+        changed_from: Option<python::Session>,
+        changed_to: Option<python::Session>,
+    },
     #[strum(to_string = "enabled telnet option {option}")]
     TelnetOptionEnabled { option: u8 },
     #[strum(to_string = "disabled telnet option {option}")]
@@ -120,10 +108,12 @@ pub(crate) enum Event {
 impl Event {
     pub(crate) fn r#type(&self) -> EventType {
         match self {
+            Event::ConfigReloaded { .. } => EventType::ConfigReloaded,
             Event::SessionClosed { .. } => EventType::SessionClosed,
             Event::SessionConnecting { .. } => EventType::SessionConnecting,
             Event::SessionConnected { .. } => EventType::SessionConnected,
             Event::SessionDisconnected { .. } => EventType::SessionDisconnected,
+            Event::ActiveSessionChanged { .. } => EventType::ActiveSessionChanged,
             Event::TelnetOptionEnabled { .. } => EventType::TelnetOptionEnabled,
             Event::TelnetOptionDisabled { .. } => EventType::TelnetOptionDisabled,
             Event::TelnetIacCommand { .. } => EventType::TelnetIacCommand,
@@ -189,10 +179,12 @@ impl From<(u16, u16)> for Dimensions {
 #[pyclass(eq, eq_int)]
 pub(crate) enum EventType {
     All,
+    ConfigReloaded,
     SessionClosed,
     SessionConnecting,
     SessionConnected,
     SessionDisconnected,
+    ActiveSessionChanged,
     TelnetOptionEnabled,
     TelnetOptionDisabled,
     TelnetIacCommand,
@@ -323,29 +315,6 @@ pub(crate) trait AllType {
 impl AllType for EventType {
     fn all() -> &'static Self {
         &Self::All
-    }
-}
-
-impl AllType for GlobalEventType {
-    fn all() -> &'static Self {
-        &Self::All
-    }
-}
-
-pub(crate) type GlobalHandler = Handler<GlobalEvent, GlobalEventType>;
-pub(crate) type GlobalHandlers = Handlers<GlobalEvent, GlobalEventType>;
-
-impl GlobalHandlers {
-    pub(crate) fn global_event(&self, event: &GlobalEvent) -> python::Result {
-        trace!(event=?event, "global event");
-        self.emit(&event.r#type(), event, |handler, event| {
-            let event = event.clone();
-            let future = Python::with_gil(|py| {
-                let awaitable = handler.awaitable.bind(py).call1((event,))?;
-                pyo3_async_runtimes::tokio::into_future(awaitable)
-            })?;
-            Ok(Box::pin(future))
-        })
     }
 }
 

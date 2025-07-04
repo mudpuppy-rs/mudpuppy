@@ -4,8 +4,6 @@ from typing import Optional
 
 import pup
 from pup import (
-    GlobalEventType,
-    GlobalEvent,
     Session,
     InputLine,
     Event,
@@ -125,12 +123,8 @@ class InputHistory:
         return None
 
 
-async def create_input_history(ev: GlobalEvent):
-    if not isinstance(ev, GlobalEvent.NewSession):
-        return
-
+async def create_input_history(sesh: Session):
     # Create a history instance for the session and the session's input area.
-    sesh = ev.session
     h = InputHistory(sesh, await sesh.input())
     history[sesh.id] = h
 
@@ -145,4 +139,4 @@ async def create_input_history(ev: GlobalEvent):
 
 logging.debug("module loaded")
 history: dict[int, InputHistory] = {}
-pup.add_global_event_handler(GlobalEventType.NewSession, create_input_history)
+pup.new_session_handler(create_input_history)

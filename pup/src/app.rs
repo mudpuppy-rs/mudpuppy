@@ -17,7 +17,7 @@ use crate::error::{Error, ErrorKind};
 use crate::headless::Headless;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
-use crate::python::GlobalEvent;
+use crate::python::{Event, NewSessionHandler};
 use crate::session::{Character, Session};
 use crate::shortcut::{Shortcut, TabShortcut};
 pub(crate) use crate::slash_command::SlashCommand;
@@ -152,7 +152,7 @@ pub(super) struct AppData {
     pub(super) config: Py<Config>,
     pub(super) active_session: Option<u32>,
     pub(super) sessions: HashMap<u32, Session>,
-    pub(super) global_event_handlers: python::GlobalHandlers,
+    pub(super) new_session_handlers: Vec<NewSessionHandler>,
     pub(super) slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
     pub(super) shortcuts: HashMap<KeyEvent, Shortcut>,
 
@@ -168,7 +168,7 @@ impl AppData {
             config: Python::with_gil(|py| Py::new(py, config).unwrap()),
             active_session: None,
             sessions: HashMap::new(),
-            global_event_handlers: python::GlobalHandlers::default(),
+            new_session_handlers: Vec::new(),
             slash_commands: slash_command::builtin(),
             shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
@@ -259,10 +259,9 @@ impl AppData {
             character: character.clone(),
         };
 
-        self.global_event_handlers
-            .global_event(&GlobalEvent::NewSession {
-                session: new_sesh.clone(),
-            })?;
+        for handler in &self.new_session_handlers {
+            handler.execute(new_sesh.clone())?;
+        }
 
         if self.active_session_py().is_none() {
             self.set_active_session(Some(new_id))?;
@@ -301,11 +300,17 @@ impl AppData {
         let mk_session =
             |maybe_id: Option<u32>| maybe_id.and_then(|id| self.session(id).ok().map(Into::into));
 
-        self.global_event_handlers
-            .global_event(&GlobalEvent::ActiveSessionChanged {
-                changed_from: mk_session(from),
-                changed_to: mk_session(session_id),
-            })
+        for (id, sesh) in &self.sessions {
+            sesh.event_handlers.session_event(
+                *id,
+                &Event::ActiveSessionChanged {
+                    changed_from: mk_session(from),
+                    changed_to: mk_session(session_id),
+                },
+            )?;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn close_session(&mut self, session_id: u32) -> Result<(), Error> {
@@ -374,10 +379,15 @@ impl AppData {
         })
         .map_err(ErrorKind::from)?;
 
-        self.global_event_handlers
-            .global_event(&GlobalEvent::ConfigReloaded {
-                config: self.config(),
-            })
+        for (id, sesh) in &self.sessions {
+            sesh.event_handlers.session_event(
+                *id,
+                &Event::ConfigReloaded {
+                    config: self.config(),
+                },
+            )?;
+        }
+        Ok(())
     }
 }
 

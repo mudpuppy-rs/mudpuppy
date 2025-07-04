@@ -3,14 +3,13 @@ import struct
 from typing import Set
 
 import pup
-from pup import Session, GlobalEvent, GlobalEventType, Event, EventType
+from pup import Session, Event, EventType
 
 NAWS_OPTION = 31
 
 enabled_sessions: Set[Session] = set()
 
-async def on_new_session(event: GlobalEvent):
-    sesh = event.session
+async def on_new_session(sesh: Session):
     logging.debug(f"{sesh} setting up telnet NAWS handlers")
     sesh.add_event_handler(EventType.SessionConnected, connected)
     sesh.add_event_handler(EventType.SessionDisconnected, disconnected)
@@ -20,7 +19,7 @@ async def on_new_session(event: GlobalEvent):
 
 
 logging.debug("module loaded")
-pup.add_global_event_handler(GlobalEventType.NewSession, on_new_session)
+pup.new_session_handler(on_new_session)
 
 
 async def connected(sesh: Session, _: Event):

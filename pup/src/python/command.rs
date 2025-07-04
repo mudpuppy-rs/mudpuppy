@@ -48,7 +48,7 @@ pub(crate) enum Command {
         tx: oneshot::Sender<Py<Input>>,
     },
     Slash(Slash),
-    AddGlobalEventHandler(python::GlobalHandler),
+    AddNewSessionHandler(python::NewSessionHandler),
     AddEventHandler(python::SessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
     SetGlobalShortcut(KeyEvent, Shortcut),
@@ -128,8 +128,8 @@ impl Command {
             Command::Slash(cmd) => {
                 cmd.exec(app);
             }
-            Command::AddGlobalEventHandler(handler) => {
-                app.global_event_handlers.add(handler);
+            Command::AddNewSessionHandler(handler) => {
+                app.new_session_handlers.push(handler);
             }
             Command::AddEventHandler(handler) => {
                 let session_id =

@@ -535,14 +535,14 @@ pub(crate) mod pup {
         Command, FutureResult, PySlashCommand, Result, dispatch_async_command, dispatch_command,
     };
     use crate::app::TabAction;
-    use crate::python::{Handler, Slash};
+    use crate::python::{NewSessionHandler, Slash};
 
     #[pymodule_export]
     use super::{Gmcp, Prompt, Session, Tab, Telnet};
     #[pymodule_export]
     use crate::keyboard::KeyEvent;
     #[pymodule_export]
-    use crate::python::{Dimensions, Event, EventType, GlobalEvent, GlobalEventType};
+    use crate::python::{Dimensions, Event, EventType};
     #[pymodule_export]
     use crate::session::{
         Alias, Buffer, BufferDirection, Character, EchoState, Input, InputLine, Markup, Mud,
@@ -599,14 +599,10 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn add_global_event_handler(
-        py: Python<'_>,
-        event_type: GlobalEventType,
-        awaitable: PyObject,
-    ) -> Result {
+    fn new_session_handler(py: Python<'_>, awaitable: PyObject) -> Result {
         dispatch_command(
             py,
-            Command::AddGlobalEventHandler(Handler::new(py, event_type, None, awaitable)?),
+            Command::AddNewSessionHandler(NewSessionHandler::new(py, awaitable)?),
         )
     }
 
