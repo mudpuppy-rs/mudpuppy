@@ -30,8 +30,6 @@ pub(crate) use events::*;
 // TODO(XXX): restore macro for loading built-in modules in a more DRY way.
 #[instrument(skip(args))]
 pub(super) async fn init_python_env(args: &cli::Args) -> Result {
-    let mut py_futures = FuturesUnordered::new();
-
     Python::with_gil(|py| {
         trace!(dir=?config_dir(), "adding config dir to sys.path");
         py.import("sys")?
@@ -46,6 +44,15 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
             c_str!(include_str!("logging.py")),
             c_str!("logging.py"),
             c_str!("logging"),
+        )
+        .map(|_| ())?;
+
+        trace!("loading built-in pup_events.py");
+        PyModule::from_code(
+            py,
+            c_str!(include_str!("pup_events.py")),
+            c_str!("pup_events.py"),
+            c_str!("pup_events"),
         )
         .map(|_| ())?;
 
@@ -85,29 +92,14 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
         )
         .map(|_| ())?;
 
-        trace!("loading built-in pup_events.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("pup_events.py")),
-            c_str!("pup_events.py"),
-            c_str!("pup_events"),
-        )
-            .map(|_| ())?;
-
         if args.headless {
             trace!("loading built-in headless.py");
-            let module = PyModule::from_code(
+            PyModule::from_code(
                 py,
                 c_str!(include_str!("headless.py")),
                 c_str!("headless.py"),
                 c_str!("headless"),
             )?;
-
-            let setup_fn = module.getattr("setup").unwrap();
-            require_coroutine(py, format!("{module} setup"), setup_fn.as_ref())?;
-            py_futures.push(Box::pin(pyo3_async_runtimes::tokio::into_future(
-                setup_fn.call0()?,
-            )?));
         } else {
             trace!("loading built-in tui.py");
             PyModule::from_code(
@@ -115,17 +107,10 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
                 c_str!(include_str!("tui.py")),
                 c_str!("tui.py"),
                 c_str!("tui"),
-            )
-            .map(|_| ())?;
+            )?;
         }
         Ok::<(), Error>(())
     })?;
-
-    while let Some(result) = py_futures.next().await {
-        if let Err(err) = result {
-            error!("python setup error: {err}");
-        }
-    }
 
     Ok(())
 }

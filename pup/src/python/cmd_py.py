@@ -6,53 +6,39 @@ import io
 import pup
 from pup import Session, OutputItem
 
+from pup_events import command
+
 import history
 
 
+# TODO(XXX): hacky. Also doesn't preserve globals() between invocations like desired to make eval() meaningful.
+@command("py")
 async def run_task(code: str, session: Session):
     tab = await session.tab()
-    tab_title = await tab.title()
-    tab_shortcuts = await tab.shortcuts()
-    layout = await tab.layout()
-    input = await session.input()
-    connection_info = await session.connection_info()
-    buffers = await session.get_buffers()
-    prompt = session.prompt()
-    prompt_line = await prompt.get()
-    prompt_mode = await prompt.mode()
-    triggers = session.triggers()
-    trigger_list = await triggers.get()
-    aliases = session.aliases()
-    alias_list = await aliases.get()
-    config = await pup.config()
-    sessions_list = await pup.sessions()
-    global_shortcuts = await pup.global_shortcuts()
-    tabs_list = await pup.tabs()
-
     eval_globals = globals().copy()
     eval_globals.update(
         {
             "history": history,
             "session": session,
-            "info": connection_info,
+            "info": await session.connection_info(),
             "tab": tab,
-            "tab_title": tab_title,
-            "tab_shortcuts": tab_shortcuts,
-            "layout": layout,
-            "input": input,
-            "buffers": buffers,
-            "prompt": prompt,
-            "prompt_line": prompt_line,
-            "prompt_mode": prompt_mode,
-            "triggers": triggers,
-            "trigger_list": trigger_list,
-            "aliases": aliases,
-            "alias_list": alias_list,
-            "config": config,
+            "tab_title": await tab.title(),
+            "tab_shortcuts": await tab.shortcuts(),
+            "layout": await tab.layout(),
+            "input": await session.input(),
+            "buffers": await session.get_buffers(),
+            "prompt": session.prompt(),
+            "prompt_line": await session.prompt().get(),
+            "prompt_mode": await session.prompt().mode(),
+            "triggers": session.triggers(),
+            "trigger_list": await session.triggers().get(),
+            "aliases": session.aliases(),
+            "alias_list": await session.aliases().get(),
+            "config": await pup.config(),
             "pup": pup,
-            "sessions_list": sessions_list,
-            "global_shortcuts": global_shortcuts,
-            "tabs_list": tabs_list,
+            "sessions_list": await pup.sessions(),
+            "global_shortcuts": await pup.global_shortcuts(),
+            "tabs_list": await pup.tabs(),
         }
     )
 
@@ -76,8 +62,5 @@ async def run_task(code: str, session: Session):
     except Exception as e:
         session.output(OutputItem.failed_command_result(f"Error running code: {e}"))
 
-async def on_new_session(sesh: Session):
-    sesh.add_slash_command("py", run_task)
 
 logging.debug("module loaded")
-pup.new_session_handler(on_new_session)

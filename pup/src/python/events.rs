@@ -8,7 +8,7 @@ use futures::stream::FuturesUnordered;
 use pyo3::types::PyAnyMethods;
 use pyo3::{Py, PyObject, Python, pyclass, pymethods};
 
-use strum::Display;
+use strum::{Display, VariantArray};
 use tracing::{error, trace};
 
 use crate::config::Config;
@@ -175,7 +175,7 @@ impl From<(u16, u16)> for Dimensions {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Display)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Display, VariantArray)]
 #[pyclass(eq, eq_int)]
 pub(crate) enum EventType {
     All,
@@ -209,6 +209,14 @@ impl EventType {
 
     fn __repr__(&self) -> String {
         format!("{self:?}")
+    }
+
+    #[staticmethod]
+    fn all() -> HashMap<String, EventType> {
+        Self::VARIANTS
+            .iter()
+            .map(|typ| (typ.to_string(), *typ))
+            .collect()
     }
 }
 
