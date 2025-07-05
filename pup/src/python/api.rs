@@ -7,7 +7,10 @@ use pyo3::{IntoPyObject, Py, PyObject, Python, pyclass, pymethods, pymodule};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 
-use super::{APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler, PromptCommand, Result, TelnetCommand, TriggerCommand, require_coroutine, Slash};
+use super::{
+    APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
+    PromptCommand, Result, Slash, TelnetCommand, TriggerCommand, require_coroutine,
+};
 use crate::app::{AppData, SlashCommand, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
@@ -167,7 +170,10 @@ impl Session {
     fn add_slash_command(&self, py: Python<'_>, name: String, callback: PyObject) -> Result {
         dispatch_command(
             py,
-            Command::Slash(self.id, Slash::Add(PySlashCommand::new(py, name, callback)?)),
+            Command::Slash(
+                self.id,
+                Slash::Add(PySlashCommand::new(py, name, callback)?),
+            ),
         )
     }
 
@@ -543,11 +549,9 @@ pub(crate) mod pup {
     use pyo3::types::{PyAnyMethods, PyStringMethods, PyTuple};
     use pyo3::{Bound, PyObject, Python, pyfunction};
 
-    use super::{
-        Command, FutureResult, Result, dispatch_async_command, dispatch_command,
-    };
+    use super::{Command, FutureResult, Result, dispatch_async_command, dispatch_command};
     use crate::app::TabAction;
-    use crate::python::{NewSessionHandler};
+    use crate::python::NewSessionHandler;
 
     #[pymodule_export]
     use super::{Gmcp, Prompt, Session, Tab, Telnet};
