@@ -1,0 +1,50 @@
+# Link Checker Workflow for PRs/Pushes.
+# Uses 'fail:true' and blocks merge of broken links.
+name: check links
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linkcheck:
+    name: Run Lychee Linkchecker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Nix Flakes doesn't work on shallow clones
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Build user guide
+        run: |
+          cd user-guide
+          nix develop --command mdbook build
+
+      - name: Build API docs
+        run: |
+          nix develop --command python-stubs/render_api_docs.py
+
+      - name: Restore lychee cache
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: cache-lychee-${{ github.sha }}
+          restore-keys: cache-lychee-
+
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2.3.0
+        with:
+          args: "--verbose \
+                 --cache \
+                 --max-cache-age 1d \
+                 'README.md' \
+                 'user-guide/book/**/*.md' \
+                 'user-guide/book/**/*.html' \
+                 'web/api-docs/**/*.html'"
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}

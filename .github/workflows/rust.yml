@@ -1,0 +1,115 @@
+---
+name: rust
+
+permissions:
+  contents: read
+
+on:  # yamllint disable-line rule:truthy
+  push:
+  pull_request:
+  merge_group:
+   schedule:
+    - cron: '0 18 * * *'
+
+jobs:
+  build:
+    name: Rust Build+Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+        os: [ubuntu-latest]
+        include:
+          - os: macos-14
+            rust: stable
+          - os: windows-latest
+            rust: stable
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install ${{ matrix.rust }} toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: cargo build (debug; default features)
+        run: cargo build --locked
+
+      - name: cargo test (debug; all features)
+        run: cargo test --locked --all-features
+        env:
+          RUST_BACKTRACE: 1
+
+  msrv:
+    name: Rust Build+Test (MSRV)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.80.0 # MSRV
+
+      - name: cargo test (debug; all features)
+        run: cargo test --locked --all-features
+        env:
+          RUST_BACKTRACE: 1
+
+  docs:
+    name: Check for documentation errors
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo doc (all features)
+        run: cargo doc --locked --all-features --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - run: cargo clippy --locked --workspace --all-features --all-targets -- --deny warnings

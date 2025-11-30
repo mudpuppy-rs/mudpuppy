@@ -1,0 +1,47 @@
+# Inspired by https://github.com/rust-lang/mdBook/wiki/Automated-Deployment%3A-GitHub-Actions
+# Modified to use `nix`, and to include the `pdoc` based API docs.
+name: deploy site
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # To push a branch 
+      pages: write     # To push to a GitHub Pages site
+      id-token: write  # To update the deployment status
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Install Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build Book
+        run: |
+          cd user-guide
+          nix develop --command mdbook build
+          cp -r book ../web/user-guide
+
+      - name: Build API docs
+        run: |
+          nix develop --command python-stubs/render_api_docs.py
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'web'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

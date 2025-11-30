@@ -1,0 +1,4 @@
+[tool.pyright]
+include = ["mudpuppy/python", "python-examples", "python-stubs/*.pyi"]
+stubPath = "python-stubs"
+reportMissingModuleSource = false

@@ -1,0 +1,34 @@
+---
+name: nix
+
+permissions:
+  contents: read
+
+on:  # yamllint disable-line rule:truthy
+  push:
+  pull_request:
+  merge_group:
+  schedule:
+    - cron: '0 18 * * *'
+
+jobs:
+  nix:
+    name: Nix Build+Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Nix check
+        run: nix flake check
+
+      - name: Nix build
+        run: nix build
+
+      - name: Nix build (MSRV)
+        run: nix develop .#msrv --command cargo build --locked
