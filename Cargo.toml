@@ -23,7 +23,7 @@ clap = "4"
 config = { version = "0.15", default-features = false }
 console-subscriber = "0.5"
 # Crossterm 0.29 blocked on Ratatui update.
-crossterm = { version = "0.28", default-features = false }
+crossterm = { version = "0.29", default-features = false }
 directories = "6"
 futures = "0.3"
 happy-eyeballs = { version = "0.2", default-features = false }
