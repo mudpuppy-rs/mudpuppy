@@ -36,7 +36,7 @@ jobs:
 
       - name: Check links
         id: lychee
-        uses: lycheeverse/lychee-action@v2.3.0
+        uses: lycheeverse/lychee-action@v2.7.0
         with:
           args: "--verbose \
                  'README.md' \
