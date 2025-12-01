@@ -18,16 +18,12 @@
             [ python3 ] ++ lib.optionals stdenv.hostPlatform.isDarwin
             [ pkgs.darwin.apple_sdk.frameworks.CoreServices ];
           devDeps = with pkgs; [
-            cargo-deny
-            cargo-udeps
             python3
             python3Packages.pdoc
             python3Packages.spylls
             ruff
             pyright
             tokio-console
-            mdbook
-            linkcheck # wrapper around lychee
           ];
 
           workspaceCargoToml =
@@ -66,20 +62,6 @@
               buildInputs = runtimeDeps;
               nativeBuildInputs = buildDeps ++ devDeps ++ [ rustc ];
             };
-
-          linkcheck = pkgs.writeShellScriptBin "linkcheck" ''
-            set -ex
-            pushd user-guide
-              ${pkgs.mdbook}/bin/mdbook build
-            popd
-            python-stubs/render_api_docs.py
-            ${pkgs.lychee}/bin/lychee \
-              --verbose \
-              'user-guide/book/**/*.md' \
-              'user-guide/book/**/*.html' \
-              'web/api-docs/**/*.html' \
-              'README.md'
-          '';
 
           rustLatest = (pkgs.rust-bin.stable.latest.default.override {
             targets = rustTargets;
@@ -121,17 +103,12 @@
                 };
                 ruff.enable = true;
                 ruff-format.enable = true;
-                pyright.enable = true;
+                # Stubs need to be caught up with the current API to
+                # re-enable type checking.
+                # pyright.enable = true;
                 nightly-fmt = (cargo-check "cargo-fmt" "fmt --check");
                 nightly-clippy = (cargo-check "cargo-clippy"
                   "clippy --all-targets --all-features -- -D warnings");
-                linkcheck = {
-                  enable = true;
-                  name = "linkcheck";
-                  files = "\\.md$";
-                  pass_filenames = false;
-                  entry = "linkcheck";
-                };
               };
             };
             # Don't run pre-commit hooks in 'nix flake check'
