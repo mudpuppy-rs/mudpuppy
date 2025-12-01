@@ -1,6 +1,0 @@
-[book]
-authors = ["Daniel McCarney"]
-language = "en"
-multilingual = false
-src = "src"
-title = "Mudpuppy User Guide"
