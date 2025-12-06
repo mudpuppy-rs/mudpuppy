@@ -49,7 +49,7 @@ pub(super) struct Tui {
 
 impl Tui {
     pub(super) fn new(args: &cli::Args, config: &Config) -> Result<Self, Error> {
-        let terminal = init_tui_terminal(config.mouse_enabled)?;
+        let terminal = init_tui_terminal(config.mouse_enabled())?;
         let mut draw_interval = interval(args.frame_rate_duration()?);
         trace!(draw_interval=?draw_interval.period(), "configuring TUI frame rate");
         draw_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);

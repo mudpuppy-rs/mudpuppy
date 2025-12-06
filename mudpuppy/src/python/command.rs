@@ -20,6 +20,7 @@ use crate::tui::TabKind;
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
+    SaveConfig,
     Session(SessionCommand),
     AddNewSessionHandler(python::NewSessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
@@ -34,6 +35,9 @@ impl Command {
         match self {
             Command::Config(tx) => {
                 let _ = tx.send(app.config());
+            }
+            Command::SaveConfig => {
+                app.config_state.queue_save();
             }
             Command::Session(cmd) => {
                 cmd.exec(app)?;

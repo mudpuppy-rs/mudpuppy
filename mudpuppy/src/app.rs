@@ -9,9 +9,10 @@ use strum::Display;
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
+use tokio::time::sleep_until;
 use tracing::{Level, error, info, instrument, trace, warn};
 
-use crate::config::{self, Config};
+use crate::config::{self, Config, ConfigState};
 use crate::error::{Error, ErrorKind};
 use crate::headless::Headless;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
@@ -26,20 +27,20 @@ use crate::{cli, python};
 #[derive(Debug)]
 pub(super) struct App {
     args: cli::Args,
-    config: Config,
     data: AppData,
     frontend: Frontend,
 }
 
 impl App {
-    pub(super) fn new(args: cli::Args, config: &Config) -> Result<Self, Error> {
+    pub(super) fn new(args: cli::Args, config: Config) -> Result<Self, Error> {
+        let frontend = match args.headless {
+            true => Headless::new().into(),
+            false => Tui::new(&args, &config)?.into(),
+        };
+        let config_py = Python::attach(|py| Py::new(py, config).unwrap());
         Ok(Self {
-            data: AppData::new(args.clone(), config.clone()),
-            frontend: match args.headless {
-                true => Headless::new().into(),
-                false => Tui::new(&args, config)?.into(),
-            },
-            config: config.clone(),
+            data: AppData::new(args.clone(), config_py),
+            frontend,
             args,
         })
     }
@@ -61,11 +62,11 @@ impl App {
         python::init_python_env(&self.args).await?;
 
         // Spawn a task to run the Python user setup code.
-        let config = self.config.clone();
+        let modules = Python::attach(|py| self.data.config.borrow(py).modules().to_vec());
         let task_locals = Python::attach(pyo3_async_runtimes::tokio::get_current_locals)?;
         let mut setup_task =
             tokio::spawn(pyo3_async_runtimes::tokio::scope(task_locals, async move {
-                if let Err(e) = python::run_user_setup(config).await {
+                if let Err(e) = python::run_user_setup(modules).await {
                     error!("python user setup failed: {e}");
                 }
             }));
@@ -75,6 +76,9 @@ impl App {
                 info!("quit request processed");
                 break Ok(());
             }
+
+            let save_deadline = self.data.config_state.pending_save;
+
             select! {
                 // User python module setup has completed
                 setup_result = &mut setup_task, if !setup_task.is_finished() => {
@@ -84,6 +88,16 @@ impl App {
                             self.data.auto_connect(&mut self.frontend)?;
                         }
                         Err(e) => error!("Python setup task panicked: {e}"),
+                    }
+                }
+                // Configuration save deadline
+                () = sleep_until(save_deadline.unwrap()), if save_deadline.is_some() => {
+                    if self.data.config_state.should_save_now() {
+                        let hash = Python::attach(|py| self.data.config.borrow(py).save());
+                        match hash {
+                            Ok(hash) => self.data.config_state.saved(hash),
+                            Err(e) => error!("failed to save config: {e}"),
+                        }
                     }
                 }
                 // Configuration reload
@@ -148,29 +162,31 @@ impl App {
 #[derive(Debug)]
 pub(super) struct AppData {
     pub(super) should_quit: bool,
-    pub(super) args: cli::Args,
-    pub(super) config: Py<Config>,
+    pub(super) args: cli::Args, // TODO(XXX): check visibilities here.
     pub(super) active_session: Option<u32>,
     pub(super) sessions: HashMap<u32, Session>,
     pub(super) new_session_handlers: Vec<NewSessionHandler>,
     pub(super) shortcuts: HashMap<KeyEvent, Shortcut>,
+    pub(super) config_state: ConfigState,
+    config: Py<Config>,
 
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
     python_event_tx: Option<UnboundedSender<(u32, python::Event)>>,
 }
 
 impl AppData {
-    fn new(args: cli::Args, config: Config) -> Self {
+    fn new(args: cli::Args, config: Py<Config>) -> Self {
         Self {
             should_quit: false,
             args,
-            config: Python::attach(|py| Py::new(py, config).unwrap()),
             active_session: None,
             sessions: HashMap::new(),
             new_session_handlers: Vec::new(),
             shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
             python_event_tx: None,
+            config,
+            config_state: ConfigState::default(),
         }
     }
 
@@ -332,7 +348,7 @@ impl AppData {
                 let Some(character) = ({
                     self.config
                         .borrow(py)
-                        .characters
+                        .characters()
                         .iter()
                         .find(|m| m.name == *char_name)
                         .cloned()
@@ -355,7 +371,6 @@ impl AppData {
     }
 
     // TODO(XXX): Consider reloading python stuff automatically?
-    // TODO(XXX): Consider debouncing created->data_changed events.
     fn config_reloaded(&mut self, event: &NotifyEvent) -> Result<(), Error> {
         use notify::EventKind;
 
@@ -368,11 +383,20 @@ impl AppData {
             return Ok(());
         }
 
-        Python::attach(|py| {
-            info!("reloading configuration: data changed");
-            self.config.borrow_mut(py).load()
-        })
-        .map_err(ErrorKind::from)?;
+        let file_hash = config::compute_file_hash().map_err(ErrorKind::from)?;
+
+        if self.config_state.up_to_date(file_hash) {
+            trace!(
+                file_hash,
+                "config reloaded event matches last save file hash. ignoring update"
+            );
+            return Ok(());
+        }
+
+        info!("reloading configuration: external change detected");
+        Python::attach(|py| self.config.borrow_mut(py).load()).map_err(ErrorKind::from)?;
+
+        self.config_state.saved(file_hash);
 
         for sesh in self.sessions.values() {
             sesh.event_handlers

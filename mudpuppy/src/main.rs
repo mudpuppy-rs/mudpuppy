@@ -40,7 +40,7 @@ fn main() -> Result<(), Error> {
 
         let config = Config::new().map_err(ErrorKind::from)?;
 
-        App::new(args, &config)?.run(py_rx).await
+        App::new(args, config)?.run(py_rx).await
     }
 
     panic::install_handler();

@@ -44,14 +44,14 @@ impl CharacterMenu {
 
     fn load(&mut self, config: &Config) {
         let items = config
-            .characters
+            .characters()
             .iter()
             .map(|mud| ListItem::new(mud.name.clone()))
             .collect::<Vec<_>>();
 
         self.state = ListState::default();
         self.state.select(items.first().map(|_| 0));
-        self.characters.clone_from(&config.characters);
+        self.characters = config.characters().to_vec();
         self.list = List::new(items)
             .block(
                 Block::default()

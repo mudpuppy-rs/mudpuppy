@@ -1,5 +1,8 @@
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::env;
+use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -10,28 +13,54 @@ use futures::channel::mpsc::{Receiver, channel as futures_channel};
 use notify::{
     Event as NotifyEvent, RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher,
 };
-use pyo3::pyclass;
+use pyo3::{Python, pyclass, pymethods};
 use serde::{Deserialize, Serialize};
+use tokio::time::{Duration, Instant as TokioInstant};
 use tokio_rustls::rustls::pki_types;
 use tracing::{info, warn};
 
-use crate::error::ConfigError;
+use crate::error::{ConfigError, Error, ErrorKind};
+use crate::python::{APP, Command};
 use crate::session::{Character, Tls};
+
+#[derive(Debug, Default)]
+pub(crate) struct ConfigState {
+    pub(super) pending_save: Option<TokioInstant>,
+    last_save_hash: Option<u64>,
+}
+
+impl ConfigState {
+    pub(crate) fn queue_save(&mut self) {
+        self.pending_save = Some(TokioInstant::now() + CONFIG_SAVE_DEBOUNCE);
+    }
+
+    pub(crate) fn should_save_now(&self) -> bool {
+        self.pending_save
+            .is_some_and(|deadline| TokioInstant::now() >= deadline)
+    }
+
+    pub(crate) fn saved(&mut self, new_hash: u64) {
+        self.last_save_hash = Some(new_hash);
+        self.pending_save = None;
+    }
+
+    pub(crate) fn up_to_date(&self, current_hash: u64) -> bool {
+        self.last_save_hash == Some(current_hash)
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[pyclass]
-#[allow(clippy::unsafe_derive_deserialize)] // No constructor invariants to uphold.
+#[allow(clippy::unsafe_derive_deserialize)]
 pub(crate) struct Config {
     #[serde(default, rename = "character")]
-    #[pyo3(get, set)]
-    pub(crate) characters: Vec<Character>,
+    characters: Vec<Character>,
 
     #[serde(default)]
-    pub(crate) modules: Vec<String>,
+    modules: Vec<String>,
 
     #[serde(default = "default::mouse_enabled")]
-    #[pyo3(get, set)]
-    pub(crate) mouse_enabled: bool,
+    mouse_enabled: bool,
 }
 
 impl Config {
@@ -62,14 +91,46 @@ impl Config {
         cfg.validate()?;
 
         *self = cfg;
+
         Ok(())
+    }
+
+    pub(crate) fn characters(&self) -> &[Character] {
+        &self.characters
+    }
+
+    pub(crate) fn modules(&self) -> &[String] {
+        &self.modules
+    }
+
+    pub(crate) fn mouse_enabled(&self) -> bool {
+        self.mouse_enabled
+    }
+
+    pub(crate) fn save(&self) -> Result<u64, ConfigError> {
+        self.validate()?;
+
+        let toml = toml::to_string(self)?;
+        let hash = {
+            let mut hasher = DefaultHasher::new();
+            toml.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        let config_path = config_file();
+        let tmp_path = config_path.with_extension("toml.tmp");
+
+        fs::write(&tmp_path, &toml)?;
+        fs::rename(tmp_path, config_path)?;
+
+        info!("configuration saved");
+        Ok(hash)
     }
 
     fn validate(&self) -> Result<(), ConfigError> {
         let mut seen = HashSet::new();
 
         for character in &self.characters {
-            // TODO(XXX): would be nice if the get_or_insert() API were stabilized for HashSet...
             if seen.contains(&character.name) {
                 return Err(ConfigError::InvalidCharacter(format!(
                     "multiple characters named {}",
@@ -101,6 +162,45 @@ impl Config {
 
         Ok(())
     }
+}
+
+#[pymethods]
+impl Config {
+    #[getter]
+    fn get_characters(&self) -> Vec<Character> {
+        self.characters.clone()
+    }
+
+    #[setter]
+    fn set_characters(&mut self, py: Python<'_>, value: Vec<Character>) -> pyo3::PyResult<()> {
+        self.characters = value;
+        dispatch_save_config(py)?;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_mouse_enabled(&self) -> bool {
+        self.mouse_enabled
+    }
+
+    #[setter]
+    fn set_mouse_enabled(&mut self, py: Python<'_>, value: bool) -> pyo3::PyResult<()> {
+        self.mouse_enabled = value;
+        dispatch_save_config(py)?;
+        Ok(())
+    }
+}
+
+pub(crate) fn compute_file_hash() -> Result<u64, ConfigError> {
+    let config_path = config_file();
+    if !config_path.exists() {
+        return Ok(0);
+    }
+
+    let contents = fs::read_to_string(config_path)?;
+    let mut hasher = DefaultHasher::new();
+    contents.hash(&mut hasher);
+    Ok(hasher.finish())
 }
 
 pub(super) fn reload_watcher()
@@ -209,9 +309,19 @@ fn lazy_overridable_dir(
     })
 }
 
+fn dispatch_save_config(py: Python<'_>) -> pyo3::PyResult<()> {
+    APP.get(py)
+        .ok_or_else(|| Error::from(ErrorKind::Internal("app not yet initialized".to_owned())))?
+        .send(Command::SaveConfig)
+        .map_err(|e| Error::from(ErrorKind::from(e)))?;
+    Ok(())
+}
+
 pub static CRATE_NAME: &str = env!("CARGO_CRATE_NAME");
 
 pub static GIT_COMMIT_HASH: &str = env!("MUDPUPPY_GIT_INFO");
+
+const CONFIG_SAVE_DEBOUNCE: Duration = Duration::from_millis(200);
 
 // 🤷 https://github.com/serde-rs/serde/issues/368
 mod default {

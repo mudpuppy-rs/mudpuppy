@@ -18,7 +18,7 @@ use pyo3::{Bound, Py, PyAny, PyErr, PyResult, Python};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Level, debug, error, instrument, trace};
 
-use crate::config::{Config, config_dir};
+use crate::config::config_dir;
 use crate::error::Error;
 
 use crate::cli;
@@ -115,12 +115,12 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
     Ok(())
 }
 
-#[instrument(level = Level::DEBUG, skip(config))]
-pub(super) async fn run_user_setup(config: Config) -> Result {
+#[instrument(level = Level::DEBUG)]
+pub(super) async fn run_user_setup(modules: Vec<String>) -> Result {
     let mut py_futures = FuturesUnordered::new();
 
     Python::attach(|py| {
-        for module in &config.modules {
+        for module in modules {
             debug!(module, "loading");
             let module = PyModule::import(py, module)?;
 

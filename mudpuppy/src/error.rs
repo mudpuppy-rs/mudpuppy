@@ -137,7 +137,13 @@ impl<T> From<SendError<T>> for ErrorKind {
 #[allow(clippy::module_name_repetitions)]
 pub enum ConfigError {
     #[error("deserializing TOML content: {0}")]
-    Toml(#[from] toml::de::Error),
+    TomlDe(#[from] toml::de::Error),
+
+    #[error("serializing TOML content: {0}")]
+    TomlSer(#[from] toml::ser::Error),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
 
     #[error("{0}")]
     General(#[from] config_crate::ConfigError),

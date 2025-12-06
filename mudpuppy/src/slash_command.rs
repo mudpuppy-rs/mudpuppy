@@ -75,7 +75,7 @@ impl SlashCommand for NewSession {
         let Some(character) = Python::attach(|py| {
             app.config()
                 .borrow(py)
-                .characters
+                .characters()
                 .iter()
                 .find(|m| m.name == line)
                 .cloned()
