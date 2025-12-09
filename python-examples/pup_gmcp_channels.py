@@ -66,11 +66,12 @@ class GmcpChannelWindow:
 
         # Set up a log file, if requested.
         if with_logfile:
-            charname = unicodedata.normalize("NFKC", self.sesh.character.name)
+            charname = unicodedata.normalize("NFKC", self.sesh.character)
             charname = re.sub(r"[^\w\s-]", "", charname.lower())
             charname = re.sub(r"[-\s]+", "-", charname).strip("-_")
 
-            mudname = unicodedata.normalize("NFKC", self.sesh.character.mud.name)
+            char_info = await self.sesh.character_config()
+            mudname = unicodedata.normalize("NFKC", char_info.mud)
             mudname = re.sub(r"[^\w\s-]", "", mudname.lower())
             mudname = re.sub(r"[-\s]+", "-", mudname).strip("-_")
 

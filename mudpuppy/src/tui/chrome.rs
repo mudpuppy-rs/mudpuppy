@@ -26,7 +26,7 @@ pub(crate) struct Chrome {
 }
 
 impl Chrome {
-    pub(crate) fn new(config: &Config) -> Self {
+    pub(crate) fn new(config: &Py<Config>) -> Self {
         Self {
             active_tab_id: 0, // ID 0 is the character menu
             next_tab_id: 1,
@@ -65,12 +65,6 @@ impl Chrome {
         );
 
         self.active_tab_mut().render(app, f, tab_content)
-    }
-
-    pub(crate) fn config_reloaded(&mut self, config: &Config) {
-        for tab_info in &mut self.tabs {
-            tab_info.tab.config_reloaded(config);
-        }
     }
 
     pub(crate) fn active_tab(&self) -> &Tab {
@@ -348,12 +342,6 @@ impl Tab {
             }
             TabKind::Session(session) => session.render(app, f, &sections),
             TabKind::Custom(custom) => custom.render(app, f, &sections),
-        }
-    }
-
-    pub(crate) fn config_reloaded(&mut self, config: &Config) {
-        if let TabKind::Menu(char_menu) = &mut self.kind {
-            char_menu.config_reloaded(config);
         }
     }
 

@@ -7,9 +7,7 @@ use super::{
 use crate::app::{AppData, SlashCommand, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
-use crate::session::{
-    Alias, Buffer, Character, EchoState, InputLine, OutputItem, PromptMode, Trigger,
-};
+use crate::session::{Alias, Buffer, EchoState, InputLine, OutputItem, PromptMode, Trigger};
 use crate::shortcut::{Shortcut, TabShortcut};
 use async_trait::async_trait;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
@@ -25,7 +23,7 @@ pub(crate) struct Session {
     #[pyo3(get)]
     pub(crate) id: u32,
     #[pyo3(get)]
-    pub(crate) character: Character,
+    pub(crate) character: String,
 }
 
 impl From<Session> for u32 {
@@ -61,6 +59,26 @@ impl Session {
                 session_id: self.id,
             },
         )
+    }
+
+    pub(crate) fn character_config<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| {
+            SessionCommand::CharacterInfo {
+                character: self.character.clone(),
+                tx,
+            }
+            .into()
+        })
+    }
+
+    pub(crate) fn mud_config<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| {
+            SessionCommand::MudInfo {
+                character: self.character.clone(),
+                tx,
+            }
+            .into()
+        })
     }
 
     pub(crate) fn connection_info<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
@@ -740,14 +758,17 @@ pub(crate) mod pup {
     #[pymodule_export]
     use super::{Gmcp, Prompt, Session, Tab, Telnet};
     #[pymodule_export]
+    use crate::config::{Character, Config, Mud, Settings, SettingsOverlay, Tls};
+    #[pymodule_export]
     use crate::keyboard::KeyEvent;
     #[pymodule_export]
     use crate::python::{Dimensions, Event, EventType};
     #[pymodule_export]
     use crate::session::{
-        Alias, Buffer, BufferDirection, Character, EchoState, Input, InputLine, Markup, Mud,
-        MudLine, OutputItem, PromptMode, PromptSignal, Scrollbar, Tls, Trigger,
+        Alias, Buffer, BufferDirection, EchoState, Input, InputLine, Markup, MudLine, OutputItem,
+        PromptMode, PromptSignal, Scrollbar, Trigger,
     };
+
     #[pymodule_export]
     use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};
     #[pymodule_export]
@@ -774,7 +795,7 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn new_session(py: Python<'_>, character: Character) -> FutureResult<'_> {
+    fn new_session(py: Python<'_>, character: String) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| SessionCommand::NewSession { character, tx }.into())
     }
 
@@ -794,9 +815,9 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
-    fn session_for_mud(py: Python<'_>, character: Character) -> FutureResult<'_> {
+    fn session_for_character(py: Python<'_>, character: String) -> FutureResult<'_> {
         dispatch_async_command(py, |tx| {
-            SessionCommand::SessionForCharacter(character, tx).into()
+            SessionCommand::SessionForCharacter { character, tx }.into()
         })
     }
 

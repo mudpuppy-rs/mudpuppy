@@ -9,11 +9,11 @@ use tokio_util::bytes::Bytes;
 use tokio_util::codec::Framed;
 use tracing::{Level, error, instrument, trace};
 
+use crate::config::Mud;
 use crate::error::{Error, ErrorKind};
 pub use crate::net::stream::Info;
 use crate::net::stream::Stream;
 use crate::net::telnet;
-use crate::session::Mud;
 
 /// A handle to an active MUD server connection.
 pub struct Handle {

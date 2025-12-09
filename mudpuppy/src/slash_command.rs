@@ -72,24 +72,13 @@ impl SlashCommand for NewSession {
     }
 
     async fn execute(&self, app: &mut AppData, line: String) -> Result<Option<TabAction>, Error> {
-        let Some(character) = Python::attach(|py| {
-            app.config()
-                .borrow(py)
-                .characters
-                .iter()
-                .find(|m| m.name == line)
-                .cloned()
-        }) else {
-            return Err(ErrorKind::NoSuchMud(line).into());
-        };
-
-        let session = app.new_session(&character)?;
+        let session = app.new_session(line.clone())?;
         app.set_active_session(Some(session.id))?;
 
         let active_sess = app.active_session_mut().unwrap();
         active_sess.output.add(OutputItem::CommandResult {
             error: false,
-            message: format!("{character}"),
+            message: format!("created session {id} for {line}", id = session.id),
         });
         active_sess.connect()?;
         Ok(Some(TabAction::CreateSessionTab { session }))
@@ -183,12 +172,12 @@ impl Session {
 
             let message = match info {
                 None => format!(
-                    "{is_active}session {}: {} - not connected",
-                    sesh.id, character.name
+                    "{is_active}session {id}: {character} - not connected",
+                    id = sesh.id,
                 ),
                 Some(info) => format!(
-                    "{is_active}session {}: {} - connected {}",
-                    sesh.id, character.name, info
+                    "{is_active}session {id}: {character} - connected {info}",
+                    id = sesh.id,
                 ),
             };
             lines.push(OutputItem::CommandResult {

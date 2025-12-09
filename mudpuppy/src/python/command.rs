@@ -7,13 +7,13 @@ use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument, warn};
 
 use crate::app::{AppData, Frontend, SlashCommand, TabAction};
-use crate::config::Config;
+use crate::config::{Character, Config, Mud};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::net::connection;
 use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
-use crate::session::{Alias, Buffer, Character, Input, InputLine, OutputItem, PromptMode, Trigger};
+use crate::session::{Alias, Buffer, Input, InputLine, OutputItem, PromptMode, Trigger};
 use crate::shortcut::{Shortcut, TabShortcut};
 use crate::tui;
 use crate::tui::TabKind;
@@ -33,7 +33,7 @@ impl Command {
     pub(crate) fn exec(self, fe: &mut Frontend, app: &mut AppData) -> Result<bool> {
         match self {
             Command::Config(tx) => {
-                let _ = tx.send(app.config());
+                let _ = tx.send(Python::attach(|py| app.config.clone_ref(py)));
             }
             Command::Session(cmd) => {
                 cmd.exec(app)?;
@@ -87,13 +87,24 @@ pub(crate) enum SessionCommand {
         session_id: u32,
         tx: oneshot::Sender<Option<Session>>,
     },
-    SessionForCharacter(Character, oneshot::Sender<Option<Session>>),
+    SessionForCharacter {
+        character: String,
+        tx: oneshot::Sender<Option<Session>>,
+    },
+    CharacterInfo {
+        character: String,
+        tx: oneshot::Sender<Option<Py<Character>>>,
+    },
+    MudInfo {
+        character: String,
+        tx: oneshot::Sender<Option<Py<Mud>>>,
+    },
     ConnectionInfo {
         session: u32,
         tx: oneshot::Sender<Option<connection::Info>>,
     },
     NewSession {
-        character: Character,
+        character: String,
         tx: oneshot::Sender<Session>,
     },
     AddEventHandler(python::Handler),
@@ -165,15 +176,29 @@ impl SessionCommand {
             Self::Session { session_id, tx } => {
                 let _ = tx.send(app.session(session_id).ok().map(Into::into));
             }
-            Self::SessionForCharacter(character, tx) => {
+            Self::SessionForCharacter { character, tx } => {
                 let _ = tx.send(
                     app.sessions_py()
                         .into_iter()
                         .find(|s| s.character == character),
                 );
             }
+            Self::CharacterInfo { character, tx } => {
+                let _ = tx.send(Python::attach(|py| {
+                    app.config.borrow(py).character(py, &character)
+                }));
+            }
+            Self::MudInfo { character, tx } => {
+                let mud = Python::attach(|py| {
+                    let config = app.config.borrow(py);
+                    config
+                        .character(py, &character)
+                        .and_then(|char| config.mud(py, &char.borrow(py).mud))
+                });
+                let _ = tx.send(mud);
+            }
             Self::NewSession { character, tx } => {
-                let _ = tx.send(app.new_session(&character)?);
+                let _ = tx.send(app.new_session(character)?);
             }
             Self::CloseSession { session_id } => {
                 let _ = app.session_mut(session_id)?.disconnect();

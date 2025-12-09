@@ -19,7 +19,7 @@ use crossterm::event::{
 };
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
-use pyo3::Python;
+use pyo3::{Py, Python};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Layout;
@@ -48,8 +48,9 @@ pub(super) struct Tui {
 }
 
 impl Tui {
-    pub(super) fn new(args: &cli::Args, config: &Config) -> Result<Self, Error> {
-        let terminal = init_tui_terminal(config.mouse_enabled)?;
+    pub(super) fn new(args: &cli::Args, config: &Py<Config>) -> Result<Self, Error> {
+        let mouse_enabled = Python::attach(|py| config.borrow(py).mouse_enabled);
+        let terminal = init_tui_terminal(mouse_enabled)?;
         let mut draw_interval = interval(args.frame_rate_duration()?);
         trace!(draw_interval=?draw_interval.period(), "configuring TUI frame rate");
         draw_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -85,10 +86,6 @@ impl Tui {
             .execute(crossterm::event::DisableMouseCapture)
             .unwrap();
         ratatui::restore();
-    }
-
-    pub(super) fn config_reloaded(&mut self, config: &Config) {
-        self.chrome.config_reloaded(config);
     }
 
     async fn crossterm_event(
@@ -207,7 +204,7 @@ impl Tui {
                 let _ = tx.send(python::Tab { id: tab_id });
             }
             TabAction::CreateSessionTab { session } => {
-                info!(name = session.character.name, "creating session tab");
+                info!(name = session.character, "creating session tab");
                 self.chrome.new_tab(Character::new_tab(session));
             }
             TabAction::Layout { tab_id, tx } => {

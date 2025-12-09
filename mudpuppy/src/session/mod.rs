@@ -1,8 +1,8 @@
 mod alias;
 mod buffer;
-mod character;
 mod gmcp;
 mod input;
+mod mudline;
 mod prompt;
 mod trigger;
 
@@ -18,24 +18,25 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::bytes::Bytes;
 use tracing::{Level, debug, error, info, instrument, trace, warn};
 
-use crate::error::{Error, ErrorKind};
+use crate::error::{ConfigError, Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation as TelnetNegotiation};
 use crate::net::{connection, telnet};
 use crate::{python, slash_command};
 
 use crate::app::SlashCommand;
+use crate::config::{Character, Config, Mud};
 pub(crate) use alias::*;
 pub(crate) use buffer::*;
-pub(crate) use character::*;
 pub(crate) use input::*;
+pub(crate) use mudline::*;
 pub(crate) use prompt::*;
 pub(crate) use trigger::*;
 
 #[derive(Debug)]
 pub(super) struct Session {
     pub(super) id: u32,
-    pub(super) character: Character,
+    pub(super) character: String,
     pub(super) event_handlers: python::Handlers,
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
@@ -51,6 +52,7 @@ pub(super) struct Session {
     gmcp_packages: HashSet<String>,
     #[allow(dead_code)] // TODO(XXX): use user_module for reload support.
     user_module: Option<Py<PyModule>>,
+    config: Py<Config>,
 
     conn_event_tx: UnboundedSender<connection::Event>,
     pub(super) python_event_tx: UnboundedSender<(u32, python::Event)>,
@@ -59,7 +61,8 @@ pub(super) struct Session {
 impl Session {
     pub(super) fn new(
         id: u32,
-        character: Character,
+        character: String,
+        config: &Py<Config>,
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
     ) -> Result<Self, Error> {
@@ -74,6 +77,17 @@ impl Session {
         scrollback.border_bottom = true;
         scrollback.scrollbar = Scrollbar::Always;
         scrollback.line_wrap = output.line_wrap;
+
+        let Some(py_character) = Python::attach(|py| config.borrow(py).character(py, &character))
+        else {
+            return Err(ErrorKind::from(ConfigError::InvalidCharacter(format!(
+                "character {character} doesn't exist in config"
+            )))
+            .into());
+        };
+
+        let user_module = Python::attach(|py| py_character.borrow(py).module.clone())
+            .and_then(|module| python::run_character_setup(id, &character, module).ok());
 
         Ok(Self {
             id,
@@ -90,7 +104,8 @@ impl Session {
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),
             gmcp_packages: HashSet::default(),
-            user_module: python::run_character_setup(id, &character)?,
+            user_module,
+            config: Python::attach(|py| config.clone_ref(py)),
             character,
 
             conn_event_tx,
@@ -98,15 +113,17 @@ impl Session {
         })
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn connect(&mut self) -> Result<(), Error> {
         if !matches!(self.state, ConnectionState::Disconnected) {
             return Ok(());
         }
 
+        let mud = Python::attach(|py| Ok::<_, Error>(self.mud(py)?.borrow(py).clone()))?;
+
         self.state = ConnectionState::Connecting(connection::Handle::new(
             self.id,
-            self.character.mud.clone(),
+            mud,
             self.conn_event_tx.clone(),
         ));
         self.python_event_tx
@@ -120,7 +137,7 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn disconnect(&mut self) -> Result<(), Error> {
         let handle = self.connected_handle()?;
         handle
@@ -138,7 +155,7 @@ impl Session {
         }
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn request_enable_option(&mut self, option: u8) -> Result<(), Error> {
         let Some(negotiation) = self.telnet_state.request_enable_option(option) else {
             return Ok(());
@@ -150,7 +167,7 @@ impl Session {
             .send(connection::Action::Send(negotiation.into()))
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn request_disable_option(&mut self, option: u8) -> Result<(), Error> {
         let Some(negotiation) = self.telnet_state.request_disable_option(option) else {
             return Ok(());
@@ -166,7 +183,7 @@ impl Session {
         self.telnet_state.option(option).local_enabled()
     }
 
-    #[instrument(level = Level::TRACE, skip(self, data), fields(id=self.id, character_name=self.character.name, data_len = data.len()))]
+    #[instrument(level = Level::TRACE, skip(self, data), fields(id=self.id, character_name=self.character, data_len = data.len()))]
     pub(super) fn send_subnegotiation(&self, option: u8, data: Vec<u8>) -> Result<(), Error> {
         debug!("sending subnegotiation");
         self.connected_handle()?
@@ -180,7 +197,7 @@ impl Session {
         self.protocol_enabled(telnet::option::GMCP)
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(crate) fn register_gmcp_package(&mut self, package: String) -> Result<(), Error> {
         if self.gmcp_enabled() {
             debug!("registering");
@@ -193,7 +210,7 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(crate) fn unregister_gmcp_package(&mut self, package: &str) -> Result<(), Error> {
         if !self.gmcp_packages.contains(package) {
             return Ok(());
@@ -208,7 +225,7 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(crate) fn send_gmcp_message(
         &self,
         package: &str,
@@ -229,7 +246,7 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn flush_prompt(&self) -> Result<(), Error> {
         let Ok(connected_handle) = self.connected_handle() else {
             return Ok(());
@@ -238,10 +255,20 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn send_line(&mut self, line: InputLine, skip_aliases: bool) -> Result<(), Error> {
-        let lines = match &self.character.command_separator {
-            Some(separator) if line.sent.contains(separator) => line.split(separator),
+        let cmd_separator = Python::attach(|py| {
+            Ok::<_, Error>(
+                self.config
+                    .borrow(py)
+                    .resolve_settings(py, &self.character)?
+                    .command_separator
+                    .clone(),
+            )
+        })?;
+
+        let lines = match line.sent.contains(&cmd_separator) {
+            true => line.split(&cmd_separator),
             _ => vec![line],
         };
 
@@ -270,7 +297,7 @@ impl Session {
                 }
             }
 
-            let session_name = self.character.to_string();
+            let session_name = self.character.clone();
             tokio::spawn(async move {
                 while let Some(result) = futures.next().await {
                     if let Err(err) = result {
@@ -301,7 +328,7 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self, event), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self, event), fields(id=self.id, character_name=self.character))]
     pub(super) fn key_event(&mut self, event: &KeyEvent) {
         trace!("updating input");
         Python::attach(|py| {
@@ -309,7 +336,7 @@ impl Session {
         });
     }
 
-    #[instrument(level = Level::TRACE, skip(self, event), fields(id=self.id, character_name=self.character.name))]
+    #[instrument(level = Level::TRACE, skip(self, event), fields(id=self.id, character_name=self.character))]
     #[expect(clippy::too_many_lines)] // Just on the cusp of needing a refactor.
     pub(super) fn handle_event(&mut self, event: &connection::SessionEvent) -> Result<(), Error> {
         match event {
@@ -424,7 +451,7 @@ impl Session {
         Ok(())
     }
 
-    #[instrument(level = Level::TRACE, skip(self, line), fields(id=self.id, character_name=self.character.name, line_len=line.len()))]
+    #[instrument(level = Level::TRACE, skip(self, line), fields(id=self.id, character_name=self.character, line_len=line.len()))]
     fn process_line(&mut self, line: &Bytes) -> Result<(), Error> {
         if let Some(flusher) = self.prompt.flusher() {
             flusher.extend_timeout();
@@ -440,7 +467,7 @@ impl Session {
             Ok::<(), Error>(())
         })?;
 
-        let character_name = self.character.to_string();
+        let character_name = self.character.clone();
         tokio::spawn(async move {
             while let Some(result) = futures.next().await {
                 if let Err(err) = result {
@@ -550,6 +577,28 @@ impl Session {
                     .map_err(ErrorKind::from)?)
             }
         }
+    }
+
+    fn character(&self, py: Python<'_>) -> Result<Py<Character>, Error> {
+        self.config
+            .borrow(py)
+            .character(py, &self.character)
+            .ok_or_else(|| {
+                ErrorKind::from(ConfigError::InvalidCharacter(format!(
+                    "character {name} isn't defined in configuration",
+                    name = self.character
+                )))
+                .into()
+            })
+    }
+
+    fn mud(&self, py: Python<'_>) -> Result<Py<Mud>, Error> {
+        let character = self.character(py)?;
+        let name = &character.borrow(py).mud;
+        self.config
+            .borrow(py)
+            .mud(py, name)
+            .ok_or_else(|| ErrorKind::NoSuchMud(name.to_owned()).into())
     }
 }
 

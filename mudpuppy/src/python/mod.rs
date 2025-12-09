@@ -18,11 +18,10 @@ use pyo3::{Bound, Py, PyAny, PyErr, PyResult, Python};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Level, debug, error, instrument, trace};
 
-use crate::config::{Config, config_dir};
+use crate::cli;
+use crate::config::config_dir;
 use crate::error::Error;
 
-use crate::cli;
-use crate::session::Character;
 pub(crate) use api::*;
 pub(crate) use command::*;
 pub(crate) use events::*;
@@ -115,12 +114,12 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
     Ok(())
 }
 
-#[instrument(level = Level::DEBUG, skip(config))]
-pub(super) async fn run_user_setup(config: Config) -> Result {
+#[instrument(level = Level::DEBUG)]
+pub(super) async fn run_user_setup(modules: &Vec<String>) -> Result {
     let mut py_futures = FuturesUnordered::new();
 
     Python::attach(|py| {
-        for module in &config.modules {
+        for module in modules {
             debug!(module, "loading");
             let module = PyModule::import(py, module)?;
 
@@ -144,12 +143,12 @@ pub(super) async fn run_user_setup(config: Config) -> Result {
 }
 
 // TOOO(XXX): pretty ugly, would be nice to get errors into session output too.
-#[instrument(level = Level::DEBUG, fields(character = character.name))]
-pub(super) fn run_character_setup(id: u32, character: &Character) -> Result<Option<Py<PyModule>>> {
-    let Some(module) = &character.module else {
-        return Ok(None);
-    };
-
+#[instrument(level = Level::DEBUG)]
+pub(super) fn run_character_setup(
+    id: u32,
+    character: &str,
+    module: String,
+) -> Result<Py<PyModule>> {
     let (future, module) = match Python::attach(|py| {
         let module = PyModule::import(py, module)?;
 
@@ -158,7 +157,7 @@ pub(super) fn run_character_setup(id: u32, character: &Character) -> Result<Opti
             Some(pyo3_async_runtimes::tokio::into_future(setup_fn.call1(
                 (Session {
                     id,
-                    character: character.clone(),
+                    character: character.to_owned(),
                 },),
             )?)?)
         } else {
@@ -169,8 +168,8 @@ pub(super) fn run_character_setup(id: u32, character: &Character) -> Result<Opti
     }) {
         Ok((future, module)) => (future, module),
         Err(err) => {
-            error!("character {} setup error: {}", character.to_string(), err);
-            return Ok(None);
+            error!("character {character} setup error: {err}");
+            return Err(err);
         }
     };
 
@@ -178,7 +177,7 @@ pub(super) fn run_character_setup(id: u32, character: &Character) -> Result<Opti
         let character_name = character.to_string();
         tokio::spawn(async move {
             if let Err(err) = future.await {
-                // Note: Error::from() to collect backtrace from PyErr.
+                // NOTE: Using Error::from to collect backtrace from PyErr.
                 error!(
                     "character {character_name} setup error: {}",
                     Error::from(err)
@@ -187,7 +186,7 @@ pub(super) fn run_character_setup(id: u32, character: &Character) -> Result<Opti
         });
     }
 
-    Ok(Some(module))
+    Ok(module)
 }
 
 pub(super) fn require_coroutine(

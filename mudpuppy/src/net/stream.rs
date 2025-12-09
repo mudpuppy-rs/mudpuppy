@@ -15,8 +15,8 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tracing::{Level, info, instrument};
 
+use crate::config::{Mud, Tls};
 use crate::error::{Error, ErrorKind};
-use crate::session::{Mud, Tls};
 
 /// A TCP stream to a MUD server that may be TLS encrypted.
 #[derive(Debug)]
@@ -33,7 +33,7 @@ pub enum Stream {
 }
 
 impl Stream {
-    #[instrument(level = Level::TRACE, skip(mud), fields(mud_name=mud.name))]
+    #[instrument(level = Level::TRACE)]
     pub async fn connect(mud: &Mud) -> Result<Stream, Error> {
         info!("connecting");
         let mut tcp_stream = happy_eyeballs::tokio::connect((mud.host.as_str(), mud.port))

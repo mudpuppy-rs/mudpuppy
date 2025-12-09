@@ -25,7 +25,7 @@ impl Character {
     pub(crate) fn new_tab(sesh: python::Session) -> Tab {
         Tab {
             data: TabData::new(
-                sesh.character.name.clone(),
+                sesh.character.clone(),
                 initial_layout(),
                 Some(default_shortcuts()),
             ),

@@ -12,60 +12,48 @@ use crate::app::{AppData, TabAction};
 use crate::config::{Config, config_file};
 use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
-use crate::session::Character;
 use crate::shortcut::{MenuShortcut, Shortcut};
 use crate::tui::chrome::{TabData, TabKind};
 use crate::tui::{Constraint, Section, Tab};
 
 #[derive(Debug)]
 pub(crate) struct CharacterMenu {
-    list: List<'static>,
     state: ListState,
-    characters: Vec<Character>,
+    config: Py<Config>,
 }
 
 impl CharacterMenu {
-    pub(crate) fn new_tab(config: &Config) -> Tab {
-        let mut ml = Self {
-            list: List::default(),
-            state: ListState::default(),
-            characters: Vec::default(),
-        };
-        ml.load(config);
+    pub(crate) fn new_tab(config: &Py<Config>) -> Tab {
+        let mut state = ListState::default();
+        state.select(Some(0));
         Tab {
             data: TabData::new(
                 "Menu".to_string(),
                 initial_layout(),
                 Some(default_shortcuts()),
             ),
-            kind: TabKind::Menu(Box::new(ml)),
+            kind: TabKind::Menu(Box::new(Self {
+                state,
+                config: Python::attach(|py| config.clone_ref(py)),
+            })),
         }
     }
 
-    fn load(&mut self, config: &Config) {
-        let items = config
-            .characters
-            .iter()
-            .map(|mud| ListItem::new(mud.name.clone()))
-            .collect::<Vec<_>>();
-
-        self.state = ListState::default();
-        self.state.select(items.first().map(|_| 0));
-        self.characters.clone_from(&config.characters);
-        self.list = List::new(items)
-            .block(
-                Block::default()
-                    .title("Choose a character")
-                    .borders(Borders::ALL)
-                    .border_style(Color::Magenta),
-            )
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::LightMagenta)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("➠ ");
+    fn sorted_characters(&self) -> Vec<(String, String)> {
+        let mut characters = Python::attach(|py| {
+            self.config
+                .borrow(py)
+                .characters
+                .iter(py)
+                .map(|(name, char)| {
+                    let mud = char.borrow(py).mud.clone();
+                    (name, mud)
+                })
+                .collect::<Vec<_>>()
+        });
+        characters
+            .sort_by(|(name_a, mud_a), (name_b, mud_b)| (name_a, mud_a).cmp(&(name_b, mud_b)));
+        characters
     }
 
     pub(crate) fn render(
@@ -80,17 +68,40 @@ impl CharacterMenu {
 
         draw_help(f, *help);
 
-        if self.list.is_empty() {
+        let items = self
+            .sorted_characters()
+            .iter()
+            .map(|(name, mud)| ListItem::new(format!("{name}@{mud}")))
+            .collect::<Vec<_>>();
+
+        // Ensure we have a valid selection if the list isn't empty
+        if !items.is_empty() && self.state.selected().is_none() {
+            self.state.select(Some(0));
+        } else if items.is_empty() {
+            self.state.select(None);
+        }
+
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .title("Choose a character")
+                    .borders(Borders::ALL)
+                    .border_style(Color::Magenta),
+            )
+            .highlight_style(
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::LightMagenta)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("➠ ");
+
+        if list.is_empty() {
             // TODO(XXX): styling.
             f.render_widget::<Text>("No characters configured...".into(), *char_list);
         } else {
-            f.render_stateful_widget(&self.list, *char_list, &mut self.state);
+            f.render_stateful_widget(&list, *char_list, &mut self.state);
         }
-    }
-
-    // TODO(XXX): this misses direct mutation from Python of the Py<Config>.
-    pub(crate) fn config_reloaded(&mut self, config: &Config) {
-        self.load(config);
     }
 
     pub(crate) fn shortcut(
@@ -115,16 +126,17 @@ impl CharacterMenu {
                 let Some(selected) = self.state.selected() else {
                     return Ok(None);
                 };
-                let Some(character) = self.characters.get(selected) else {
+                let characters = self.sorted_characters();
+                let Some((name, _)) = characters.get(selected) else {
                     error!(
                         "selected character index {selected} out of bounds (len: {})",
-                        self.characters.len()
+                        characters.len()
                     );
                     return Ok(None);
                 };
 
-                info!("creating session for {character}");
-                let session = app.new_session(character)?;
+                info!(item = ?name, "list item selected, creating session");
+                let session = app.new_session(name.to_owned())?;
                 Python::attach(|py| session.connect(py))?;
                 Ok(Some(TabAction::CreateSessionTab { session }))
             }

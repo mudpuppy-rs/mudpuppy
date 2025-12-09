@@ -16,7 +16,7 @@ mod tui;
 use std::process::exit;
 
 use clap::Parser;
-use pyo3::Python;
+use pyo3::{Py, Python};
 use pyo3_async_runtimes::tokio as pyo3tokio;
 use tokio::runtime;
 use tokio::sync::mpsc::unbounded_channel;
@@ -39,6 +39,7 @@ fn main() -> Result<(), Error> {
         });
 
         let config = Config::new().map_err(ErrorKind::from)?;
+        let config = Python::attach(|py| Py::new(py, config))?;
 
         App::new(args, &config)?.run(py_rx).await
     }

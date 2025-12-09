@@ -9,7 +9,7 @@ use strum::Display;
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
-use tracing::{Level, error, info, instrument, trace, warn};
+use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::config::{self, Config};
 use crate::error::{Error, ErrorKind};
@@ -17,7 +17,7 @@ use crate::headless::Headless;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
 use crate::python::{BufferCommand, NewSessionHandler};
-use crate::session::{Buffer, Character, Session};
+use crate::session::{Buffer, Session};
 use crate::shortcut::{Shortcut, TabShortcut};
 pub(crate) use crate::slash_command::SlashCommand;
 use crate::tui::{Section, Tui};
@@ -26,20 +26,18 @@ use crate::{cli, python};
 #[derive(Debug)]
 pub(super) struct App {
     args: cli::Args,
-    config: Config,
     data: AppData,
     frontend: Frontend,
 }
 
 impl App {
-    pub(super) fn new(args: cli::Args, config: &Config) -> Result<Self, Error> {
+    pub(super) fn new(args: cli::Args, config: &Py<Config>) -> Result<Self, Error> {
         Ok(Self {
-            data: AppData::new(args.clone(), config.clone()),
+            data: AppData::new(args.clone(), config),
             frontend: match args.headless {
                 true => Headless::new().into(),
                 false => Tui::new(&args, config)?.into(),
             },
-            config: config.clone(),
             args,
         })
     }
@@ -61,14 +59,21 @@ impl App {
         python::init_python_env(&self.args).await?;
 
         // Spawn a task to run the Python user setup code.
-        let config = self.config.clone();
-        let task_locals = Python::attach(pyo3_async_runtimes::tokio::get_current_locals)?;
-        let mut setup_task =
-            tokio::spawn(pyo3_async_runtimes::tokio::scope(task_locals, async move {
-                if let Err(e) = python::run_user_setup(config).await {
+        let (task_locals, modules) = Python::attach(|py| {
+            (
+                pyo3_async_runtimes::tokio::get_current_locals(py),
+                self.data.config.borrow(py).modules.clone(),
+            )
+        });
+        debug!(?modules, "loading user setup for global modules");
+        let mut setup_task = tokio::spawn(pyo3_async_runtimes::tokio::scope(
+            task_locals?,
+            async move {
+                if let Err(e) = python::run_user_setup(&modules).await {
                     error!("python user setup failed: {e}");
                 }
-            }));
+            },
+        ));
 
         let result = loop {
             if self.data.should_quit {
@@ -90,11 +95,6 @@ impl App {
                 Some(event) = config_event_rx.next() => {
                     if let Ok(event) = event {
                         self.data.config_reloaded(&event)?;
-
-                        Python::attach(|py| {
-                            self.frontend.config_reloaded(&self.data.config.borrow(py));
-                            Ok::<(), Error>(())
-                        })?;
                     }
                 }
                 // Connection event dispatch
@@ -160,11 +160,11 @@ pub(super) struct AppData {
 }
 
 impl AppData {
-    fn new(args: cli::Args, config: Config) -> Self {
+    fn new(args: cli::Args, config: &Py<Config>) -> Self {
         Self {
             should_quit: false,
             args,
-            config: Python::attach(|py| Py::new(py, config).unwrap()),
+            config: Python::attach(|py| config.clone_ref(py)),
             active_session: None,
             sessions: HashMap::new(),
             new_session_handlers: Vec::new(),
@@ -207,10 +207,6 @@ impl AppData {
         shortcuts
     }
 
-    pub(crate) fn config(&self) -> Py<Config> {
-        Python::attach(|py| self.config.clone_ref(py))
-    }
-
     pub(crate) fn session(&self, session_id: u32) -> Result<&Session, Error> {
         self.sessions
             .get(&session_id)
@@ -235,7 +231,7 @@ impl AppData {
         sessions
     }
 
-    pub(crate) fn new_session(&mut self, character: &Character) -> Result<python::Session, Error> {
+    pub(crate) fn new_session(&mut self, character: String) -> Result<python::Session, Error> {
         let (Some(conn_event_tx), Some(py_event_tx)) = (&self.conn_event_tx, &self.python_event_tx)
         else {
             return Err(ErrorKind::Internal("App not running".to_owned()).into());
@@ -247,6 +243,7 @@ impl AppData {
             Session::new(
                 new_id,
                 character.clone(),
+                &self.config,
                 conn_event_tx.clone(),
                 py_event_tx.clone(),
             )?,
@@ -254,7 +251,7 @@ impl AppData {
 
         let new_sesh = python::Session {
             id: new_id,
-            character: character.clone(),
+            character,
         };
 
         for handler in &self.new_session_handlers {
@@ -328,20 +325,9 @@ impl AppData {
         let mut sessions = Vec::with_capacity(auto_connect.len());
         Python::attach(|py| {
             trace!(?auto_connect, "auto-connecting");
-            for char_name in &auto_connect {
-                let Some(character) = ({
-                    self.config
-                        .borrow(py)
-                        .characters
-                        .iter()
-                        .find(|m| m.name == *char_name)
-                        .cloned()
-                }) else {
-                    error!("character not found in config: {char_name}");
-                    continue;
-                };
-                info!(character=?character, "auto-connecting");
-                let sesh = self.new_session(&character)?;
+            for character in &auto_connect {
+                info!(character, "auto-connecting");
+                let sesh = self.new_session(character.to_owned())?;
                 sesh.connect(py)?;
                 sessions.push(sesh);
             }
@@ -370,15 +356,16 @@ impl AppData {
 
         Python::attach(|py| {
             info!("reloading configuration: data changed");
-            self.config.borrow_mut(py).load()
-        })
-        .map_err(ErrorKind::from)?;
+            self.config
+                .borrow_mut(py)
+                .replace_with(Config::new().map_err(ErrorKind::from)?);
+            Ok::<_, Error>(())
+        })?;
 
         for sesh in self.sessions.values() {
+            let config = Python::attach(|py| self.config.clone_ref(py));
             sesh.event_handlers
-                .session_event(&python::Event::ConfigReloaded {
-                    config: self.config(),
-                })?;
+                .session_event(&python::Event::ConfigReloaded { config })?;
         }
         Ok(())
     }
@@ -405,12 +392,6 @@ impl Frontend {
             return Ok(());
         };
         tui.handle_tab_action(app, action)
-    }
-
-    fn config_reloaded(&mut self, config: &Config) {
-        if let Frontend::Tui(tui) = self {
-            tui.config_reloaded(config);
-        }
     }
 
     fn exit(&mut self) {
