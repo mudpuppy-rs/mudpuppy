@@ -6,6 +6,7 @@ mod headless;
 mod keyboard;
 mod logging;
 mod net;
+mod new_config;
 mod panic;
 mod python;
 mod session;
