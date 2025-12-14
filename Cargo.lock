@@ -1644,9 +1644,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-pylogger"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea90e35ff3f398f0a1b715101194a84b1b0e7393765739b3bd569fff218d2974"
+checksum = "74bf4788117a7881dcc0609638a3688c8c6da52a45643efb3b9c6418ef38e1c9"
 dependencies = [
  "log",
  "pyo3",
