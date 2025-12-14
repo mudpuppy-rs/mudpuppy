@@ -22,6 +22,8 @@ pub(crate) enum Shortcut {
     SessionInput(InputShortcut),
     #[strum(to_string = "Scroll({0})")]
     Scroll(ScrollShortcut),
+    #[strum(to_string = "Settings({0})")]
+    Settings(SettingsShortcut),
     #[strum(to_string = "PythonShortcut({0})")] // TODO(XXX): improve PythonShortcut to_string
     Python(PythonShortcut),
     Quit {},
@@ -48,6 +50,12 @@ impl From<InputShortcut> for Shortcut {
 impl From<ScrollShortcut> for Shortcut {
     fn from(shortcut: ScrollShortcut) -> Self {
         Self::Scroll(shortcut)
+    }
+}
+
+impl From<SettingsShortcut> for Shortcut {
+    fn from(shortcut: SettingsShortcut) -> Self {
+        Self::Settings(shortcut)
     }
 }
 
@@ -103,6 +111,12 @@ pub(crate) enum ScrollShortcut {
     Down,
     Top,
     Bottom,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
+#[pyclass(frozen, eq, hash)]
+pub(crate) enum SettingsShortcut {
+    ToggleGmcpDebug,
 }
 
 #[derive(Debug, Clone)]

@@ -195,6 +195,9 @@ settings! {
 
         /// Percentage of screen to use for scrollback overlay.
         scrollback_percentage: u16 = 70,
+
+        /// Whether to echo raw received GMCP messages as debug output
+        gmcp_echo: bool = false,
     }
 }
 
@@ -521,7 +524,7 @@ pub struct Character {
         deserialize_with = "der_py_settings_overlay"
     )]
     #[pyo3(get)]
-    settings: Py<SettingsOverlay>,
+    pub settings: Py<SettingsOverlay>,
 }
 
 #[pymethods]

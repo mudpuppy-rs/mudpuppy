@@ -12,7 +12,7 @@ use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::python::{self, Event};
 use crate::session::{Buffer, InputLine, OUTPUT_BUFFER_NAME, OutputItem};
-use crate::shortcut::{InputShortcut, ScrollShortcut, Shortcut};
+use crate::shortcut::{InputShortcut, ScrollShortcut, SettingsShortcut, Shortcut};
 use crate::tui::chrome::{TabData, TabKind};
 use crate::tui::{Constraint, Section, Tab, buffer, commandline};
 
@@ -155,6 +155,33 @@ impl Character {
             }
             Shortcut::Scroll(shortcut) => {
                 scroll_shortcut(&mut app.session_mut(self.sesh.id)?.scrollback, shortcut);
+                return Ok(None);
+            }
+            Shortcut::Settings(SettingsShortcut::ToggleGmcpDebug) => {
+                // TODO(XXX): Clunky!
+                let new_setting = Python::attach(|py| {
+                    let config = app.config.borrow(py);
+                    let current = config.resolve_settings(py, &self.sesh.character)?.gmcp_echo;
+
+                    let character = app
+                        .config
+                        .borrow(py)
+                        .character(py, &self.sesh.character)
+                        .unwrap();
+                    let character = character.borrow_mut(py);
+                    let mut settings = character.settings.borrow_mut(py);
+                    settings.gmcp_echo = Some(!current);
+                    Ok::<_, Error>(!current)
+                })?;
+                debug!(gmcp_echo = new_setting, "setting changed");
+                let session = app.active_session_mut().unwrap();
+                session.output.add(OutputItem::CommandResult {
+                    error: false,
+                    message: format!(
+                        "GMCP debug echo {}",
+                        if new_setting { "enabled" } else { "disabled" }
+                    ),
+                });
                 return Ok(None);
             }
             _ => return Ok(None),
@@ -516,6 +543,12 @@ pub(crate) fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
                 code: KeyCode::End,
             },
             ScrollShortcut::Bottom.into(),
+        ),
+        // F1 -> Toggle GMCP debug
+        // TODO(XXX): Change this shortcut's keybinding!
+        (
+            KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE),
+            SettingsShortcut::ToggleGmcpDebug.into(),
         ),
     ])
 }

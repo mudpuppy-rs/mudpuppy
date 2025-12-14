@@ -396,10 +396,20 @@ impl Session {
                 if *opt == telnet::option::GMCP =>
             {
                 let gmcp_event = gmcp::decode(data).map_err(ErrorKind::from)?;
-                // TODO(XXX): Debug on/off for GMCP.
-                self.output.add(OutputItem::Debug {
-                    line: gmcp_event.to_string(),
-                });
+                let gmcp_echo = Python::attach(|py| {
+                    Ok::<_, Error>(
+                        self.config
+                            .borrow(py)
+                            .resolve_settings(py, &self.character)?
+                            .gmcp_echo,
+                    )
+                })?;
+                if gmcp_echo {
+                    self.output.add(OutputItem::Debug {
+                        line: gmcp_event.to_string(),
+                    });
+                }
+
                 if self.protocol_enabled(telnet::option::GMCP) {
                     self.python_event_tx
                         .send((self.id, gmcp_event))
