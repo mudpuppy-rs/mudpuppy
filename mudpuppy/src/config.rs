@@ -201,6 +201,12 @@ settings! {
         /// Percentage of screen to use for scrollback overlay.
         scrollback_percentage: u16 = 70,
 
+        /// Vertical margin for scrollback overlay.
+        scrollback_vertical_margin: u16 = 0,
+
+        /// Horizontal margin for scrollback overlay.
+        scrollback_horizontal_margin: u16 = 6,
+
         /// Whether to echo raw received GMCP messages as debug output
         gmcp_echo: bool = false,
 

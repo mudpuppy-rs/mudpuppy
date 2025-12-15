@@ -110,9 +110,25 @@ impl Character {
         )?;
 
         if session.scrollback.scroll_pos != 0 {
+            let (scrollback_percentage, vertical_margin, horizontal_margin) =
+                Python::attach(|py| {
+                    let settings = self
+                        .config
+                        .borrow(py)
+                        .resolve_settings(py, Some(&self.sesh.character))?;
+                    Ok::<_, Error>((
+                        settings.scrollback_percentage,
+                        settings.scrollback_vertical_margin,
+                        settings.scrollback_horizontal_margin,
+                    ))
+                })?;
+
             draw_scrollback(
                 f,
                 *output_section,
+                scrollback_percentage,
+                vertical_margin,
+                horizontal_margin,
                 &mut session.scrollback,
                 &mut session.output,
             )?;
@@ -319,6 +335,9 @@ async fn dispatch_command(
 fn draw_scrollback(
     f: &mut Frame,
     output_area: Rect,
+    scrollback_percentage: u16,
+    scrollback_vertical_margin: u16,
+    scrollback_horizontal_margin: u16,
     scrollback: &mut Buffer,
     output: &mut Buffer,
 ) -> Result<(), Error> {
@@ -328,7 +347,7 @@ fn draw_scrollback(
     let area = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            ratatui::layout::Constraint::Percentage(70), // TODO(XXX): scrollback percentage setting.
+            ratatui::layout::Constraint::Percentage(scrollback_percentage),
             ratatui::layout::Constraint::Min(1),
         ])
         .split(output_area)[0];
@@ -336,8 +355,8 @@ fn draw_scrollback(
     // Render the scrollback content and the scrollbar inside a viewport offset within the
     // overall area.
     let viewport = area.inner(Margin {
-        vertical: 0,   // TODO(XXX): scrollback margin vertical setting.
-        horizontal: 6, // TODO(XXX): scrollback margin horizontal setting.
+        vertical: scrollback_vertical_margin,
+        horizontal: scrollback_horizontal_margin,
     });
     // Make sure to clear the viewport first - we're drawing on top of the already rendered
     // normal buffer content.
