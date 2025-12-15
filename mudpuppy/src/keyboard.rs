@@ -175,7 +175,10 @@ impl FromStr for KeyCode {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(match value {
-            v if v.starts_with('f') => {
+            v if v.len() > 1
+                && (v.starts_with('f') || v.starts_with('F'))
+                && v[1..].chars().all(|c| c.is_ascii_digit()) =>
+            {
                 let num = v[1..]
                     .parse::<u8>()
                     .map_err(|_| KeyBindingError::InvalidKeys(format!("invalid F-key: {v}")))?;
@@ -233,5 +236,270 @@ impl Display for KeyCode {
                 KeyCode::Esc => "esc".to_string(),
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_alt_f_not_fkey() {
+        let key: KeyEvent = "Alt-f".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Char('f'));
+        assert!(key.modifiers.contains(KeyModifiers::ALT));
+    }
+
+    #[test]
+    fn test_modifiers_none() {
+        let mods = KeyModifiers::NONE;
+        assert!(!mods.contains(KeyModifiers::SHIFT));
+        assert!(!mods.contains(KeyModifiers::CONTROL));
+        assert!(!mods.contains(KeyModifiers::ALT));
+    }
+
+    #[test]
+    fn test_modifiers_insert() {
+        let mut mods = KeyModifiers::NONE;
+        mods.insert(KeyModifiers::CONTROL);
+        assert!(mods.contains(KeyModifiers::CONTROL));
+        assert!(!mods.contains(KeyModifiers::SHIFT));
+
+        mods.insert(KeyModifiers::SHIFT);
+        assert!(mods.contains(KeyModifiers::CONTROL));
+        assert!(mods.contains(KeyModifiers::SHIFT));
+    }
+
+    #[test]
+    fn test_modifiers_parse() {
+        assert_eq!(
+            "ctrl".parse::<KeyModifiers>().unwrap(),
+            KeyModifiers::CONTROL
+        );
+        assert_eq!(
+            "Ctrl".parse::<KeyModifiers>().unwrap(),
+            KeyModifiers::CONTROL
+        );
+        assert_eq!(
+            "CTRL".parse::<KeyModifiers>().unwrap(),
+            KeyModifiers::CONTROL
+        );
+        assert_eq!(
+            "shift".parse::<KeyModifiers>().unwrap(),
+            KeyModifiers::SHIFT
+        );
+        assert_eq!("alt".parse::<KeyModifiers>().unwrap(), KeyModifiers::ALT);
+        assert_eq!("meta".parse::<KeyModifiers>().unwrap(), KeyModifiers::META);
+    }
+
+    #[test]
+    fn test_modifiers_parse_invalid() {
+        assert!("super".parse::<KeyModifiers>().is_err());
+        assert!("command".parse::<KeyModifiers>().is_err());
+        assert!("".parse::<KeyModifiers>().is_err());
+        assert!("ctrl-shift".parse::<KeyModifiers>().is_err());
+    }
+
+    #[test]
+    fn test_modifiers_display() {
+        let mut mods = KeyModifiers::NONE;
+        assert_eq!(mods.to_string(), "");
+
+        mods.insert(KeyModifiers::CONTROL);
+        assert_eq!(mods.to_string(), "ctrl-");
+
+        mods.insert(KeyModifiers::SHIFT);
+        assert_eq!(mods.to_string(), "ctrl-shift-");
+
+        mods.insert(KeyModifiers::ALT);
+        assert_eq!(mods.to_string(), "ctrl-shift-alt-");
+    }
+
+    #[test]
+    fn test_modifiers_to_vec() {
+        let mut mods = KeyModifiers::NONE;
+        mods.insert(KeyModifiers::CONTROL);
+        mods.insert(KeyModifiers::ALT);
+
+        let vec: Vec<String> = (&mods).into();
+        assert_eq!(vec, vec!["ctrl", "alt"]);
+    }
+
+    #[test]
+    fn test_keycode_special_keys() {
+        assert_eq!("backspace".parse::<KeyCode>().unwrap(), KeyCode::Backspace);
+        assert_eq!("enter".parse::<KeyCode>().unwrap(), KeyCode::Enter);
+        assert_eq!("left".parse::<KeyCode>().unwrap(), KeyCode::Left);
+        assert_eq!("right".parse::<KeyCode>().unwrap(), KeyCode::Right);
+        assert_eq!("up".parse::<KeyCode>().unwrap(), KeyCode::Up);
+        assert_eq!("down".parse::<KeyCode>().unwrap(), KeyCode::Down);
+        assert_eq!("home".parse::<KeyCode>().unwrap(), KeyCode::Home);
+        assert_eq!("end".parse::<KeyCode>().unwrap(), KeyCode::End);
+        assert_eq!("pageup".parse::<KeyCode>().unwrap(), KeyCode::PageUp);
+        assert_eq!("pagedown".parse::<KeyCode>().unwrap(), KeyCode::PageDown);
+        assert_eq!("tab".parse::<KeyCode>().unwrap(), KeyCode::Tab);
+        assert_eq!("delete".parse::<KeyCode>().unwrap(), KeyCode::Delete);
+        assert_eq!("insert".parse::<KeyCode>().unwrap(), KeyCode::Insert);
+        assert_eq!("esc".parse::<KeyCode>().unwrap(), KeyCode::Esc);
+    }
+
+    #[test]
+    fn test_keycode_chars() {
+        assert_eq!("a".parse::<KeyCode>().unwrap(), KeyCode::Char('a'));
+        assert_eq!("Z".parse::<KeyCode>().unwrap(), KeyCode::Char('Z'));
+        assert_eq!("1".parse::<KeyCode>().unwrap(), KeyCode::Char('1'));
+        assert_eq!("!".parse::<KeyCode>().unwrap(), KeyCode::Char('!'));
+        assert_eq!(" ".parse::<KeyCode>().unwrap(), KeyCode::Char(' '));
+    }
+
+    #[test]
+    fn test_keycode_f_keys_all() {
+        for i in 1..=12 {
+            let key_str = format!("f{i}");
+            assert_eq!(key_str.parse::<KeyCode>().unwrap(), KeyCode::F(i));
+
+            let key_str_upper = format!("F{i}");
+            assert_eq!(key_str_upper.parse::<KeyCode>().unwrap(), KeyCode::F(i));
+        }
+    }
+
+    #[test]
+    fn test_keycode_f_keys_invalid() {
+        assert!("f0".parse::<KeyCode>().is_err());
+        assert!("f13".parse::<KeyCode>().is_err());
+        assert!("f99".parse::<KeyCode>().is_err());
+        assert!("f1a".parse::<KeyCode>().is_err());
+        assert!("fa".parse::<KeyCode>().is_err());
+    }
+
+    #[test]
+    fn test_keycode_invalid() {
+        assert!("".parse::<KeyCode>().is_err());
+        assert!("unknown".parse::<KeyCode>().is_err());
+        assert!("ctrl-a".parse::<KeyCode>().is_err());
+        assert!("page up".parse::<KeyCode>().is_err());
+    }
+
+    #[test]
+    fn test_keycode_display_roundtrip() {
+        let codes = vec![
+            KeyCode::Char('a'),
+            KeyCode::F(5),
+            KeyCode::Backspace,
+            KeyCode::Enter,
+            KeyCode::Tab,
+            KeyCode::Esc,
+        ];
+
+        for code in codes {
+            let s = code.to_string();
+            let parsed: KeyCode = s.parse().unwrap();
+            assert_eq!(code, parsed, "Failed roundtrip for {code:?}");
+        }
+    }
+
+    #[test]
+    fn test_keyevent_multiple_modifiers() {
+        let key: KeyEvent = "Ctrl-Shift-a".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Char('a'));
+        assert!(key.modifiers.contains(KeyModifiers::CONTROL));
+        assert!(key.modifiers.contains(KeyModifiers::SHIFT));
+        assert!(!key.modifiers.contains(KeyModifiers::ALT));
+    }
+
+    #[test]
+    fn test_keyevent_all_modifiers() {
+        let key: KeyEvent = "Ctrl-Shift-Alt-x".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Char('x'));
+        assert!(key.modifiers.contains(KeyModifiers::CONTROL));
+        assert!(key.modifiers.contains(KeyModifiers::SHIFT));
+        assert!(key.modifiers.contains(KeyModifiers::ALT));
+    }
+
+    #[test]
+    fn test_keyevent_modifier_order() {
+        // Order shouldn't matter
+        let key1: KeyEvent = "Ctrl-Alt-a".parse().unwrap();
+        let key2: KeyEvent = "Alt-Ctrl-a".parse().unwrap();
+        assert_eq!(key1, key2);
+    }
+
+    #[test]
+    fn test_keyevent_with_special_keys() {
+        let key: KeyEvent = "Ctrl-enter".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Enter);
+        assert!(key.modifiers.contains(KeyModifiers::CONTROL));
+
+        let key: KeyEvent = "Shift-tab".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Tab);
+        assert!(key.modifiers.contains(KeyModifiers::SHIFT));
+
+        let key: KeyEvent = "Alt-f5".parse().unwrap();
+        assert_eq!(key.code, KeyCode::F(5));
+        assert!(key.modifiers.contains(KeyModifiers::ALT));
+    }
+
+    #[test]
+    fn test_keyevent_display() {
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL);
+        assert_eq!(key.to_string(), "ctrl-a");
+
+        let mut mods = KeyModifiers::NONE;
+        mods.insert(KeyModifiers::CONTROL);
+        mods.insert(KeyModifiers::SHIFT);
+        let key = KeyEvent::new(KeyCode::Enter, mods);
+        assert_eq!(key.to_string(), "ctrl-shift-enter");
+    }
+
+    #[test]
+    fn test_keyevent_display_roundtrip() {
+        let events = vec![
+            "a",
+            "ctrl-a",
+            "shift-b",
+            "alt-f1",
+            "ctrl-shift-enter",
+            "ctrl-alt-delete",
+        ];
+
+        for event_str in events {
+            let parsed: KeyEvent = event_str.parse().unwrap();
+            let displayed = parsed.to_string();
+            let reparsed: KeyEvent = displayed.parse().unwrap();
+            assert_eq!(parsed, reparsed, "Failed roundtrip for {event_str}");
+        }
+    }
+
+    #[test]
+    fn test_keyevent_no_key() {
+        // Just modifiers without a key should fail
+        assert!("Ctrl-".parse::<KeyEvent>().is_err());
+        assert!("Ctrl-Shift-".parse::<KeyEvent>().is_err());
+    }
+
+    #[test]
+    fn test_keyevent_plain_key() {
+        let key: KeyEvent = "a".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Char('a'));
+        assert_eq!(key.modifiers, KeyModifiers::NONE);
+
+        let key: KeyEvent = "enter".parse().unwrap();
+        assert_eq!(key.code, KeyCode::Enter);
+        assert_eq!(key.modifiers, KeyModifiers::NONE);
+    }
+
+    #[test]
+    fn test_keyevent_case_normalization() {
+        // Modifiers are case-insensitive
+        let key1: KeyEvent = "ctrl-a".parse().unwrap();
+        let key2: KeyEvent = "Ctrl-a".parse().unwrap();
+        let key3: KeyEvent = "CTRL-a".parse().unwrap();
+        assert_eq!(key1, key2);
+        assert_eq!(key2, key3);
+
+        // Keys are lowercased (except uppercase chars become lowercase)
+        let key1: KeyEvent = "alt-ENTER".parse().unwrap();
+        let key2: KeyEvent = "Alt-enter".parse().unwrap();
+        assert_eq!(key1, key2);
     }
 }
