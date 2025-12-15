@@ -28,16 +28,16 @@ impl KeyEvent {
 #[allow(clippy::trivially_copy_pass_by_ref)] // Can't move `self` for __str__ and __repr__.
 impl KeyEvent {
     #[new]
-    fn py_new(event: &str) -> Result<Self, Error> {
+    pub(crate) fn py_new(event: &str) -> Result<Self, Error> {
         event.parse().map_err(|e| ErrorKind::from(e).into())
     }
 
-    #[pyo3(name = "code")]
+    #[getter(code)]
     fn get_code(&self) -> String {
         self.code.to_string()
     }
 
-    #[pyo3(name = "modifiers")]
+    #[getter(modifiers)]
     fn get_modifiers(&self) -> Vec<String> {
         (&self.modifiers).into()
     }

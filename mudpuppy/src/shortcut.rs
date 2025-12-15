@@ -167,7 +167,7 @@ impl PythonShortcut {
 #[pymethods]
 impl PythonShortcut {
     #[new]
-    fn new(py: Python<'_>, awaitable: Py<PyAny>) -> Result<Self, Error> {
+    pub(crate) fn new(py: Python<'_>, awaitable: Py<PyAny>) -> Result<Self, Error> {
         require_coroutine(py, "PythonShortcut", &awaitable)?;
         Ok(Self {
             label: label_for_coroutine(py, &awaitable).unwrap_or("unknown".to_string()),

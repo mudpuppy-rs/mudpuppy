@@ -16,7 +16,10 @@ from pup import (
     Constraint,
     OutputItem,
     MudLine,
+    Tab,
+    KeyEvent,
 )
+
 
 logging.debug("pup gmcp channel package loaded")
 
@@ -39,6 +42,7 @@ class GmcpChannelWindow:
     sesh: Optional[Session] = None
     buffer: Optional[Buffer] = None
     logfile: Optional[TextIO] = None
+    layout_min_rows: int = 10
 
     async def setup(self, sesh: Session, *, with_logfile: bool = False):
         self.sesh = sesh
@@ -48,7 +52,9 @@ class GmcpChannelWindow:
         tab = await sesh.tab()
         layout = await tab.layout()
         output_parent = layout.get_parent("MUD Output")
-        output_parent.insert_child(0, Constraint.Min(5), Section("Channels"))
+        output_parent.insert_child(
+            0, Constraint.Min(self.layout_min_rows), Section("Channels")
+        )
         self.logger.debug(f"{self.sesh}: added channel")
 
         # Create a buffer in the tab to put channel messages into. Using the same name
@@ -100,6 +106,16 @@ class GmcpChannelWindow:
         sesh.add_event_handler(EventType.GmcpMessage, self.handle_gmcp)
         self.logger.debug(f"{self.sesh}: registered for GMCP Comm.Channel")
 
+        # Set up keyboard shortcuts.
+        def resize_shortcut(adjustment: int):
+            async def handler(key_event, sesh, tab):
+                await self.resize_window(key_event, sesh, tab, adjustment)
+
+            return handler
+
+        tab.set_shortcut("Alt-j", resize_shortcut(5))
+        tab.set_shortcut("Alt-k", resize_shortcut(-5))
+
     async def handle_gmcp(self, _sesh: Session, ev: Event):
         assert isinstance(ev, Event.GmcpMessage)
         if ev.package != "Comm.Channel.Text":
@@ -123,3 +139,29 @@ class GmcpChannelWindow:
 
         self.buffer.add(OutputItem.mud(MudLine(bytes(msg, "utf-8"))))
         self.logger.debug(f"{self.sesh}: added channel msg to buffer")
+
+    async def resize_window(
+        self, _key_event: KeyEvent, sesh: Optional[Session], tab: Tab, adjustment: int
+    ):
+        if sesh is None or sesh != self.sesh:
+            self.logger.warn("session mismatch, we have {self.sesh}, given {sesh}")
+            return
+
+        layout = await tab.layout()
+
+        constraint = layout.get_constraint("Channels")
+        if constraint is None:
+            self.logger.warn("missing channel capture window constraint")
+            return
+
+        match constraint:
+            case Constraint.Min(rows):
+                new = rows + adjustment
+                if new <= 0:
+                    new = 0
+                layout.set_constraint("Channels", Constraint.Min(new))
+                self.logger.info(f"resized channel capture window to {new} rows")
+            case _:
+                self.logger.warn(
+                    f"unexpected non-Min channel capture window constraint: {constraint}"
+                )

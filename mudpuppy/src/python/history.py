@@ -8,9 +8,6 @@ from pup import (
     InputLine,
     Event,
     EventType,
-    KeyEvent,
-    Shortcut,
-    PythonShortcut,
     Tab,
     Input,
     EchoState,
@@ -78,16 +75,6 @@ class InputHistory:
                 line = line.clone_with_original()
             self.input.set_value(line)
 
-    async def shortcut_next(
-        self, _key_event: KeyEvent, _sesh: Optional[Session], _tab: Tab
-    ):
-        await self._navigate_history(Direction.NEXT)
-
-    async def shortcut_prev(
-        self, _key_event: KeyEvent, _sesh: Optional[Session], _tab: Tab
-    ):
-        await self._navigate_history(Direction.PREV)
-
     @staticmethod
     def _should_skip_line(line: InputLine, skip_scripted: bool = True) -> bool:
         return (line.scripted and skip_scripted) or (
@@ -132,9 +119,17 @@ async def create_input_history(sesh: Session):
     sesh.add_event_handler(EventType.InputLine, h.sent_line)
 
     # Set up default down/up arrow key shortcuts for navigating input history.
+    # TODO(XXX): config for bindings
     tab = await sesh.tab()
-    tab.set_shortcut(KeyEvent("down"), Shortcut.Python(PythonShortcut(h.shortcut_next)))
-    tab.set_shortcut(KeyEvent("up"), Shortcut.Python(PythonShortcut(h.shortcut_prev)))
+
+    def move_shortcut(direction: Direction):
+        async def handler(_key_event, _sesh, _tab):
+            await h._navigate_history(direction)
+
+        return handler
+
+    tab.set_shortcut("down", move_shortcut(Direction.NEXT))
+    tab.set_shortcut("up", move_shortcut(Direction.PREV))
 
 
 logging.debug("module loaded")

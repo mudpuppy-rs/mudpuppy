@@ -8,7 +8,7 @@ use crate::app::{AppData, SlashCommand, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::session::{Alias, Buffer, EchoState, InputLine, OutputItem, PromptMode, Trigger};
-use crate::shortcut::{Shortcut, TabShortcut};
+use crate::shortcut::{PythonShortcut, Shortcut, TabShortcut};
 use async_trait::async_trait;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::types::{PyAnyMethods, PyList, PyListMethods};
@@ -544,12 +544,32 @@ impl Tab {
         })
     }
 
+    #[expect(clippy::needless_pass_by_value)] // Making key_event & doesn't compile.
     fn set_shortcut(
         &self,
         py: Python<'_>,
-        key_event: KeyEvent,
-        shortcut: Option<Shortcut>,
+        key_event: Py<PyAny>,
+        shortcut: Option<Py<PyAny>>,
     ) -> Result {
+        let key_event = if let Ok(ke) = key_event.extract::<KeyEvent>(py) {
+            ke
+        } else if let Ok(s) = key_event.extract::<String>(py) {
+            KeyEvent::py_new(&s)?
+        } else {
+            return Err(PyTypeError::new_err("key_event must be a KeyEvent or str").into());
+        };
+
+        let shortcut = match shortcut {
+            Some(s) => {
+                if let Ok(sc) = s.extract::<Shortcut>(py) {
+                    Some(sc)
+                } else {
+                    Some(Shortcut::Python(PythonShortcut::new(py, s)?))
+                }
+            }
+            None => None,
+        };
+
         dispatch_command(
             py,
             TabAction::SetShortcut {
