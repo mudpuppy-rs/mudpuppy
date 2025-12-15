@@ -124,10 +124,10 @@ async def create_input_history(sesh: Session):
 
     # Resolve keybindings from config with character-specific overrides.
     config = await pup.config()
-    next_key = config.resolve_setting(
+    next_key = config.resolve_extra_setting(
         sesh.character, HISTORY_NEXT_KEY, default=HISTORY_NEXT_DEFAULT
     )
-    prev_key = config.resolve_setting(
+    prev_key = config.resolve_extra_setting(
         sesh.character, HISTORY_PREV_KEY, default=HISTORY_PREV_DEFAULT
     )
 

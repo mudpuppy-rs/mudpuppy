@@ -261,7 +261,7 @@ impl Session {
             Ok::<_, Error>(
                 self.config
                     .borrow(py)
-                    .resolve_settings(py, &self.character)?
+                    .resolve_settings(py, Some(&self.character))?
                     .send_separator
                     .clone(),
             )
@@ -400,7 +400,7 @@ impl Session {
                     Ok::<_, Error>(
                         self.config
                             .borrow(py)
-                            .resolve_settings(py, &self.character)?
+                            .resolve_settings(py, Some(&self.character))?
                             .gmcp_echo,
                     )
                 })?;

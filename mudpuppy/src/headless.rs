@@ -1,9 +1,11 @@
+use pyo3::{Py, Python};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin, stdin};
 use tracing::{debug, error, trace, warn};
 
 use crate::app::{AppData, SlashCommand};
+use crate::config::Config;
 use crate::error::{Error, ErrorKind};
 use crate::session::{EchoState, InputLine};
 use crate::slash_command;
@@ -12,14 +14,17 @@ use crate::slash_command;
 pub(super) struct Headless {
     stdin: Lines<BufReader<Stdin>>,
     slash_commands: HashMap<String, Arc<dyn SlashCommand>>,
+    config: Py<Config>,
 }
 
 impl Headless {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(config: &Py<Config>) -> Self {
         trace!("configuring headless mode stdin reader");
+        let config = Python::attach(|py| config.clone_ref(py));
         Self {
             stdin: BufReader::new(stdin()).lines(),
             slash_commands: slash_command::builtin(),
+            config,
         }
     }
 
@@ -35,7 +40,20 @@ impl Headless {
     }
 
     async fn stdin(&mut self, app: &mut AppData, line: String) -> Result<(), Error> {
-        if let Some(line) = line.strip_prefix('/') {
+        // Resolve the configured command prefix, either using the active character name
+        // or none for the global context.
+        let command_prefix = Python::attach(|py| {
+            let config = self.config.borrow(py);
+            let char_name = app.active_session().map(|sesh| sesh.character.clone());
+            Ok::<_, Error>(
+                config
+                    .resolve_settings(py, char_name.as_deref())?
+                    .command_prefix
+                    .clone(),
+            )
+        })?;
+
+        if let Some(line) = line.strip_prefix(&command_prefix) {
             let mut parts = line.splitn(2, ' ');
             let cmd_name = parts.next().unwrap_or_default();
             let remaining = parts.next().unwrap_or_default();

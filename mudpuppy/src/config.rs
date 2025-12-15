@@ -189,6 +189,9 @@ settings! {
         /// Separator for sending multiple commands in one line.
         send_separator: String = ";;".to_string(),
 
+        /// Prefix for executing commands.
+        command_prefix: String = "/".to_string(),
+
         /// Number of lines to scroll when using scroll shortcuts.
         scroll_lines: u16 = 5,
 
@@ -350,9 +353,20 @@ impl Config {
 
     /// Resolve all settings for the character name provided.
     ///
-    /// This returns a `Settings` instance with the override hierarchy applied:
+    /// If no character name is provided, the global settings are returned.
+    ///
+    /// Otherwise, this returns a `Settings` instance with the override
+    /// hierarchy applied:
     /// Character settings > MUD settings > Global settings.
-    pub fn resolve_settings(&self, py: Python<'_>, char_name: &str) -> Result<Settings, Error> {
+    pub fn resolve_settings(
+        &self,
+        py: Python<'_>,
+        char_name: Option<&str>,
+    ) -> Result<Settings, Error> {
+        let Some(char_name) = char_name else {
+            return Ok(self.settings.borrow(py).clone());
+        };
+
         let char_def = self.character(py, char_name).ok_or_else(|| {
             ErrorKind::from(ConfigError::InvalidCharacter(format!(
                 "unknown character name {char_name:?}"
@@ -376,14 +390,14 @@ impl Config {
         Ok(settings)
     }
 
-    /// Resolve a single custom setting by key for the character name provided.
+    /// Resolve a single extra setting by key for the character name provided.
     ///
     /// This applies the same override hierarchy as `resolve_settings`:
     /// Character settings > MUD settings > Global settings.
     ///
     /// If the setting key is not found in any level, returns the provided default.
     #[pyo3(signature = (char_name, key, default = None))]
-    pub fn resolve_setting(
+    pub fn resolve_extra_setting(
         &self,
         py: Python<'_>,
         char_name: &str,
@@ -391,7 +405,7 @@ impl Config {
         default: Option<String>,
     ) -> Result<Option<String>, Error> {
         Ok(self
-            .resolve_settings(py, char_name)?
+            .resolve_settings(py, Some(char_name))?
             .extras
             .get(key)
             .cloned()
@@ -970,7 +984,7 @@ mod tests {
         });
 
         Python::attach(|py| {
-            let resolved = config.resolve_settings(py, TEST_CHAR_NAME).unwrap();
+            let resolved = config.resolve_settings(py, Some(TEST_CHAR_NAME)).unwrap();
             assert!(!resolved.show_input_echo); // From MUD override
             assert_eq!(resolved.scroll_lines, 11); // From character override.
             assert!(!resolved.word_wrap); // From character override
@@ -1018,26 +1032,26 @@ mod tests {
         });
 
         Python::attach(|py| {
-            // Test global setting
+            // Test global extra setting
             assert_eq!(
                 config
-                    .resolve_setting(py, TEST_CHAR_NAME, "global_key", None)
+                    .resolve_extra_setting(py, TEST_CHAR_NAME, "global_key", None)
                     .unwrap(),
                 Some("global_value".to_string())
             );
 
-            // Test MUD setting
+            // Test MUD extra setting
             assert_eq!(
                 config
-                    .resolve_setting(py, TEST_CHAR_NAME, "mud_key", None)
+                    .resolve_extra_setting(py, TEST_CHAR_NAME, "mud_key", None)
                     .unwrap(),
                 Some("mud_value".to_string())
             );
 
-            // Test character setting
+            // Test character extra setting
             assert_eq!(
                 config
-                    .resolve_setting(py, TEST_CHAR_NAME, "char_key", None)
+                    .resolve_extra_setting(py, TEST_CHAR_NAME, "char_key", None)
                     .unwrap(),
                 Some("char_value".to_string())
             );
@@ -1045,15 +1059,15 @@ mod tests {
             // Test override hierarchy (character > MUD > global)
             assert_eq!(
                 config
-                    .resolve_setting(py, TEST_CHAR_NAME, "overridden_key", None)
+                    .resolve_extra_setting(py, TEST_CHAR_NAME, "overridden_key", None)
                     .unwrap(),
                 Some("char_value".to_string())
             );
 
-            // Test non-existent key with default
+            // Test non-existent extra setting key with default
             assert_eq!(
                 config
-                    .resolve_setting(
+                    .resolve_extra_setting(
                         py,
                         TEST_CHAR_NAME,
                         "nonexistent",
@@ -1063,10 +1077,10 @@ mod tests {
                 Some("default_value".to_string())
             );
 
-            // Test non-existent key without default
+            // Test non-existent extra setting key without default
             assert_eq!(
                 config
-                    .resolve_setting(py, TEST_CHAR_NAME, "nonexistent", None)
+                    .resolve_extra_setting(py, TEST_CHAR_NAME, "nonexistent", None)
                     .unwrap(),
                 None
             );
@@ -1212,7 +1226,7 @@ def test_settings(config):
                 );
             }
             // Test hierarchy resolution
-            let resolved = config.resolve_settings(py, TEST_CHAR_NAME).unwrap();
+            let resolved = config.resolve_settings(py, Some(TEST_CHAR_NAME)).unwrap();
             assert!(
                 resolved.word_wrap,
                 "Resolved word_wrap should be True (from character override)"
@@ -1279,14 +1293,14 @@ def test_settings(config):
 
             let warrior = config.character(py, "Warrior").unwrap();
             assert_eq!(warrior.borrow(py).mud, "DuneMUD");
-            let warrior_settings = config.resolve_settings(py, "Warrior").unwrap();
+            let warrior_settings = config.resolve_settings(py, Some("Warrior")).unwrap();
             assert_eq!(warrior_settings.scroll_lines, 10); // From MUD
             assert_eq!(warrior_settings.send_separator, ";"); // From MUD
             assert!(!warrior_settings.word_wrap); // From global
 
             let mage = config.character(py, "Mage").unwrap();
             assert_eq!(mage.borrow(py).mud, "DuneMUD");
-            let mage_settings = config.resolve_settings(py, "Mage").unwrap();
+            let mage_settings = config.resolve_settings(py, Some("Mage")).unwrap();
             assert_eq!(mage_settings.scroll_lines, 15); // From character override
             assert_eq!(mage_settings.send_separator, ";"); // From MUD
         });
@@ -1330,11 +1344,11 @@ def test_settings(config):
             );
             assert_eq!(settings.extras.get("history_prev"), Some(&"up".to_string()));
 
-            // Test resolve_setting with hierarchy
+            // Test resolve_extra_setting with hierarchy
             // history_prev should come from global (not overridden)
             assert_eq!(
                 config
-                    .resolve_setting(py, "TestChar", "history_prev", None)
+                    .resolve_extra_setting(py, "TestChar", "history_prev", None)
                     .unwrap(),
                 Some("up".to_string())
             );
@@ -1342,7 +1356,7 @@ def test_settings(config):
             // history_next should come from character override
             assert_eq!(
                 config
-                    .resolve_setting(py, "TestChar", "history_next", None)
+                    .resolve_extra_setting(py, "TestChar", "history_next", None)
                     .unwrap(),
                 Some("Ctrl-n".to_string())
             );
@@ -1350,13 +1364,13 @@ def test_settings(config):
             // GMCP settings should come from MUD
             assert_eq!(
                 config
-                    .resolve_setting(py, "TestChar", "gmcp_window_resize_up", None)
+                    .resolve_extra_setting(py, "TestChar", "gmcp_window_resize_up", None)
                     .unwrap(),
                 Some("Alt-j".to_string())
             );
             assert_eq!(
                 config
-                    .resolve_setting(py, "TestChar", "gmcp_window_resize_down", None)
+                    .resolve_extra_setting(py, "TestChar", "gmcp_window_resize_down", None)
                     .unwrap(),
                 Some("Alt-k".to_string())
             );
@@ -1364,7 +1378,12 @@ def test_settings(config):
             // Non-existent setting with default
             assert_eq!(
                 config
-                    .resolve_setting(py, "TestChar", "nonexistent", Some("default".to_string()))
+                    .resolve_extra_setting(
+                        py,
+                        "TestChar",
+                        "nonexistent",
+                        Some("default".to_string())
+                    )
                     .unwrap(),
                 Some("default".to_string())
             );

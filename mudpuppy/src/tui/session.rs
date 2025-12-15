@@ -8,6 +8,7 @@ use ratatui::widgets::Clear;
 use tracing::{debug, error, warn};
 
 use crate::app::{AppData, TabAction};
+use crate::config::Config;
 use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::python::{self, Event};
@@ -19,17 +20,18 @@ use crate::tui::{Constraint, Section, Tab, buffer, commandline};
 #[derive(Debug)]
 pub(crate) struct Character {
     pub(crate) sesh: python::Session,
+    config: Py<Config>,
 }
 
 impl Character {
-    pub(crate) fn new_tab(sesh: python::Session) -> Tab {
+    pub(crate) fn new_tab(sesh: python::Session, config: Py<Config>) -> Tab {
         Tab {
             data: TabData::new(
                 sesh.character.clone(),
                 initial_layout(),
                 Some(default_shortcuts()),
             ),
-            kind: TabKind::Session(Box::new(Self { sesh })),
+            kind: TabKind::Session(Box::new(Self { sesh, config })),
         }
     }
 
@@ -59,12 +61,6 @@ impl Character {
         sections: &HashMap<String, Rect>,
     ) -> Result<(), Error> {
         let session = app.session_mut(self.sesh.id)?;
-
-        // TODO(XXX): spammy, remove after debugging:
-        /*trace!("\n\n");
-        for (name, rect) in &sections {
-            trace!("{name} -> {rect}");
-        }*/
 
         // Safety: we unconditionally create this section in layout init.
         let output_section = sections.get(OUTPUT_BUFFER_NAME).unwrap();
@@ -161,7 +157,9 @@ impl Character {
                 // TODO(XXX): Clunky!
                 let new_setting = Python::attach(|py| {
                     let config = app.config.borrow(py);
-                    let current = config.resolve_settings(py, &self.sesh.character)?.gmcp_echo;
+                    let current = config
+                        .resolve_settings(py, Some(&self.sesh.character))?
+                        .gmcp_echo;
 
                     let character = app
                         .config
@@ -193,9 +191,19 @@ impl Character {
             session.input.borrow_mut(py).pop().unwrap_or_default()
         });
 
+        // Resolve the configured command prefix
+        let command_prefix = Python::attach(|py| {
+            Ok::<_, Error>(
+                self.config
+                    .borrow(py)
+                    .resolve_settings(py, Some(&self.sesh.character))?
+                    .command_prefix
+                    .clone(),
+            )
+        })?;
+
         // If the input line has the command prefix, dispatch the input line as a command.
-        // TODO(XXX): configurable prefix.
-        if let Some(cmd_name) = input.sent.strip_prefix('/') {
+        if let Some(cmd_name) = input.sent.strip_prefix(&command_prefix) {
             return dispatch_command(app, &input, cmd_name).await;
         }
 

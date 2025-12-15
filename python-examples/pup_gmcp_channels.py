@@ -112,12 +112,12 @@ class GmcpChannelWindow:
 
         # Resolve keybindings from config with character-specific overrides.
         config = await pup.config()
-        resize_up_key = config.resolve_setting(
+        resize_up_key = config.resolve_extra_setting(
             sesh.character,
             GMCP_WINDOW_RESIZE_UP_KEY,
             default=GMCP_WINDOW_RESIZE_UP_DEFAULT,
         )
-        resize_down_key = config.resolve_setting(
+        resize_down_key = config.resolve_extra_setting(
             sesh.character,
             GMCP_WINDOW_RESIZE_DOWN_KEY,
             default=GMCP_WINDOW_RESIZE_DOWN_DEFAULT,

@@ -35,7 +35,7 @@ impl App {
         Ok(Self {
             data: AppData::new(args.clone(), config),
             frontend: match args.headless {
-                true => Headless::new().into(),
+                true => Headless::new(config).into(),
                 false => Tui::new(&args, config)?.into(),
             },
             args,

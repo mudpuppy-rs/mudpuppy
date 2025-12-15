@@ -205,7 +205,8 @@ impl Tui {
             }
             TabAction::CreateSessionTab { session } => {
                 info!(name = session.character, "creating session tab");
-                self.chrome.new_tab(Character::new_tab(session));
+                let config = Python::attach(|py| app.config.clone_ref(py));
+                self.chrome.new_tab(Character::new_tab(session, config));
             }
             TabAction::Layout { tab_id, tx } => {
                 let section = self.chrome.get_tab(tab_id)?.data.layout();
