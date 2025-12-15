@@ -150,7 +150,19 @@ impl Character {
                 });
             }
             Shortcut::Scroll(shortcut) => {
-                scroll_shortcut(&mut app.session_mut(self.sesh.id)?.scrollback, shortcut);
+                let scroll_lines = Python::attach(|py| {
+                    Ok::<_, Error>(
+                        self.config
+                            .borrow(py)
+                            .resolve_settings(py, Some(&self.sesh.character))?
+                            .scroll_lines,
+                    )
+                })?;
+                scroll_shortcut(
+                    &mut app.session_mut(self.sesh.id)?.scrollback,
+                    shortcut,
+                    scroll_lines,
+                );
                 return Ok(None);
             }
             Shortcut::Settings(SettingsShortcut::ToggleGmcpDebug) => {
@@ -233,8 +245,7 @@ impl Character {
     }
 }
 
-fn scroll_shortcut(scrollback: &mut Buffer, shortcut: &ScrollShortcut) {
-    let scroll_lines = 5; // TODO(XXX): Setting for scroll lines
+fn scroll_shortcut(scrollback: &mut Buffer, shortcut: &ScrollShortcut, scroll_lines: u16) {
     match shortcut {
         ScrollShortcut::Up => {
             scrollback.scroll_up(scroll_lines);
