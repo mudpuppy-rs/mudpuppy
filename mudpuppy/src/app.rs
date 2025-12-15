@@ -177,31 +177,31 @@ impl AppData {
     fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
         let mut shortcuts = HashMap::new();
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('c')),
             Shortcut::Quit {},
         );
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Esc),
             Shortcut::Quit {},
         );
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('n'), KeyModifiers::CONTROL),
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('n')),
             TabShortcut::SwitchToNext {}.into(),
         );
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('p')),
             TabShortcut::SwitchToPrevious {}.into(),
         );
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT),
+            KeyEvent::new(KeyModifiers::ALT, KeyCode::Char('n')),
             TabShortcut::MoveRight { tab_id: None }.into(),
         );
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT),
+            KeyEvent::new(KeyModifiers::ALT, KeyCode::Char('p')),
             TabShortcut::MoveLeft { tab_id: None }.into(),
         );
         shortcuts.insert(
-            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('x')),
             TabShortcut::Close { tab_id: None }.into(),
         );
         shortcuts

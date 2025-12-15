@@ -12,15 +12,14 @@ use crate::error::{Error, ErrorKind, KeyBindingError};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[pyclass(frozen)]
 pub(crate) struct KeyEvent {
-    pub(crate) code: KeyCode,
     pub(crate) modifiers: KeyModifiers,
+    pub(crate) code: KeyCode,
 }
 
 impl KeyEvent {
-    // TODO(XXX): reverse arg order.
     #[must_use]
-    pub(crate) fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
-        Self { code, modifiers }
+    pub(crate) fn new(modifiers: KeyModifiers, code: KeyCode) -> Self {
+        Self { modifiers, code }
     }
 }
 
@@ -74,8 +73,8 @@ impl FromStr for KeyEvent {
         }
 
         Ok(Self::new(
-            final_part.as_deref().unwrap_or_default().parse()?,
             modifiers,
+            final_part.as_deref().unwrap_or_default().parse()?,
         ))
     }
 }
@@ -441,13 +440,13 @@ mod tests {
 
     #[test]
     fn test_keyevent_display() {
-        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL);
+        let key = KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('a'));
         assert_eq!(key.to_string(), "ctrl-a");
 
         let mut mods = KeyModifiers::NONE;
         mods.insert(KeyModifiers::CONTROL);
         mods.insert(KeyModifiers::SHIFT);
-        let key = KeyEvent::new(KeyCode::Enter, mods);
+        let key = KeyEvent::new(mods, KeyCode::Enter);
         assert_eq!(key.to_string(), "ctrl-shift-enter");
     }
 

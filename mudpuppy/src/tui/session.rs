@@ -354,200 +354,125 @@ pub(crate) fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
     HashMap::from([
         // ENTER -> Send input
         (
-            KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Enter),
             InputShortcut::Send.into(),
         ),
         // BACKSPACE or Ctrl-h -> Delete prev char
         (
-            KeyEvent {
-                code: KeyCode::Backspace,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Backspace),
             InputShortcut::DeletePrev.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('h'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('h')),
             InputShortcut::DeletePrev.into(),
         ),
         // DELETE -> Delete next char
         (
-            KeyEvent {
-                code: KeyCode::Delete,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Delete),
             InputShortcut::DeleteNext.into(),
         ),
         // LEFT or Ctrl-b -> Cursor left
         (
-            KeyEvent {
-                code: KeyCode::Left,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Left),
             InputShortcut::CursorLeft.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('b'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('b')),
             InputShortcut::CursorLeft.into(),
         ),
         // Ctrl-LEFT or Alt-b -> Cursor word left
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Left,
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Left),
             InputShortcut::CursorWordLeft.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::ALT,
-                code: KeyCode::Char('b'),
-            },
+            KeyEvent::new(KeyModifiers::ALT, KeyCode::Char('b')),
             InputShortcut::CursorWordLeft.into(),
         ),
         // RIGHT or Ctrl-f -> Cursor right
         (
-            KeyEvent {
-                code: KeyCode::Right,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Right),
             InputShortcut::CursorRight.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('f'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('f')),
             InputShortcut::CursorRight.into(),
         ),
         // Ctrl-RIGHT or Alt-f -> Cursor word right
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Right,
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Right),
             InputShortcut::CursorWordRight.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::ALT,
-                code: KeyCode::Char('f'),
-            },
+            KeyEvent::new(KeyModifiers::ALT, KeyCode::Char('f')),
             InputShortcut::CursorWordRight.into(),
         ),
         // CTRL-u -> Reset
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('u'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('u')),
             InputShortcut::Reset.into(),
         ),
         // Alt-BACKSPACE or CTRL-w -> Delete word left
         (
-            KeyEvent {
-                modifiers: KeyModifiers::ALT,
-                code: KeyCode::Backspace,
-            },
+            KeyEvent::new(KeyModifiers::ALT, KeyCode::Backspace),
             InputShortcut::CursorDeleteWordLeft.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('w'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('w')),
             InputShortcut::CursorDeleteWordLeft.into(),
         ),
         // Ctrl-DELETE -> Delete word right
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Delete,
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Delete),
             InputShortcut::CursorDeleteWordRight.into(),
         ),
         // Ctrl-k -> Delete to end
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('k'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('k')),
             InputShortcut::CursorDeleteToEnd.into(),
         ),
         // HOME or Ctrl-a -> Cursor start
         (
-            KeyEvent {
-                code: KeyCode::Home,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::Home),
             InputShortcut::CursorToStart.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('a'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('a')),
             InputShortcut::CursorToStart.into(),
         ),
         // END or Ctrl-e -> Cursor end
         (
-            KeyEvent {
-                code: KeyCode::End,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::End),
             InputShortcut::CursorToEnd.into(),
         ),
         (
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char('e'),
-            },
+            KeyEvent::new(KeyModifiers::CONTROL, KeyCode::Char('e')),
             InputShortcut::CursorToEnd.into(),
         ),
         // PAGE-UP -> Scroll up
         (
-            KeyEvent {
-                code: KeyCode::PageUp,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::PageUp),
             ScrollShortcut::Up.into(),
         ),
         // PAGE-DOWN -> Scroll down
         (
-            KeyEvent {
-                code: KeyCode::PageDown,
-                modifiers: KeyModifiers::NONE,
-            },
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::PageDown),
             ScrollShortcut::Down.into(),
         ),
         // SHIFT-HOME -> Scroll top
         (
-            KeyEvent {
-                modifiers: KeyModifiers::SHIFT,
-                code: KeyCode::Home,
-            },
+            KeyEvent::new(KeyModifiers::SHIFT, KeyCode::Home),
             ScrollShortcut::Top.into(),
         ),
         // SHIFT-END -> Scroll bottom
         (
-            KeyEvent {
-                modifiers: KeyModifiers::SHIFT,
-                code: KeyCode::End,
-            },
+            KeyEvent::new(KeyModifiers::SHIFT, KeyCode::End),
             ScrollShortcut::Bottom.into(),
         ),
         // F1 -> Toggle GMCP debug
         // TODO(XXX): Change this shortcut's keybinding!
         (
-            KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE),
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::F(1)),
             SettingsShortcut::ToggleGmcpDebug.into(),
         ),
     ])
