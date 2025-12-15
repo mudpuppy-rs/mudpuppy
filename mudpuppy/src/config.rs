@@ -129,7 +129,7 @@ macro_rules! settings {
         $(#[$settings_meta])*
         #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
         #[pyclass]
-        #[serde(default)]
+        #[serde(default, deny_unknown_fields)]
         #[allow(clippy::unsafe_derive_deserialize)]
         pub struct Settings {
             $(
@@ -149,6 +149,7 @@ macro_rules! settings {
 
         #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
         #[pyclass]
+        #[serde(deny_unknown_fields)]
         #[allow(clippy::unsafe_derive_deserialize)]
         pub struct SettingsOverlay {
             $(
@@ -210,6 +211,7 @@ settings! {
 /// Top level app configuration with character list and global settings.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[pyclass]
+#[serde(deny_unknown_fields)]
 #[allow(clippy::unsafe_derive_deserialize)]
 pub struct Config {
     /// Whether mouse support is enabled in the TUI.
@@ -437,6 +439,7 @@ impl PartialEq for Config {
 /// MUD server configuration with connection details and optional setting overrides.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[pyclass]
+#[serde(deny_unknown_fields)]
 #[allow(clippy::unsafe_derive_deserialize)]
 pub struct Mud {
     /// Hostname to connect to.
@@ -529,6 +532,7 @@ pub enum Tls {
 /// Character definition with MUD reference and optional setting overrides.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[pyclass]
+#[serde(deny_unknown_fields)]
 #[allow(clippy::unsafe_derive_deserialize)]
 pub struct Character {
     /// Reference to a MUD definition by name.
@@ -1407,4 +1411,114 @@ def test_settings(config):
 
     static TEST_MUD_NAME: &str = "TestMUD";
     static TEST_CHAR_NAME: &str = "TestChar";
+
+    #[test]
+    fn test_deny_unknown_fields_in_config() {
+        Python::initialize();
+        let toml = r#"
+            mouse_enabledd = true
+
+            [muds.TestMUD]
+            host = "test.mud.com"
+            port = 4000
+
+            [characters.TestChar]
+            mud = "TestMUD"
+        "#;
+
+        let result: Result<Config, _> = toml::from_str(toml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown field"));
+    }
+
+    #[test]
+    fn test_deny_unknown_fields_in_mud() {
+        Python::initialize();
+        let toml = r#"
+            [muds.TestMUD]
+            host = "test.mud.com"
+            port = 4000
+            hostt = "typo.mud.com"
+
+            [characters.TestChar]
+            mud = "TestMUD"
+        "#;
+
+        let result: Result<Config, _> = toml::from_str(toml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown field"));
+    }
+
+    #[test]
+    fn test_deny_unknown_fields_in_character() {
+        Python::initialize();
+        let toml = r#"
+            [muds.TestMUD]
+            host = "test.mud.com"
+            port = 4000
+
+            [characters.TestChar]
+            mud = "TestMUD"
+            mudd = "typo"
+        "#;
+
+        let result: Result<Config, _> = toml::from_str(toml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown field"));
+    }
+
+    #[test]
+    fn test_deny_unknown_fields_in_settings() {
+        Python::initialize();
+        let toml = r#"
+            [settings]
+            word_wrap = true
+            word_wrapp = false
+
+            [muds.TestMUD]
+            host = "test.mud.com"
+            port = 4000
+
+            [characters.TestChar]
+            mud = "TestMUD"
+        "#;
+
+        let result: Result<Config, _> = toml::from_str(toml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown field"));
+    }
+
+    #[test]
+    fn test_allow_arbitrary_extras() {
+        Python::initialize();
+        let toml = r#"
+            [settings.extras]
+            custom_key = "custom_value"
+            another_key = "another_value"
+
+            [muds.TestMUD]
+            host = "test.mud.com"
+            port = 4000
+
+            [characters.TestChar]
+            mud = "TestMUD"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        Python::attach(|py| {
+            let settings = config.settings.borrow(py);
+            assert_eq!(
+                settings.extras.get("custom_key"),
+                Some(&"custom_value".to_string())
+            );
+            assert_eq!(
+                settings.extras.get("another_key"),
+                Some(&"another_value".to_string())
+            );
+        });
+    }
 }
