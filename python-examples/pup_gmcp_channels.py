@@ -20,6 +20,10 @@ from pup import (
     KeyEvent,
 )
 
+GMCP_WINDOW_RESIZE_UP_KEY = "gmcp_window_resize_up"
+GMCP_WINDOW_RESIZE_UP_DEFAULT = "Alt-j"
+GMCP_WINDOW_RESIZE_DOWN_KEY = "gmcp_window_resize_down"
+GMCP_WINDOW_RESIZE_DOWN_DEFAULT = "Alt-k"
 
 logging.debug("pup gmcp channel package loaded")
 
@@ -106,6 +110,19 @@ class GmcpChannelWindow:
         sesh.add_event_handler(EventType.GmcpMessage, self.handle_gmcp)
         self.logger.debug(f"{self.sesh}: registered for GMCP Comm.Channel")
 
+        # Resolve keybindings from config with character-specific overrides.
+        config = await pup.config()
+        resize_up_key = config.resolve_setting(
+            sesh.character,
+            GMCP_WINDOW_RESIZE_UP_KEY,
+            default=GMCP_WINDOW_RESIZE_UP_DEFAULT,
+        )
+        resize_down_key = config.resolve_setting(
+            sesh.character,
+            GMCP_WINDOW_RESIZE_DOWN_KEY,
+            default=GMCP_WINDOW_RESIZE_DOWN_DEFAULT,
+        )
+
         # Set up keyboard shortcuts.
         def resize_shortcut(adjustment: int):
             async def handler(key_event, sesh, tab):
@@ -113,8 +130,8 @@ class GmcpChannelWindow:
 
             return handler
 
-        tab.set_shortcut("Alt-j", resize_shortcut(5))
-        tab.set_shortcut("Alt-k", resize_shortcut(-5))
+        tab.set_shortcut(resize_up_key, resize_shortcut(5))
+        tab.set_shortcut(resize_down_key, resize_shortcut(-5))
 
     async def handle_gmcp(self, _sesh: Session, ev: Event):
         assert isinstance(ev, Event.GmcpMessage)

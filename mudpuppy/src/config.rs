@@ -164,7 +164,8 @@ macro_rules! settings {
             pub fn merge(&self, mut base: Settings) -> Settings {
                 $(
                     if let Some(ref value) = self.$field {
-                        base.$field = value.clone();
+                        // Use MergeField trait - HashMap merges keys, others replace
+                        base.$field.merge_from(value);
                     }
                 )*
                 base
@@ -198,6 +199,11 @@ settings! {
 
         /// Whether to echo raw received GMCP messages as debug output
         gmcp_echo: bool = false,
+
+        /// Free-form custom settings for use by Python scripts.
+        /// Allows arbitrary string key-value pairs without requiring Rust struct changes.
+        #[serde(default)]
+        extras: HashMap<String, String> = HashMap::new(),
     }
 }
 
@@ -366,6 +372,28 @@ impl Config {
         let settings = char_def.settings.borrow(py).merge(settings);
 
         Ok(settings)
+    }
+
+    /// Resolve a single custom setting by key for the character name provided.
+    ///
+    /// This applies the same override hierarchy as `resolve_settings`:
+    /// Character settings > MUD settings > Global settings.
+    ///
+    /// If the setting key is not found in any level, returns the provided default.
+    #[pyo3(signature = (char_name, key, default = None))]
+    pub fn resolve_setting(
+        &self,
+        py: Python<'_>,
+        char_name: &str,
+        key: &str,
+        default: Option<String>,
+    ) -> Result<Option<String>, Error> {
+        Ok(self
+            .resolve_settings(py, char_name)?
+            .extras
+            .get(key)
+            .cloned()
+            .or(default))
     }
 }
 
@@ -676,6 +704,39 @@ where
     }
 }
 
+// Trait for merging overlay values onto base values.
+trait MergeField {
+    fn merge_from(&mut self, overlay: &Self);
+}
+
+// Implementations for primitive/simple types: replace base with overlay
+impl MergeField for bool {
+    fn merge_from(&mut self, overlay: &Self) {
+        *self = *overlay;
+    }
+}
+
+impl MergeField for String {
+    fn merge_from(&mut self, overlay: &Self) {
+        self.clone_from(overlay);
+    }
+}
+
+impl MergeField for u16 {
+    fn merge_from(&mut self, overlay: &Self) {
+        *self = *overlay;
+    }
+}
+
+// Specialized implementation for HashMap: merge keys with overlay taking precedence
+impl MergeField for HashMap<String, String> {
+    fn merge_from(&mut self, overlay: &Self) {
+        for (key, value) in overlay {
+            self.insert(key.clone(), value.clone());
+        }
+    }
+}
+
 fn ser_py_settings<S>(settings: &Py<Settings>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -807,6 +868,44 @@ mod tests {
     }
 
     #[test]
+    fn test_settings_extras_default() {
+        assert!(Settings::default().extras.is_empty());
+    }
+
+    #[test]
+    fn test_settings_extras_merge() {
+        let mut base = Settings::default();
+        base.extras
+            .insert("key1".to_string(), "base_value".to_string());
+        base.extras
+            .insert("key2".to_string(), "base_value2".to_string());
+
+        let mut overlay_extras = HashMap::new();
+        overlay_extras.insert("key2".to_string(), "overlay_value2".to_string());
+        overlay_extras.insert("key3".to_string(), "overlay_value3".to_string());
+
+        let overlay = SettingsOverlay {
+            extras: Some(overlay_extras),
+            ..Default::default()
+        };
+
+        let merged = overlay.merge(base);
+
+        // key1 from base should remain
+        assert_eq!(merged.extras.get("key1"), Some(&"base_value".to_string()));
+        // key2 from overlay should override base
+        assert_eq!(
+            merged.extras.get("key2"),
+            Some(&"overlay_value2".to_string())
+        );
+        // key3 from overlay should be added
+        assert_eq!(
+            merged.extras.get("key3"),
+            Some(&"overlay_value3".to_string())
+        );
+    }
+
+    #[test]
     fn test_config_load_save_roundtrip() {
         Python::initialize();
         let config = test_config();
@@ -872,6 +971,101 @@ mod tests {
             assert_eq!(resolved.scroll_lines, 11); // From character override.
             assert!(!resolved.word_wrap); // From character override
             assert_eq!(resolved.command_separator, ";;"); // From global default
+        });
+    }
+
+    #[test]
+    fn test_resolve_setting_hierarchy() {
+        Python::initialize();
+        let config = test_config();
+
+        // Set up extras at different levels
+        Python::attach(|py| {
+            // Global setting
+            let mut settings = config.settings.borrow_mut(py);
+            settings
+                .extras
+                .insert("global_key".to_string(), "global_value".to_string());
+            settings
+                .extras
+                .insert("overridden_key".to_string(), "global_value".to_string());
+        });
+
+        // MUD-level setting (overrides global)
+        Python::attach(|py| {
+            let mud = config.muds.get(py, TEST_MUD_NAME).unwrap();
+            let mud = mud.borrow(py);
+            let mut settings = mud.settings.borrow_mut(py);
+            let mut extras = HashMap::new();
+            extras.insert("mud_key".to_string(), "mud_value".to_string());
+            extras.insert("overridden_key".to_string(), "mud_value".to_string());
+            settings.extras = Some(extras);
+        });
+
+        // Character-level setting (overrides MUD and global)
+        Python::attach(|py| {
+            let char = config.characters.get(py, TEST_CHAR_NAME).unwrap();
+            let char = char.borrow(py);
+            let mut settings = char.settings.borrow_mut(py);
+            let mut extras = HashMap::new();
+            extras.insert("char_key".to_string(), "char_value".to_string());
+            extras.insert("overridden_key".to_string(), "char_value".to_string());
+            settings.extras = Some(extras);
+        });
+
+        Python::attach(|py| {
+            // Test global setting
+            assert_eq!(
+                config
+                    .resolve_setting(py, TEST_CHAR_NAME, "global_key", None)
+                    .unwrap(),
+                Some("global_value".to_string())
+            );
+
+            // Test MUD setting
+            assert_eq!(
+                config
+                    .resolve_setting(py, TEST_CHAR_NAME, "mud_key", None)
+                    .unwrap(),
+                Some("mud_value".to_string())
+            );
+
+            // Test character setting
+            assert_eq!(
+                config
+                    .resolve_setting(py, TEST_CHAR_NAME, "char_key", None)
+                    .unwrap(),
+                Some("char_value".to_string())
+            );
+
+            // Test override hierarchy (character > MUD > global)
+            assert_eq!(
+                config
+                    .resolve_setting(py, TEST_CHAR_NAME, "overridden_key", None)
+                    .unwrap(),
+                Some("char_value".to_string())
+            );
+
+            // Test non-existent key with default
+            assert_eq!(
+                config
+                    .resolve_setting(
+                        py,
+                        TEST_CHAR_NAME,
+                        "nonexistent",
+                        Some("default_value".to_string())
+                    )
+                    .unwrap(),
+                Some("default_value".to_string())
+            );
+
+            // Test non-existent key without default
+            assert_eq!(
+                config
+                    .resolve_setting(py, TEST_CHAR_NAME, "nonexistent", None)
+                    .unwrap(),
+                None
+            );
         });
     }
 
@@ -1091,6 +1285,85 @@ def test_settings(config):
             let mage_settings = config.resolve_settings(py, "Mage").unwrap();
             assert_eq!(mage_settings.scroll_lines, 15); // From character override
             assert_eq!(mage_settings.command_separator, ";"); // From MUD
+        });
+    }
+
+    #[test]
+    fn test_toml_parsing_with_extras() {
+        Python::initialize();
+        let toml = r#"
+            [settings]
+            word_wrap = false
+
+            [settings.extras]
+            history_next = "down"
+            history_prev = "up"
+
+            [muds.TestMUD]
+            host = "test.mud.com"
+            port = 4000
+
+            [muds.TestMUD.settings.extras]
+            gmcp_window_resize_up = "Alt-j"
+            gmcp_window_resize_down = "Alt-k"
+
+            [characters.TestChar]
+            mud = "TestMUD"
+
+            [characters.TestChar.settings.extras]
+            history_next = "Ctrl-n"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        Python::attach(|py| config.validate(py).unwrap());
+
+        Python::attach(|py| {
+            // Test global extras
+            let settings = config.settings.borrow(py);
+            assert_eq!(
+                settings.extras.get("history_next"),
+                Some(&"down".to_string())
+            );
+            assert_eq!(settings.extras.get("history_prev"), Some(&"up".to_string()));
+
+            // Test resolve_setting with hierarchy
+            // history_prev should come from global (not overridden)
+            assert_eq!(
+                config
+                    .resolve_setting(py, "TestChar", "history_prev", None)
+                    .unwrap(),
+                Some("up".to_string())
+            );
+
+            // history_next should come from character override
+            assert_eq!(
+                config
+                    .resolve_setting(py, "TestChar", "history_next", None)
+                    .unwrap(),
+                Some("Ctrl-n".to_string())
+            );
+
+            // GMCP settings should come from MUD
+            assert_eq!(
+                config
+                    .resolve_setting(py, "TestChar", "gmcp_window_resize_up", None)
+                    .unwrap(),
+                Some("Alt-j".to_string())
+            );
+            assert_eq!(
+                config
+                    .resolve_setting(py, "TestChar", "gmcp_window_resize_down", None)
+                    .unwrap(),
+                Some("Alt-k".to_string())
+            );
+
+            // Non-existent setting with default
+            assert_eq!(
+                config
+                    .resolve_setting(py, "TestChar", "nonexistent", Some("default".to_string()))
+                    .unwrap(),
+                Some("default".to_string())
+            );
         });
     }
 

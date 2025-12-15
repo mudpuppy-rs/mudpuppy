@@ -8,10 +8,14 @@ from pup import (
     InputLine,
     Event,
     EventType,
-    Tab,
     Input,
     EchoState,
 )
+
+HISTORY_NEXT_KEY = "history_next"
+HISTORY_NEXT_DEFAULT = "down"
+HISTORY_PREV_KEY = "history_prev"
+HISTORY_PREV_DEFAULT = "up"
 
 
 class Direction(Enum):
@@ -118,8 +122,16 @@ async def create_input_history(sesh: Session):
     # Listen for session input being sent, add it to the history.
     sesh.add_event_handler(EventType.InputLine, h.sent_line)
 
-    # Set up default down/up arrow key shortcuts for navigating input history.
-    # TODO(XXX): config for bindings
+    # Resolve keybindings from config with character-specific overrides.
+    config = await pup.config()
+    next_key = config.resolve_setting(
+        sesh.character, HISTORY_NEXT_KEY, default=HISTORY_NEXT_DEFAULT
+    )
+    prev_key = config.resolve_setting(
+        sesh.character, HISTORY_PREV_KEY, default=HISTORY_PREV_DEFAULT
+    )
+
+    # Set up keyboard shortcuts for navigating input history.
     tab = await sesh.tab()
 
     def move_shortcut(direction: Direction):
@@ -128,8 +140,8 @@ async def create_input_history(sesh: Session):
 
         return handler
 
-    tab.set_shortcut("down", move_shortcut(Direction.NEXT))
-    tab.set_shortcut("up", move_shortcut(Direction.PREV))
+    tab.set_shortcut(next_key, move_shortcut(Direction.NEXT))
+    tab.set_shortcut(prev_key, move_shortcut(Direction.PREV))
 
 
 logging.debug("module loaded")
