@@ -257,18 +257,18 @@ impl Session {
 
     #[instrument(level = Level::TRACE, skip(self), fields(id=self.id, character_name=self.character))]
     pub(super) fn send_line(&mut self, line: InputLine, skip_aliases: bool) -> Result<(), Error> {
-        let cmd_separator = Python::attach(|py| {
+        let send_separator = Python::attach(|py| {
             Ok::<_, Error>(
                 self.config
                     .borrow(py)
                     .resolve_settings(py, &self.character)?
-                    .command_separator
+                    .send_separator
                     .clone(),
             )
         })?;
 
-        let lines = match line.sent.contains(&cmd_separator) {
-            true => line.split(&cmd_separator),
+        let lines = match line.sent.contains(&send_separator) {
+            true => line.split(&send_separator),
             _ => vec![line],
         };
 

@@ -185,8 +185,8 @@ settings! {
         /// Whether output should wrap at the buffer edge.
         word_wrap: bool = true,
 
-        /// Command separator for sending multiple commands in one line.
-        command_separator: String = ";;".to_string(),
+        /// Separator for sending multiple commands in one line.
+        send_separator: String = ";;".to_string(),
 
         /// Number of lines to scroll when using scroll shortcuts.
         scroll_lines: u16 = 5,
@@ -835,7 +835,7 @@ mod tests {
     fn test_settings_defaults() {
         let settings = Settings::default();
         assert!(settings.word_wrap);
-        assert_eq!(settings.command_separator, ";;");
+        assert_eq!(settings.send_separator, ";;");
         assert_eq!(settings.scroll_lines, 5);
         assert!(settings.show_input_echo);
         assert_eq!(settings.scrollback_percentage, 70);
@@ -852,7 +852,7 @@ mod tests {
         let merged = overlay.merge(Settings::default());
         assert!(!merged.word_wrap); // From overlay
         assert_eq!(merged.scroll_lines, 10); // From overlay
-        assert_eq!(merged.command_separator, ";;"); // From base
+        assert_eq!(merged.send_separator, ";;"); // From base
     }
 
     #[test]
@@ -970,7 +970,7 @@ mod tests {
             assert!(!resolved.show_input_echo); // From MUD override
             assert_eq!(resolved.scroll_lines, 11); // From character override.
             assert!(!resolved.word_wrap); // From character override
-            assert_eq!(resolved.command_separator, ";;"); // From global default
+            assert_eq!(resolved.send_separator, ";;"); // From global default
         });
     }
 
@@ -1099,7 +1099,7 @@ mod tests {
                 let mut global_settings = config.settings.borrow_mut(py);
                 global_settings.word_wrap = true;
                 global_settings.scroll_lines = 5;
-                global_settings.command_separator = ";;".to_string();
+                global_settings.send_separator = ";;".to_string();
             }
 
             let code = c"
@@ -1107,7 +1107,7 @@ def test_settings(config):
     # Read global settings
     assert config.settings.word_wrap == True
     assert config.settings.scroll_lines == 5
-    assert config.settings.command_separator == ';;'
+    assert config.settings.send_separator == ';;'
 
     # Modify global settings
     config.settings.word_wrap = False
@@ -1145,8 +1145,8 @@ def test_settings(config):
     # scrollback_percentage should be 80 (from character override)
     assert resolved.scrollback_percentage == 80
 
-    # command_separator should be ';;' (from global default, no overrides)
-    assert resolved.command_separator == ';;'
+    # send_separator should be ';;' (from global default, no overrides)
+    assert resolved.send_separator == ';;'
 
     return 'success'
 ";
@@ -1226,8 +1226,8 @@ def test_settings(config):
                 "Resolved scrollback_percentage should be 80 (from character override)"
             );
             assert_eq!(
-                resolved.command_separator, ";;",
-                "Resolved command_separator should be ';;' (from global default)"
+                resolved.send_separator, ";;",
+                "Resolved send_separator should be ';;' (from global default)"
             );
         });
     }
@@ -1245,7 +1245,7 @@ def test_settings(config):
             port = 6789
 
             [muds.DuneMUD.settings]
-            command_separator = ";"
+            send_separator = ";"
             scroll_lines = 10
 
             [characters.Warrior]
@@ -1277,14 +1277,14 @@ def test_settings(config):
             assert_eq!(warrior.borrow(py).mud, "DuneMUD");
             let warrior_settings = config.resolve_settings(py, "Warrior").unwrap();
             assert_eq!(warrior_settings.scroll_lines, 10); // From MUD
-            assert_eq!(warrior_settings.command_separator, ";"); // From MUD
+            assert_eq!(warrior_settings.send_separator, ";"); // From MUD
             assert!(!warrior_settings.word_wrap); // From global
 
             let mage = config.character(py, "Mage").unwrap();
             assert_eq!(mage.borrow(py).mud, "DuneMUD");
             let mage_settings = config.resolve_settings(py, "Mage").unwrap();
             assert_eq!(mage_settings.scroll_lines, 15); // From character override
-            assert_eq!(mage_settings.command_separator, ";"); // From MUD
+            assert_eq!(mage_settings.send_separator, ";"); // From MUD
         });
     }
 
