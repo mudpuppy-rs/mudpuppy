@@ -36,6 +36,7 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tracing::info;
 
 use crate::error::{ConfigError, Error, ErrorKind};
+use crate::session::BufferConfig;
 
 pub(super) fn reload_watcher()
 -> NotifyResult<(RecommendedWatcher, Receiver<NotifyResult<NotifyEvent>>)> {
@@ -209,6 +210,12 @@ settings! {
 
         /// Whether to echo raw received GMCP messages as debug output
         gmcp_echo: bool = false,
+
+        /// How the output buffer is configured (word wrap, etc).
+        output_buffer: BufferConfig = BufferConfig::default(),
+
+        /// How the history scrollback buffer is configured (word wrap, etc).
+        scrollback_buffer: BufferConfig = default::scrollback_buffer(),
 
         /// Free-form custom settings for use by Python scripts.
         /// Allows arbitrary string key-value pairs without requiring Rust struct changes.
@@ -761,6 +768,12 @@ impl MergeField for HashMap<String, String> {
     }
 }
 
+impl MergeField for BufferConfig {
+    fn merge_from(&mut self, overlay: &Self) {
+        self.merge_from_other(overlay);
+    }
+}
+
 fn ser_py_settings<S>(settings: &Py<Settings>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -831,9 +844,8 @@ pub static GIT_COMMIT_HASH: &str = env!("MUDPUPPY_GIT_INFO");
 
 // 🤷 https://github.com/serde-rs/serde/issues/368
 mod default {
-    use pyo3::{Py, Python};
-
-    use super::{Settings, SettingsOverlay};
+    use super::{BufferConfig, Py, Python, Settings, SettingsOverlay};
+    use crate::session::Scrollbar;
 
     pub(super) fn mouse_enabled() -> bool {
         true
@@ -845,6 +857,13 @@ mod default {
 
     pub(super) fn settings_overlay() -> Py<SettingsOverlay> {
         Python::attach(|py| Py::new(py, SettingsOverlay::default()).unwrap())
+    }
+
+    pub(super) fn scrollback_buffer() -> BufferConfig {
+        BufferConfig {
+            scrollbar: Scrollbar::Always,
+            ..BufferConfig::default()
+        }
     }
 }
 

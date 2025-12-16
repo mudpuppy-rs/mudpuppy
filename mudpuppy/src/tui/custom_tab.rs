@@ -56,8 +56,13 @@ impl CustomTab {
             };
             Python::attach(|py| {
                 let mut buffer = buffer.borrow_mut(py);
+                let buffer_config = buffer
+                    .config
+                    .as_ref()
+                    .map(|buffer_config| buffer_config.borrow(py).clone())
+                    .unwrap_or_default();
                 // TODO(XXX): filtering settings.
-                buffer::draw(f, &mut buffer, None, None, |_| true, *area)
+                buffer::draw(f, &mut buffer, None, &buffer_config, None, |_| true, *area)
             })?;
         }
         Ok(())

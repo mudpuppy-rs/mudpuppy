@@ -8,7 +8,7 @@ use ratatui::widgets::Clear;
 use tracing::{debug, error, warn};
 
 use crate::app::{AppData, TabAction};
-use crate::config::Config;
+use crate::config::{Config, Settings};
 use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::python::{self, Event};
@@ -99,10 +99,17 @@ impl Character {
             })
         };
 
+        let settings = Python::attach(|py| {
+            self.config
+                .borrow(py)
+                .resolve_settings(py, Some(&self.sesh.character))
+        })?;
+
         buffer::draw(
             f,
             &mut session.output,
             None,
+            &settings.output_buffer,
             prompt.as_ref(),
             // TODO(XXX): filtering settings.
             |item| !matches!(item, OutputItem::Prompt { .. }),
@@ -110,25 +117,10 @@ impl Character {
         )?;
 
         if session.scrollback.scroll_pos != 0 {
-            let (scrollback_percentage, vertical_margin, horizontal_margin) =
-                Python::attach(|py| {
-                    let settings = self
-                        .config
-                        .borrow(py)
-                        .resolve_settings(py, Some(&self.sesh.character))?;
-                    Ok::<_, Error>((
-                        settings.scrollback_percentage,
-                        settings.scrollback_vertical_margin,
-                        settings.scrollback_horizontal_margin,
-                    ))
-                })?;
-
             draw_scrollback(
                 f,
                 *output_section,
-                scrollback_percentage,
-                vertical_margin,
-                horizontal_margin,
+                &settings,
                 &mut session.scrollback,
                 &mut session.output,
             )?;
@@ -143,8 +135,21 @@ impl Character {
             };
             Python::attach(|py| {
                 let mut buffer = buffer.borrow_mut(py);
+                let buffer_config = buffer
+                    .config
+                    .as_ref()
+                    .map(|buffer_config| buffer_config.borrow(py).clone())
+                    .unwrap_or_default();
                 // TODO(XXX): filtering settings.
-                buffer::draw(f, &mut buffer, None, None, |_| true, *output_section)
+                buffer::draw(
+                    f,
+                    &mut buffer,
+                    None,
+                    &buffer_config,
+                    None,
+                    |_| true,
+                    *output_section,
+                )
             })?;
         }
 
@@ -335,9 +340,7 @@ async fn dispatch_command(
 fn draw_scrollback(
     f: &mut Frame,
     output_area: Rect,
-    scrollback_percentage: u16,
-    scrollback_vertical_margin: u16,
-    scrollback_horizontal_margin: u16,
+    settings: &Settings,
     scrollback: &mut Buffer,
     output: &mut Buffer,
 ) -> Result<(), Error> {
@@ -347,7 +350,7 @@ fn draw_scrollback(
     let area = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            ratatui::layout::Constraint::Percentage(scrollback_percentage),
+            ratatui::layout::Constraint::Percentage(settings.scrollback_percentage),
             ratatui::layout::Constraint::Min(1),
         ])
         .split(output_area)[0];
@@ -355,8 +358,8 @@ fn draw_scrollback(
     // Render the scrollback content and the scrollbar inside a viewport offset within the
     // overall area.
     let viewport = area.inner(Margin {
-        vertical: scrollback_vertical_margin,
-        horizontal: scrollback_horizontal_margin,
+        vertical: settings.scrollback_vertical_margin,
+        horizontal: settings.scrollback_horizontal_margin,
     });
     // Make sure to clear the viewport first - we're drawing on top of the already rendered
     // normal buffer content.
@@ -366,6 +369,7 @@ fn draw_scrollback(
         f,
         scrollback,
         Some(output),
+        &settings.scrollback_buffer,
         None,
         |_| true, // TODO(XXX): filtering
         viewport,

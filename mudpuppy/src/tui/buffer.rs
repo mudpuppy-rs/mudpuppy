@@ -13,13 +13,14 @@ use tracing::trace;
 use unicode_width::UnicodeWidthStr;
 
 use crate::error::{Error, ErrorKind};
-use crate::session::{Buffer, BufferDirection, InputLine, OutputItem, Scrollbar};
+use crate::session::{Buffer, BufferConfig, BufferDirection, InputLine, OutputItem, Scrollbar};
 use crate::tui::reflow::{LineComposer, LineTruncator, WordWrapper, WrappedLine};
 
 pub fn draw<Filter>(
     f: &mut Frame<'_>,
     buffer: &mut Buffer,
     data_buffer: Option<&mut Buffer>,
+    buffer_config: &BufferConfig,
     prompt: Option<&OutputItem>,
     filter: Filter,
     area: Rect,
@@ -39,7 +40,7 @@ where
         .as_ref()
         .unwrap_or(&buffer)
         .len()
-        .saturating_sub(area_inside_buffer_borders(buffer, area, false).height as usize);
+        .saturating_sub(area_inside_borders(buffer_config, area, false).height as usize);
     buffer.max_scroll = max_scroll;
     if buffer.scroll_pos > max_scroll {
         trace!("clamping scroll to max_scroll: {}", max_scroll);
@@ -48,12 +49,12 @@ where
 
     // Draw a framed block with a border (if borders are configured).
     f.render_widget(
-        Paragraph::default().block(Block::default().borders(buffer_borders(buffer))),
+        Paragraph::default().block(Block::default().borders(buffer_config.into())),
         area,
     );
 
     let is_scrolled = buffer.scroll_pos > 0;
-    let draw_scrollbar = match buffer.scrollbar {
+    let draw_scrollbar = match buffer_config.scrollbar {
         Scrollbar::IfScrolled => is_scrolled,
         Scrollbar::Never => false,
         Scrollbar::Always => true,
@@ -63,9 +64,10 @@ where
         f,
         buffer,
         data_buffer,
+        buffer_config,
         prompt,
         filter,
-        area_inside_buffer_borders(buffer, area, draw_scrollbar),
+        area_inside_borders(buffer_config, area, draw_scrollbar),
     )?;
 
     if draw_scrollbar {
@@ -81,7 +83,7 @@ where
 
         f.render_stateful_widget(
             scrollbar,
-            area_inside_buffer_top_borders(buffer, area),
+            area_inside_top_borders(buffer_config, area),
             &mut scrollbar_state,
         );
     }
@@ -89,60 +91,12 @@ where
     Ok(())
 }
 
-fn area_inside_buffer_borders(buff: &Buffer, mut area: Rect, with_scrollbar: bool) -> Rect {
-    if buff.border_top {
-        area.height = area.height.saturating_sub(1);
-        area.y = area.y.saturating_add(1);
-    }
-    if buff.border_bottom {
-        area.height = area.height.saturating_sub(1);
-    }
-    if buff.border_left {
-        area.width = area.width.saturating_sub(1);
-        area.x = area.x.saturating_add(1);
-    }
-    if buff.border_right {
-        area.width = area.width.saturating_sub(1);
-    }
-    if with_scrollbar {
-        area.width = area.width.saturating_sub(1);
-    }
-    area
-}
-
-fn area_inside_buffer_top_borders(buff: &Buffer, mut area: Rect) -> Rect {
-    if buff.border_top {
-        area.height = area.height.saturating_sub(1);
-        area.y = area.y.saturating_add(1);
-    }
-    if buff.border_bottom {
-        area.height = area.height.saturating_sub(1);
-    }
-    area
-}
-
-fn buffer_borders(buff: &Buffer) -> Borders {
-    let mut borders = Borders::empty();
-    if buff.border_top {
-        borders |= Borders::TOP;
-    }
-    if buff.border_bottom {
-        borders |= Borders::BOTTOM;
-    }
-    if buff.border_left {
-        borders |= Borders::LEFT;
-    }
-    if buff.border_right {
-        borders |= Borders::RIGHT;
-    }
-    borders
-}
-
 // A hacked up combination of `Paragraph::render_paragraph` and `Paragraph::render_text`.
 fn render_visible<Filter>(
     f: &mut Frame<'_>,
     buffer: &mut Buffer,
     data_buffer: Option<&mut Buffer>,
+    buffer_config: &BufferConfig,
     prompt: Option<&OutputItem>,
     filter: Filter,
     area: Rect,
@@ -151,8 +105,8 @@ where
     Filter: Fn(&&OutputItem) -> bool,
 {
     let scroll_pos = buffer.scroll_pos;
-    let direction = buffer.direction;
-    let line_wrap = buffer.line_wrap;
+    let direction = buffer_config.direction;
+    let line_wrap = buffer_config.line_wrap;
 
     let items =
         HeldPromptIterator::new(data_buffer.unwrap_or(buffer).take_received().iter(), prompt);
@@ -504,5 +458,56 @@ where
         // The length of the iterator is the length of the data iterator plus one if
         // there is a held item.
         self.data_iter.len() + usize::from(self.held_prompt.is_some())
+    }
+}
+
+fn area_inside_borders(buffer_config: &BufferConfig, mut area: Rect, with_scrollbar: bool) -> Rect {
+    if buffer_config.border_top {
+        area.height = area.height.saturating_sub(1);
+        area.y = area.y.saturating_add(1);
+    }
+    if buffer_config.border_bottom {
+        area.height = area.height.saturating_sub(1);
+    }
+    if buffer_config.border_left {
+        area.width = area.width.saturating_sub(1);
+        area.x = area.x.saturating_add(1);
+    }
+    if buffer_config.border_right {
+        area.width = area.width.saturating_sub(1);
+    }
+    if with_scrollbar {
+        area.width = area.width.saturating_sub(1);
+    }
+    area
+}
+
+fn area_inside_top_borders(buffer_config: &BufferConfig, mut area: Rect) -> Rect {
+    if buffer_config.border_top {
+        area.height = area.height.saturating_sub(1);
+        area.y = area.y.saturating_add(1);
+    }
+    if buffer_config.border_bottom {
+        area.height = area.height.saturating_sub(1);
+    }
+    area
+}
+
+impl From<&BufferConfig> for Borders {
+    fn from(buff: &BufferConfig) -> Borders {
+        let mut borders = Borders::empty();
+        if buff.border_top {
+            borders |= Borders::TOP;
+        }
+        if buff.border_bottom {
+            borders |= Borders::BOTTOM;
+        }
+        if buff.border_left {
+            borders |= Borders::LEFT;
+        }
+        if buff.border_right {
+            borders |= Borders::RIGHT;
+        }
+        borders
     }
 }

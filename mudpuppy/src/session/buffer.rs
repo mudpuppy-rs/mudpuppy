@@ -2,7 +2,8 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use pyo3::{pyclass, pymethods};
+use pyo3::{Py, Python, pyclass, pymethods};
+use serde::{Deserialize, Serialize};
 use strum::Display;
 use tracing::trace;
 
@@ -12,31 +13,12 @@ use crate::session::{InputLine, MudLine};
 
 #[derive(Debug, Clone)]
 #[pyclass]
-#[allow(clippy::struct_excessive_bools)] // TODO(XXX): Consider.
 pub(crate) struct Buffer {
     #[pyo3(get, set)]
     pub(crate) name: String,
 
     #[pyo3(get, set)]
-    pub(crate) line_wrap: bool,
-
-    #[pyo3(get, set)]
-    pub(crate) border_top: bool,
-
-    #[pyo3(get, set)]
-    pub(crate) border_bottom: bool,
-
-    #[pyo3(get, set)]
-    pub(crate) border_left: bool,
-
-    #[pyo3(get, set)]
-    pub(crate) border_right: bool,
-
-    #[pyo3(get, set)]
-    pub(crate) direction: BufferDirection,
-
-    #[pyo3(get, set)]
-    pub(crate) scrollbar: Scrollbar,
+    pub(crate) config: Option<Py<BufferConfig>>,
 
     #[pyo3(get)]
     pub(crate) scroll_pos: usize,
@@ -51,6 +33,26 @@ pub(crate) struct Buffer {
 }
 
 impl Buffer {
+    /// Create a new Buffer with no Py<BufferConfig>
+    ///
+    /// This is useful for internal buffers where we create buffer configuration
+    /// on the fly from the Py<Config>. This constructor is crate internal, while
+    /// the `py_new()` constructor in the `pymethods` impl block is exposed to
+    /// Python user code for creating extra buffers.
+    pub(crate) fn new(name: String) -> Result<Self, Error> {
+        if name.is_empty() {
+            return Err(ErrorKind::NameRequired.into());
+        }
+        Ok(Self {
+            name,
+            config: None,
+            scroll_pos: 0,
+            max_scroll: 0,
+            dimensions: (0, 0),
+            data: TrackedOutput::default(),
+        })
+    }
+
     pub(crate) fn take_received(&mut self) -> &VecDeque<OutputItem> {
         self.data.take_received()
     }
@@ -58,25 +60,15 @@ impl Buffer {
 
 #[pymethods]
 impl Buffer {
+    /// Create a new Buffer with a default Py<BufferConfig>
+    ///
+    /// This allows Python scripts to create a buffer and have the config accessible
+    /// as mutable state.
     #[new]
-    pub(crate) fn new(name: String) -> Result<Self, Error> {
-        if name.is_empty() {
-            return Err(ErrorKind::NameRequired.into());
-        }
-        Ok(Self {
-            name,
-            line_wrap: false,
-            border_top: false,
-            border_bottom: false,
-            border_left: false,
-            border_right: false,
-            direction: BufferDirection::default(),
-            scrollbar: Scrollbar::default(),
-            scroll_pos: 0,
-            max_scroll: 0,
-            dimensions: (0, 0),
-            data: TrackedOutput::default(),
-        })
+    fn py_new(name: String) -> Result<Self, Error> {
+        let mut buffer = Self::new(name)?;
+        buffer.config = Some(Python::attach(|py| Py::new(py, BufferConfig::default()))?);
+        Ok(buffer)
     }
 
     pub(crate) fn new_data(&self) -> usize {
@@ -149,8 +141,84 @@ impl Buffer {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[pyclass]
+#[serde(default, deny_unknown_fields)]
+#[expect(clippy::unsafe_derive_deserialize, clippy::struct_excessive_bools)]
+pub struct BufferConfig {
+    #[pyo3(get, set)]
+    pub line_wrap: bool,
+
+    #[pyo3(get, set)]
+    pub border_top: bool,
+
+    #[pyo3(get, set)]
+    pub border_bottom: bool,
+
+    #[pyo3(get, set)]
+    pub border_left: bool,
+
+    #[pyo3(get, set)]
+    pub border_right: bool,
+
+    #[pyo3(get, set)]
+    pub direction: BufferDirection,
+
+    #[pyo3(get, set)]
+    pub scrollbar: Scrollbar,
+}
+
+impl BufferConfig {
+    pub(crate) fn merge_from_other(&mut self, other: &BufferConfig) {
+        let BufferConfig {
+            line_wrap,
+            border_top,
+            border_bottom,
+            border_left,
+            border_right,
+            direction,
+            scrollbar,
+        } = other;
+
+        self.line_wrap = *line_wrap;
+        self.border_top = *border_top;
+        self.border_bottom = *border_bottom;
+        self.border_left = *border_left;
+        self.border_right = *border_right;
+        self.direction = *direction;
+        self.scrollbar = *scrollbar;
+    }
+}
+
+#[pymethods]
+impl BufferConfig {
+    fn __str__(&self) -> String {
+        // TODO(XXX): nicer str format
+        format!("{self:?}")
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+impl Default for BufferConfig {
+    fn default() -> Self {
+        Self {
+            line_wrap: true,
+            border_top: true,
+            border_bottom: true,
+            border_left: true,
+            border_right: true,
+            direction: BufferDirection::default(),
+            scrollbar: Scrollbar::default(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[pyclass(eq, eq_int)]
+#[expect(clippy::unsafe_derive_deserialize)]
 pub enum BufferDirection {
     TopToBottom,
     #[default]
@@ -286,9 +354,10 @@ impl From<InputLine> for OutputItem {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Display)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Display, Serialize, Deserialize)]
 #[pyclass]
-pub(crate) enum Scrollbar {
+#[expect(clippy::unsafe_derive_deserialize)]
+pub enum Scrollbar {
     #[default]
     IfScrolled,
     Never,

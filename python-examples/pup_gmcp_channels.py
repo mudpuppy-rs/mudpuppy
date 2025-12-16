@@ -18,6 +18,7 @@ from pup import (
     MudLine,
     Tab,
     KeyEvent,
+    Scrollbar,
 )
 
 GMCP_WINDOW_RESIZE_UP_KEY = "gmcp_window_resize_up"
@@ -64,12 +65,8 @@ class GmcpChannelWindow:
         # Create a buffer in the tab to put channel messages into. Using the same name
         # as the layout section we created.
         buffer = Buffer("Channels")
-        buffer.line_wrap = True
-        buffer = Buffer("Channels")
-        buffer.line_wrap = True
-        buffer.border_bottom = True
-        buffer.border_left = True
-        buffer.border_right = True
+        buffer.config.border_top = False
+        buffer.config.scrollbar = Scrollbar.Always
         tab.add_buffer(buffer)
         self.logger.debug(f"{self.sesh}: added buffer: {buffer}")
         self.buffer = buffer
