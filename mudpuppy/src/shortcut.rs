@@ -1,15 +1,19 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::ops::DerefMut;
 
 use pyo3::types::PyAnyMethods;
 use pyo3::{Py, PyAny, Python, pyclass, pymethods};
 use strum::Display;
-use tracing::error;
+use tracing::{debug, error};
 
+use crate::app::AppData;
+use crate::config::{Settings, SettingsOverlay};
 use crate::error::Error;
 use crate::keyboard::KeyEvent;
 use crate::python;
 use crate::python::{label_for_coroutine, require_coroutine};
+use crate::session::OutputItem;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
 #[pyclass(frozen, eq, hash)]
@@ -116,7 +120,67 @@ pub(crate) enum ScrollShortcut {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Display)]
 #[pyclass(frozen, eq, hash)]
 pub(crate) enum SettingsShortcut {
+    ToggleLineWrap,
     ToggleGmcpDebug,
+}
+
+impl SettingsShortcut {
+    pub(crate) fn execute(&self, app: &mut AppData, character: &str) {
+        let result = Python::attach(|py| {
+            let config = app.config.borrow(py);
+            let current = config.resolve_settings(py, Some(character))?;
+
+            let character = config.character(py, character).unwrap();
+            let character = character.borrow_mut(py);
+            let next = character.settings.borrow_mut(py);
+
+            Ok::<_, Error>(self.apply_shortcut(current, next))
+        });
+
+        let output = &mut app.active_session_mut().unwrap().output;
+        match result {
+            Ok(message) => output.add(OutputItem::CommandResult {
+                error: false,
+                message,
+            }),
+            Err(err) => output.add(OutputItem::CommandResult {
+                error: true,
+                message: format!("shortcut {self} failed: {err}"),
+            }),
+        }
+    }
+
+    fn apply_shortcut(
+        &self,
+        current: Settings,
+        mut next: impl DerefMut<Target = SettingsOverlay>,
+    ) -> String {
+        match self {
+            Self::ToggleLineWrap => {
+                let (mut output_config, mut scrollback_config) =
+                    (current.output_buffer, current.scrollback_buffer);
+                let new_setting = !output_config.line_wrap;
+                output_config.line_wrap = new_setting;
+                scrollback_config.line_wrap = new_setting; // Toggle in-sync w/ output.
+                debug!(line_wrap = new_setting, "setting changed");
+                next.output_buffer = Some(output_config);
+                next.scrollback_buffer = Some(scrollback_config);
+                format!(
+                    "Line wrap {}",
+                    if new_setting { "enabled" } else { "disabled" }
+                )
+            }
+            Self::ToggleGmcpDebug => {
+                let new_setting = !current.gmcp_echo;
+                debug!(gmcp_echo = new_setting, "setting changed");
+                next.gmcp_echo = Some(new_setting);
+                format!(
+                    "GMCP echo {}",
+                    if new_setting { "enabled" } else { "disabled" }
+                )
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

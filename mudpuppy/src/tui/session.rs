@@ -186,33 +186,8 @@ impl Character {
                 );
                 return Ok(None);
             }
-            Shortcut::Settings(SettingsShortcut::ToggleGmcpDebug) => {
-                // TODO(XXX): Clunky!
-                let new_setting = Python::attach(|py| {
-                    let config = app.config.borrow(py);
-                    let current = config
-                        .resolve_settings(py, Some(&self.sesh.character))?
-                        .gmcp_echo;
-
-                    let character = app
-                        .config
-                        .borrow(py)
-                        .character(py, &self.sesh.character)
-                        .unwrap();
-                    let character = character.borrow_mut(py);
-                    let mut settings = character.settings.borrow_mut(py);
-                    settings.gmcp_echo = Some(!current);
-                    Ok::<_, Error>(!current)
-                })?;
-                debug!(gmcp_echo = new_setting, "setting changed");
-                let session = app.active_session_mut().unwrap();
-                session.output.add(OutputItem::CommandResult {
-                    error: false,
-                    message: format!(
-                        "GMCP debug echo {}",
-                        if new_setting { "enabled" } else { "disabled" }
-                    ),
-                });
+            Shortcut::Settings(shortcut) => {
+                shortcut.execute(app, &self.sesh.character);
                 return Ok(None);
             }
             _ => return Ok(None),
@@ -511,10 +486,14 @@ pub(crate) fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
             KeyEvent::new(KeyModifiers::SHIFT, KeyCode::End),
             ScrollShortcut::Bottom.into(),
         ),
-        // F1 -> Toggle GMCP debug
-        // TODO(XXX): Change this shortcut's keybinding!
+        // F1 -> Toggle line wrap
         (
             KeyEvent::new(KeyModifiers::NONE, KeyCode::F(1)),
+            SettingsShortcut::ToggleLineWrap.into(),
+        ),
+        // F2 -> Toggle GMCP debug
+        (
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::F(2)),
             SettingsShortcut::ToggleGmcpDebug.into(),
         ),
     ])
