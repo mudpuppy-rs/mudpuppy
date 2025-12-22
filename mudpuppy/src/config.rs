@@ -193,6 +193,12 @@ settings! {
         /// Prefix for executing commands.
         command_prefix: String = "/".to_string(),
 
+        /// Whether to always hold the last detected prompt at the bottom of the output buffer.
+        hold_prompt: bool = true,
+
+        /// Whether to display user's own input in the output buffer.
+        echo_input: bool = true,
+
         /// Number of lines to scroll when using scroll shortcuts.
         scroll_lines: u16 = 5,
 

@@ -60,6 +60,12 @@ impl Character {
         f: &mut Frame<'_>,
         sections: &HashMap<String, Rect>,
     ) -> Result<(), Error> {
+        let settings = Python::attach(|py| {
+            self.config
+                .borrow(py)
+                .resolve_settings(py, Some(&self.sesh.character))
+        })?;
+
         let session = app.session_mut(self.sesh.id)?;
 
         // Safety: we unconditionally create this section in layout init.
@@ -90,8 +96,7 @@ impl Character {
                 .scroll_up(u16::try_from(new_data).unwrap_or(u16::MAX));
         }
 
-        // TODO(XXX): held prompt setting.
-        let prompt = if session.prompt.content().is_empty() {
+        let prompt = if session.prompt.content().is_empty() || !settings.hold_prompt {
             None
         } else {
             Some(OutputItem::HeldPrompt {
@@ -99,20 +104,13 @@ impl Character {
             })
         };
 
-        let settings = Python::attach(|py| {
-            self.config
-                .borrow(py)
-                .resolve_settings(py, Some(&self.sesh.character))
-        })?;
-
         buffer::draw(
             f,
             &mut session.output,
             None,
             &settings.output_buffer,
             prompt.as_ref(),
-            // TODO(XXX): filtering settings.
-            |item| !matches!(item, OutputItem::Prompt { .. }),
+            |item| output_item_filter(&settings, item),
             *output_section,
         )?;
 
@@ -140,14 +138,13 @@ impl Character {
                     .as_ref()
                     .map(|buffer_config| buffer_config.borrow(py).clone())
                     .unwrap_or_default();
-                // TODO(XXX): filtering settings.
                 buffer::draw(
                     f,
                     &mut buffer,
                     None,
                     &buffer_config,
                     None,
-                    |_| true,
+                    |_| true, // Extra buffers display all of their content.
                     *output_section,
                 )
             })?;
@@ -161,6 +158,12 @@ impl Character {
         app: &mut AppData,
         shortcut: &Shortcut,
     ) -> Result<Option<TabAction>, Error> {
+        let settings = Python::attach(|py| {
+            self.config
+                .borrow(py)
+                .resolve_settings(py, Some(&self.sesh.character))
+        })?;
+
         match shortcut {
             Shortcut::SessionInput(InputShortcut::Send) => {}
             Shortcut::SessionInput(shortcut) => {
@@ -171,18 +174,10 @@ impl Character {
                 });
             }
             Shortcut::Scroll(shortcut) => {
-                let scroll_lines = Python::attach(|py| {
-                    Ok::<_, Error>(
-                        self.config
-                            .borrow(py)
-                            .resolve_settings(py, Some(&self.sesh.character))?
-                            .scroll_lines,
-                    )
-                })?;
                 scroll_shortcut(
                     &mut app.session_mut(self.sesh.id)?.scrollback,
                     shortcut,
-                    scroll_lines,
+                    settings.scroll_lines,
                 );
                 return Ok(None);
             }
@@ -199,19 +194,8 @@ impl Character {
             session.input.borrow_mut(py).pop().unwrap_or_default()
         });
 
-        // Resolve the configured command prefix
-        let command_prefix = Python::attach(|py| {
-            Ok::<_, Error>(
-                self.config
-                    .borrow(py)
-                    .resolve_settings(py, Some(&self.sesh.character))?
-                    .command_prefix
-                    .clone(),
-            )
-        })?;
-
         // If the input line has the command prefix, dispatch the input line as a command.
-        if let Some(cmd_name) = input.sent.strip_prefix(&command_prefix) {
+        if let Some(cmd_name) = input.sent.strip_prefix(&settings.command_prefix) {
             return dispatch_command(app, &input, cmd_name).await;
         }
 
@@ -238,6 +222,15 @@ impl Character {
             input.key_event(key_event);
             Ok(None)
         })
+    }
+}
+
+fn output_item_filter(settings: &Settings, item: &OutputItem) -> bool {
+    match item {
+        OutputItem::Prompt { .. } if settings.hold_prompt => false,
+        OutputItem::HeldPrompt { .. } if !settings.hold_prompt => false,
+        OutputItem::Input { .. } if !settings.echo_input => false,
+        _ => true,
     }
 }
 
@@ -346,7 +339,7 @@ fn draw_scrollback(
         Some(output),
         &settings.scrollback_buffer,
         None,
-        |_| true, // TODO(XXX): filtering
+        |item| output_item_filter(settings, item),
         viewport,
     )
 }
