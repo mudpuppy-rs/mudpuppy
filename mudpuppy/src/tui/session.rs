@@ -181,7 +181,7 @@ impl Character {
                 );
                 return Ok(None);
             }
-            Shortcut::Settings(shortcut) => {
+            Shortcut::ToggleSetting(shortcut) => {
                 shortcut.execute(app, &self.sesh.character);
                 return Ok(None);
             }
@@ -482,12 +482,17 @@ pub(crate) fn default_shortcuts() -> HashMap<KeyEvent, Shortcut> {
         // F1 -> Toggle line wrap
         (
             KeyEvent::new(KeyModifiers::NONE, KeyCode::F(1)),
-            SettingsShortcut::ToggleLineWrap.into(),
+            SettingsShortcut::LineWrap.into(),
         ),
-        // F2 -> Toggle GMCP debug
+        // F2 -> Toggle echo input
         (
             KeyEvent::new(KeyModifiers::NONE, KeyCode::F(2)),
-            SettingsShortcut::ToggleGmcpDebug.into(),
+            SettingsShortcut::EchoInput.into(),
+        ),
+        // F3 -> Toggle GMCP debug
+        (
+            KeyEvent::new(KeyModifiers::NONE, KeyCode::F(3)),
+            SettingsShortcut::GmcpDebug.into(),
         ),
     ])
 }
