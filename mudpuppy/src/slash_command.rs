@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pyo3::Python;
 
-use crate::app::{AppData, TabAction};
+use crate::app::{AppData, QuitStatus, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::session::OutputItem;
 use crate::shortcut::TabShortcut;
@@ -51,7 +51,14 @@ impl SlashCommand for QuitCommand {
     }
 
     async fn execute(&self, app: &mut AppData, _line: String) -> Result<Option<TabAction>, Error> {
-        app.should_quit = true;
+        app.should_quit = if matches!(app.should_quit, QuitStatus::Requested { .. }) {
+            QuitStatus::Confirmed
+        } else {
+            QuitStatus::Requested {
+                expires_at: QuitStatus::default_expires(),
+            }
+        };
+
         if let Some(active_session) = app.active_session_mut() {
             active_session.output.add(OutputItem::CommandResult {
                 error: false,

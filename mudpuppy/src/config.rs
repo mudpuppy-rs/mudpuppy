@@ -241,6 +241,11 @@ pub struct Config {
     #[pyo3(get, set)]
     pub mouse_enabled: bool,
 
+    /// Whether to confirm the user's intent before quitting.
+    #[serde(default = "default::confirm_quit")]
+    #[pyo3(get, set)]
+    pub confirm_quit: bool,
+
     /// Named MUD definitions that can be referenced by characters.
     #[serde(default)]
     pub muds: PyMap<Mud>,
@@ -436,6 +441,7 @@ impl PartialEq for Config {
     fn eq(&self, other: &Self) -> bool {
         let Self {
             mouse_enabled,
+            confirm_quit,
             muds,
             characters,
             modules,
@@ -462,6 +468,7 @@ impl PartialEq for Config {
             Python::attach(|py| *settings.borrow(py) == *other.settings.borrow(py));
 
         *mouse_enabled == other.mouse_enabled
+            && *confirm_quit == other.confirm_quit
             && muds == other_muds
             && characters == other_characters
             && modules == &other.modules
@@ -854,6 +861,10 @@ mod default {
     use crate::session::Scrollbar;
 
     pub(super) fn mouse_enabled() -> bool {
+        true
+    }
+
+    pub(super) fn confirm_quit() -> bool {
         true
     }
 
@@ -1434,6 +1445,7 @@ def test_settings(config):
 
         Python::attach(|py| Config {
             mouse_enabled: true,
+            confirm_quit: true,
             muds,
             characters,
             modules: vec![],

@@ -3,16 +3,17 @@ use std::fmt::Debug;
 
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
-use ratatui::layout::Constraint::{Fill, Length};
-use ratatui::layout::{Layout, Rect};
+use ratatui::layout::Constraint::{Fill, Length, Max};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Tabs};
+use ratatui::text::{Line, Text};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs};
+use tracing::info;
 
-use crate::app::{AppData, TabAction};
+use crate::app::{AppData, QuitStatus, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
-use crate::keyboard::KeyEvent;
+use crate::keyboard::{KeyCode, KeyEvent};
 use crate::shortcut::Shortcut;
 use crate::tui::Section;
 use crate::{python, tui};
@@ -64,7 +65,38 @@ impl Chrome {
             tab_bar,
         );
 
-        self.active_tab_mut().render(app, f, tab_content)
+        self.active_tab_mut().render(app, f, tab_content)?;
+
+        if matches!(app.should_quit, QuitStatus::Requested { .. }) {
+            let popup_area = centered_rect(tab_content, 50, 25);
+            let [msg_area, help_area] = Layout::vertical([Max(2), Max(2)]).areas(popup_area);
+
+            f.render_widget(Clear, msg_area);
+            f.render_widget(Clear, help_area);
+
+            f.render_widget(
+                Paragraph::new::<Text>("Are you sure you want to quit?".to_owned().into()).block(
+                    Block::default()
+                        .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
+                        .border_style(Color::Yellow)
+                        .title("Confirm exit"),
+                ),
+                msg_area,
+            );
+
+            let help_text: Text = "Press 'q' to quit or any other key to continue"
+                .to_owned()
+                .into();
+
+            let help_paragraph = Paragraph::new(help_text).block(
+                Block::default()
+                    .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                    .border_style(Color::Yellow),
+            );
+            f.render_widget(help_paragraph, help_area);
+        }
+
+        Ok(())
     }
 
     pub(crate) fn active_tab(&self) -> &Tab {
@@ -350,6 +382,19 @@ impl Tab {
         app: &mut AppData,
         key_event: &KeyEvent,
     ) -> Result<Option<TabAction>, Error> {
+        if matches!(app.should_quit, QuitStatus::Requested { .. }) {
+            if key_event.code == KeyCode::Char('q') {
+                app.should_quit = QuitStatus::Confirmed;
+            } else {
+                info!(
+                    ?key_event,
+                    "cancelling quit status for non-confirm key press"
+                );
+                app.should_quit = QuitStatus::default();
+            }
+            return Ok(None);
+        }
+
         match &mut self.kind {
             TabKind::Menu(_) | TabKind::Custom(_) => Ok(None),
             TabKind::Session(session) => session.key_event(app, key_event),
@@ -390,4 +435,23 @@ impl Tab {
             .map(|(key_event, shortcut)| (*key_event, shortcut.to_string()))
             .collect()
     }
+}
+
+fn centered_rect(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    fn layout_split(area: Rect, dir: Direction, percent: u16) -> Rect {
+        Layout::default()
+            .direction(dir)
+            .constraints([
+                Constraint::Percentage((100 - percent) / 2),
+                Constraint::Percentage(percent),
+                Constraint::Percentage((100 - percent) / 2),
+            ])
+            .split(area)[1]
+    }
+
+    layout_split(
+        layout_split(area, Direction::Vertical, percent_y),
+        Direction::Horizontal,
+        percent_x,
+    )
 }

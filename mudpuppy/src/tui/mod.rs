@@ -7,11 +7,6 @@ mod layout;
 mod reflow;
 mod session;
 
-use std::fmt::Debug;
-use std::io::{IsTerminal, Stdout, stdout};
-use std::num::NonZeroUsize;
-use std::panic;
-
 use crossterm::ExecutableCommand;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode as CrosstermKeyCode,
@@ -23,11 +18,17 @@ use pyo3::{Py, Python};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Layout;
+use std::fmt::Debug;
+use std::io::{IsTerminal, Stdout, stdout};
+use std::num::NonZeroUsize;
+use std::ops::Add;
+use std::panic;
+use std::time::{Duration, Instant};
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
 
-use crate::app::{AppData, TabAction};
+use crate::app::{AppData, QuitStatus, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
@@ -157,7 +158,9 @@ impl Tui {
     ) -> Result<Option<TabAction>, Error> {
         Ok(match shortcut {
             Shortcut::Quit {} => {
-                app.should_quit = true;
+                app.should_quit = QuitStatus::Requested {
+                    expires_at: Instant::now().add(Duration::from_secs(15)),
+                };
                 None
             }
             Shortcut::Python(shortcut) => {
@@ -286,7 +289,9 @@ impl Tui {
                     }
                 };
                 let (_, Some(removed)) = self.chrome.close_tab(id) else {
-                    app.should_quit = true;
+                    app.should_quit = QuitStatus::Requested {
+                        expires_at: QuitStatus::default_expires(),
+                    };
                     return Ok(());
                 };
                 if let Some(session) = removed.session().map(|s| s.id) {

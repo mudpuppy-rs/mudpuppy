@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::ops::Add;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use notify::event::Event as NotifyEvent;
@@ -76,9 +78,22 @@ impl App {
         ));
 
         let result = loop {
-            if self.data.should_quit {
-                info!("quit request processed");
-                break Ok(());
+            let confirm_quit = Python::attach(|py| self.data.config.borrow(py).confirm_quit);
+            let now = Instant::now();
+            match self.data.should_quit {
+                QuitStatus::Requested { .. } if !confirm_quit => {
+                    info!("quitting. Goodbye!");
+                    break Ok(());
+                }
+                QuitStatus::Requested { expires_at } if expires_at < now => {
+                    info!("quit request timed out.");
+                    self.data.should_quit = QuitStatus::default();
+                }
+                QuitStatus::Confirmed => {
+                    info!("quit request confirmed. Goodbye!");
+                    break Ok(());
+                }
+                QuitStatus::Requested { .. } | QuitStatus::None => {}
             }
             select! {
                 // User python module setup has completed
@@ -147,7 +162,7 @@ impl App {
 
 #[derive(Debug)]
 pub(super) struct AppData {
-    pub(super) should_quit: bool,
+    pub(super) should_quit: QuitStatus,
     pub(super) args: cli::Args,
     pub(super) config: Py<Config>,
     pub(super) active_session: Option<u32>,
@@ -162,7 +177,7 @@ pub(super) struct AppData {
 impl AppData {
     fn new(args: cli::Args, config: &Py<Config>) -> Self {
         Self {
-            should_quit: false,
+            should_quit: QuitStatus::default(),
             args,
             config: Python::attach(|py| config.clone_ref(py)),
             active_session: None,
@@ -465,6 +480,22 @@ pub(crate) enum TabAction {
 impl From<TabShortcut> for TabAction {
     fn from(tab_shortcut: TabShortcut) -> Self {
         Self::Shortcut(tab_shortcut)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Display)]
+pub(crate) enum QuitStatus {
+    #[default]
+    None,
+    Requested {
+        expires_at: Instant,
+    },
+    Confirmed,
+}
+
+impl QuitStatus {
+    pub(crate) fn default_expires() -> Instant {
+        Instant::now().add(Duration::from_secs(25))
     }
 }
 
