@@ -60,14 +60,14 @@ impl App {
 
         python::init_python_env(&self.args).await?;
 
-        // Spawn a task to run the Python user setup code.
         let modules = Python::attach(|py| self.data.config.borrow(py).modules.clone());
         debug!(?modules, "loading user setup for global modules");
-        let mut setup_task = tokio::spawn(async move {
-            if let Err(e) = python::run_user_setup(&modules).await {
-                error!("python user setup failed: {e}");
-            }
-        });
+        if let Err(e) = python::run_user_setup(&modules).await {
+            error!("python user setup failed: {e}");
+        }
+        info!("Python setup completed successfully");
+
+        self.data.auto_connect(&mut self.frontend)?;
 
         let result = loop {
             let confirm_quit = Python::attach(|py| self.data.config.borrow(py).confirm_quit);
@@ -88,16 +88,6 @@ impl App {
                 QuitStatus::Requested { .. } | QuitStatus::None => {}
             }
             select! {
-                // User python module setup has completed
-                setup_result = &mut setup_task, if !setup_task.is_finished() => {
-                    match setup_result {
-                        Ok(()) => {
-                            info!("Python setup completed successfully");
-                            self.data.auto_connect(&mut self.frontend)?;
-                        }
-                        Err(e) => error!("Python setup task panicked: {e}"),
-                    }
-                }
                 // Configuration reload
                 Some(event) = config_event_rx.next() => {
                     if let Ok(event) = event {
