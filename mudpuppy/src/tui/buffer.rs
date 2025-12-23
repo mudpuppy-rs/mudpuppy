@@ -71,15 +71,24 @@ where
     )?;
 
     if draw_scrollbar {
-        // Create a scrollbar and position its state.
         let scrollbar = ScrollbarWidget::default()
             .orientation(ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
+
+        // When Scrollbar::Always is set, ensure we have a non-zero content size for the
+        // scrollbar widget, otherwise it won't render. Use the viewport height so the thumb
+        // fills the entire track when there's no scrollable content.
+        let scrollbar_content_size = if buffer.max_scroll == 0 {
+            area_inside_borders(buffer_config, area, draw_scrollbar).height as usize
+        } else {
+            buffer.max_scroll
+        };
         // NB: imprecise - uses unwrapped len.
         let scrollbar_position = buffer.max_scroll - buffer.scroll_pos;
+
         let mut scrollbar_state =
-            ScrollbarState::new(buffer.max_scroll).position(scrollbar_position);
+            ScrollbarState::new(scrollbar_content_size).position(scrollbar_position);
 
         f.render_stateful_widget(
             scrollbar,
