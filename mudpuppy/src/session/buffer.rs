@@ -33,10 +33,10 @@ pub(crate) struct Buffer {
 }
 
 impl Buffer {
-    /// Create a new Buffer with no Py<BufferConfig>
+    /// Create a new Buffer with no `Py<BufferConfig>`
     ///
     /// This is useful for internal buffers where we create buffer configuration
-    /// on the fly from the Py<Config>. This constructor is crate internal, while
+    /// on the fly from the `Py<Config>`. This constructor is crate internal, while
     /// the `py_new()` constructor in the `pymethods` impl block is exposed to
     /// Python user code for creating extra buffers.
     pub(crate) fn new(name: String) -> Result<Self, Error> {
@@ -60,7 +60,7 @@ impl Buffer {
 
 #[pymethods]
 impl Buffer {
-    /// Create a new Buffer with a default Py<BufferConfig>
+    /// Create a new Buffer with a default `Py<BufferConfig>`
     ///
     /// This allows Python scripts to create a buffer and have the config accessible
     /// as mutable state.
