@@ -21,6 +21,10 @@ from pup import (
     Scrollbar,
 )
 
+GMCP_WINDOW_SCROLL_UP_KEY = "gmcp_window_scroll_up"
+GMCP_WINDOW_SCROLL_UP_DEFAULT = "Shift-PageUp"
+GMCP_WINDOW_SCROLL_DOWN_KEY = "gmcp_window_scroll_down"
+GMCP_WINDOW_SCROLL_DOWN_DEFAULT = "Shift-PageDown"
 GMCP_WINDOW_RESIZE_UP_KEY = "gmcp_window_resize_up"
 GMCP_WINDOW_RESIZE_UP_DEFAULT = "Alt-j"
 GMCP_WINDOW_RESIZE_DOWN_KEY = "gmcp_window_resize_down"
@@ -109,6 +113,16 @@ class GmcpChannelWindow:
 
         # Resolve keybindings from config with character-specific overrides.
         config = await pup.config()
+        scroll_up_key = config.resolve_extra_setting(
+            sesh.character,
+            GMCP_WINDOW_SCROLL_UP_KEY,
+            default=GMCP_WINDOW_SCROLL_UP_DEFAULT,
+        )
+        scroll_down_key = config.resolve_extra_setting(
+            sesh.character,
+            GMCP_WINDOW_SCROLL_DOWN_KEY,
+            default=GMCP_WINDOW_SCROLL_DOWN_DEFAULT,
+        )
         resize_up_key = config.resolve_extra_setting(
             sesh.character,
             GMCP_WINDOW_RESIZE_UP_KEY,
@@ -120,7 +134,9 @@ class GmcpChannelWindow:
             default=GMCP_WINDOW_RESIZE_DOWN_DEFAULT,
         )
 
-        # Set up keyboard shortcuts.
+        tab.set_shortcut(scroll_up_key, self.scroll_up)
+        tab.set_shortcut(scroll_down_key, self.scroll_down)
+
         def resize_shortcut(adjustment: int):
             async def handler(key_event, sesh, tab):
                 await self.resize_window(key_event, sesh, tab, adjustment)
@@ -136,7 +152,7 @@ class GmcpChannelWindow:
             return
 
         if self.sesh is None or self.buffer is None:
-            self.logger.warn("handle_gmcp() called before Setup()")
+            self.logger.warning("handle_gmcp() called before Setup()")
             return
 
         now = datetime.now(timezone.utc)
@@ -158,14 +174,14 @@ class GmcpChannelWindow:
         self, _key_event: KeyEvent, sesh: Optional[Session], tab: Tab, adjustment: int
     ):
         if sesh is None or sesh != self.sesh:
-            self.logger.warn("session mismatch, we have {self.sesh}, given {sesh}")
+            self.logger.warning("session mismatch, we have {self.sesh}, given {sesh}")
             return
 
         layout = await tab.layout()
 
         constraint = layout.get_constraint("Channels")
         if constraint is None:
-            self.logger.warn("missing channel capture window constraint")
+            self.logger.warning("missing channel capture window constraint")
             return
 
         match constraint:
@@ -176,6 +192,20 @@ class GmcpChannelWindow:
                 layout.set_constraint("Channels", Constraint.Min(new))
                 self.logger.info(f"resized channel capture window to {new} rows")
             case _:
-                self.logger.warn(
+                self.logger.warning(
                     f"unexpected non-Min channel capture window constraint: {constraint}"
                 )
+
+    async def scroll_up(
+        self, _key_event: KeyEvent, _sesh: Optional[Session], _tab: Tab
+    ):
+        if self.buffer is None:
+            self.logger.warning("scroll up called before setup")
+        self.buffer.scroll_up(5)
+
+    async def scroll_down(
+        self, _key_event: KeyEvent, _sesh: Optional[Session], _tab: Tab
+    ):
+        if self.buffer is None:
+            self.logger.warning("scroll down called before setup")
+        self.buffer.scroll_down(5)
