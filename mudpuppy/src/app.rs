@@ -61,21 +61,13 @@ impl App {
         python::init_python_env(&self.args).await?;
 
         // Spawn a task to run the Python user setup code.
-        let (task_locals, modules) = Python::attach(|py| {
-            (
-                pyo3_async_runtimes::tokio::get_current_locals(py),
-                self.data.config.borrow(py).modules.clone(),
-            )
-        });
+        let modules = Python::attach(|py| self.data.config.borrow(py).modules.clone());
         debug!(?modules, "loading user setup for global modules");
-        let mut setup_task = tokio::spawn(pyo3_async_runtimes::tokio::scope(
-            task_locals?,
-            async move {
-                if let Err(e) = python::run_user_setup(&modules).await {
-                    error!("python user setup failed: {e}");
-                }
-            },
-        ));
+        let mut setup_task = tokio::spawn(async move {
+            if let Err(e) = python::run_user_setup(&modules).await {
+                error!("python user setup failed: {e}");
+            }
+        });
 
         let result = loop {
             let confirm_quit = Python::attach(|py| self.data.config.borrow(py).confirm_quit);
