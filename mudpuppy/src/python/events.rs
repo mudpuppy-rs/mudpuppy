@@ -7,6 +7,7 @@ use pyo3::types::PyAnyMethods;
 use pyo3::{Py, PyAny, Python, pyclass, pymethods};
 
 use strum::{Display, VariantArray};
+use tokio::task::JoinHandle;
 use tracing::{error, trace};
 
 use crate::config::Config;
@@ -30,14 +31,14 @@ impl NewSessionHandler {
         })
     }
 
-    pub(crate) fn execute(&self, sesh: python::Session) -> Result<(), Error> {
+    pub(crate) fn execute(&self, sesh: python::Session) -> Result<JoinHandle<()>, Error> {
         let future = Python::attach(|py| {
             let awaitable = self.awaitable.bind(py).call1((sesh,))?;
             pyo3_async_runtimes::tokio::into_future(awaitable)
         })?;
 
         let label = self.label.clone();
-        tokio::spawn(async move {
+        Ok(tokio::spawn(async move {
             if let Err(err) = future.await {
                 // Note: Error::from() to collect backtrace from PyErr.
                 error!(
@@ -45,10 +46,7 @@ impl NewSessionHandler {
                     Error::from(err)
                 );
             }
-            Ok::<_, Error>(())
-        });
-
-        Ok(())
+        }))
     }
 }
 

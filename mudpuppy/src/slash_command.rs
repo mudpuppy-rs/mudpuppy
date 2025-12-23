@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pyo3::Python;
+use tracing::error;
 
-use crate::app::{AppData, QuitStatus, TabAction};
+use crate::app::{self, AppData, QuitStatus, TabAction};
 use crate::error::{Error, ErrorKind};
 use crate::session::OutputItem;
 use crate::shortcut::TabShortcut;
@@ -79,7 +80,8 @@ impl SlashCommand for NewSession {
     }
 
     async fn execute(&self, app: &mut AppData, line: String) -> Result<Option<TabAction>, Error> {
-        let session = app.new_session(line.clone())?;
+        let (session, new_session_handlers) = app.new_session(&line)?;
+
         app.set_active_session(Some(session.id))?;
 
         let active_sess = app.active_session_mut().unwrap();
@@ -87,7 +89,16 @@ impl SlashCommand for NewSession {
             error: false,
             message: format!("created session {id} for {line}", id = session.id),
         });
-        active_sess.connect()?;
+
+        let session_clone = session.clone();
+        let session_id = session.id;
+        tokio::spawn(async move {
+            app::join_all(new_session_handlers, "new session handler panicked").await;
+            if let Err(e) = Python::attach(|py| session_clone.connect(py)) {
+                error!("failed to connect session {session_id}: {e}");
+            }
+        });
+
         Ok(Some(TabAction::CreateSessionTab { session }))
     }
 }

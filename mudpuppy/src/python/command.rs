@@ -6,7 +6,7 @@ use strum::Display;
 use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument, warn};
 
-use crate::app::{AppData, Frontend, SlashCommand, TabAction};
+use crate::app::{self, AppData, Frontend, SlashCommand, TabAction};
 use crate::config::{Character, Config, Mud};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
@@ -15,8 +15,7 @@ use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
 use crate::session::{Alias, Buffer, Input, InputLine, OutputItem, PromptMode, Trigger};
 use crate::shortcut::{Shortcut, TabShortcut};
-use crate::tui;
-use crate::tui::TabKind;
+use crate::tui::{self, TabKind};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
@@ -198,7 +197,11 @@ impl SessionCommand {
                 let _ = tx.send(mud);
             }
             Self::NewSession { character, tx } => {
-                let _ = tx.send(app.new_session(character)?);
+                let (session, new_session_handlers) = app.new_session(&character)?;
+                tokio::spawn(async move {
+                    app::join_all(new_session_handlers, "new session handler panicked").await;
+                    let _ = tx.send(session);
+                });
             }
             Self::CloseSession { session_id } => {
                 let _ = app.session_mut(session_id)?.disconnect();

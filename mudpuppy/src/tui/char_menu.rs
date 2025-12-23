@@ -8,7 +8,7 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use tracing::{debug, error, info};
 
-use crate::app::{AppData, TabAction};
+use crate::app::{self, AppData, TabAction};
 use crate::config::{Config, config_file};
 use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
@@ -136,8 +136,16 @@ impl CharacterMenu {
                 };
 
                 info!(item = ?name, "list item selected, creating session");
-                let session = app.new_session(name.to_owned())?;
-                Python::attach(|py| session.connect(py))?;
+                let (session, handles) = app.new_session(name)?;
+
+                let session_clone = session.clone();
+                tokio::spawn(async move {
+                    app::join_all(handles, "new session handler panicked").await;
+                    if let Err(e) = Python::attach(|py| session_clone.connect(py)) {
+                        error!("failed to connect session: {e}");
+                    }
+                });
+
                 Ok(Some(TabAction::CreateSessionTab { session }))
             }
         }

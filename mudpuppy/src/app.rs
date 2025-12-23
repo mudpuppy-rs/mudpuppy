@@ -4,13 +4,14 @@ use std::ops::Add;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-use futures::StreamExt;
+use futures::{StreamExt, future};
 use notify::event::Event as NotifyEvent;
 use pyo3::{Py, Python};
 use strum::Display;
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::config::{self, Config};
@@ -66,6 +67,18 @@ impl App {
             error!("python user setup failed: {e}");
         }
         info!("Python setup completed successfully");
+
+        // Drain Python command queue to ensure new session handlers are registered
+        // before auto-connect runs (handlers are registered via commands sent during init)
+        while let Ok(py_cmd) = py_rx.try_recv() {
+            if let Err(err) = py_cmd.exec(&mut self.frontend, &mut self.data) {
+                error!("python command during init failed: {err}");
+            }
+        }
+        debug!(
+            handler_count = self.data.new_session_handlers.len(),
+            "new session handlers registered"
+        );
 
         self.data.auto_connect(&mut self.frontend)?;
 
@@ -228,7 +241,10 @@ impl AppData {
         sessions
     }
 
-    pub(crate) fn new_session(&mut self, character: String) -> Result<python::Session, Error> {
+    pub(crate) fn new_session(
+        &mut self,
+        character: &str,
+    ) -> Result<(python::Session, Vec<JoinHandle<()>>), Error> {
         let (Some(conn_event_tx), Some(py_event_tx)) = (&self.conn_event_tx, &self.python_event_tx)
         else {
             return Err(ErrorKind::Internal("App not running".to_owned()).into());
@@ -239,7 +255,7 @@ impl AppData {
             new_id,
             Session::new(
                 new_id,
-                character.clone(),
+                character.to_owned(),
                 &self.config,
                 conn_event_tx.clone(),
                 py_event_tx.clone(),
@@ -248,18 +264,25 @@ impl AppData {
 
         let new_sesh = python::Session {
             id: new_id,
-            character,
+            character: character.to_owned(),
         };
 
+        let mut handles = Vec::new();
         for handler in &self.new_session_handlers {
-            handler.execute(new_sesh.clone())?;
+            handles.push(handler.execute(new_sesh.clone())?);
         }
+        trace!(
+            session_id = new_id,
+            character,
+            handler_count = handles.len(),
+            "spawned new session handler tasks"
+        );
 
         if self.active_session_py().is_none() {
             self.set_active_session(Some(new_id))?;
         }
 
-        Ok(new_sesh)
+        Ok((new_sesh, handles))
     }
 
     pub(crate) fn active_session(&self) -> Option<&Session> {
@@ -321,22 +344,28 @@ impl AppData {
 
         trace!(?auto_connect, "auto-connecting");
         let mut sessions = Vec::with_capacity(auto_connect.len());
+        let mut new_session_handlers = Vec::new();
         for character in &auto_connect {
             info!(character, "auto-connecting");
-            let sesh = self.new_session(character.to_owned())?;
-            sessions.push(sesh);
-        }
-
-        Python::attach(|py| {
-            for sesh in &sessions {
-                sesh.connect(py)?;
-            }
-            Ok::<(), Error>(())
-        })?;
-
-        for sesh in sessions {
+            let (sesh, handles) = self.new_session(character)?;
+            sessions.push(sesh.clone());
+            new_session_handlers.extend(handles);
+            // Create tab immediately so handlers can access it
             fe.tab_action(self, TabAction::CreateSessionTab { session: sesh })?;
         }
+
+        tokio::spawn(async move {
+            join_all(new_session_handlers, "new session handler task panicked").await;
+            if let Err(e) = Python::attach(|py| {
+                for sesh in &sessions {
+                    sesh.connect(py)?;
+                }
+                Ok::<(), Error>(())
+            }) {
+                error!("auto-connect failed: {e}");
+            }
+        });
+
         Ok(())
     }
 
@@ -481,6 +510,15 @@ pub(crate) enum QuitStatus {
 impl QuitStatus {
     pub(crate) fn default_expires() -> Instant {
         Instant::now().add(Duration::from_secs(25))
+    }
+}
+
+/// helper to await a set of `JoinHandle`'s without caring about results.
+pub(crate) async fn join_all(handles: Vec<JoinHandle<()>>, err_prefix: &str) {
+    for result in future::join_all(handles).await {
+        if let Err(e) = result {
+            error!("{err_prefix}: {e}");
+        }
     }
 }
 
