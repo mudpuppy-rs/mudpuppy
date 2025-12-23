@@ -319,14 +319,17 @@ impl AppData {
     fn auto_connect(&mut self, fe: &mut Frontend) -> Result<(), Error> {
         let auto_connect = self.args.connect.clone();
 
+        trace!(?auto_connect, "auto-connecting");
         let mut sessions = Vec::with_capacity(auto_connect.len());
+        for character in &auto_connect {
+            info!(character, "auto-connecting");
+            let sesh = self.new_session(character.to_owned())?;
+            sessions.push(sesh);
+        }
+
         Python::attach(|py| {
-            trace!(?auto_connect, "auto-connecting");
-            for character in &auto_connect {
-                info!(character, "auto-connecting");
-                let sesh = self.new_session(character.to_owned())?;
+            for sesh in &sessions {
                 sesh.connect(py)?;
-                sessions.push(sesh);
             }
             Ok::<(), Error>(())
         })?;
