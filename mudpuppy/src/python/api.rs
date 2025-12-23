@@ -742,7 +742,7 @@ where
     })
 }
 
-fn dispatch_command(py: Python<'_>, cmd: impl Into<Command>) -> Result {
+pub(crate) fn dispatch_command(py: Python<'_>, cmd: impl Into<Command>) -> Result {
     Ok(APP
         .get(py)
         .unwrap()
@@ -786,7 +786,7 @@ pub(crate) mod pup {
     #[pymodule_export]
     use crate::session::{
         Alias, Buffer, BufferDirection, EchoState, Input, InputLine, Markup, MudLine, OutputItem,
-        PromptMode, PromptSignal, Scrollbar, Trigger,
+        PromptMode, PromptSignal, Scrollbar, Timer, Trigger,
     };
 
     #[pymodule_export]

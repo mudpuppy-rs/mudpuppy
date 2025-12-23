@@ -93,6 +93,15 @@ pub(crate) enum ErrorKind {
 
     #[error("tab ID {0} does not have a buffer with name {1}")]
     NoSuchBufferName(u32, String),
+
+    #[error("invalid alias: {0}")]
+    InvalidAlias(String),
+
+    #[error("invalid trigger: {0}")]
+    InvalidTrigger(String),
+
+    #[error("invalid timer: {0}")]
+    InvalidTimer(String),
 }
 
 // We implement From<PyErr> by hand in order to always collect a traceback.

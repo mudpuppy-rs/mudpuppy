@@ -4,6 +4,7 @@ mod gmcp;
 mod input;
 mod mudline;
 mod prompt;
+mod timer;
 mod trigger;
 
 use std::collections::{HashMap, HashSet};
@@ -31,6 +32,7 @@ pub(crate) use buffer::*;
 pub(crate) use input::*;
 pub(crate) use mudline::*;
 pub(crate) use prompt::*;
+pub(crate) use timer::*;
 pub(crate) use trigger::*;
 
 #[derive(Debug)]

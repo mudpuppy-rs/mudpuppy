@@ -8,7 +8,7 @@ use tracing::{Level, debug, instrument, trace};
 
 use crate::error::{Error, ErrorKind};
 use crate::python;
-use crate::python::PyFuture;
+use crate::python::{PyFuture, require_coroutine};
 use crate::session::MudLine;
 
 // TODO(XXX): flagset instead of bools
@@ -127,6 +127,7 @@ impl Trigger {
     #[pyo3(signature = (pattern, name, *, strip_ansi=false, prompt=false, gag=false, callback=None, highlight=None, reaction=None))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
+        py: Python<'_>,
         pattern: &str,
         name: String,
         strip_ansi: bool,
@@ -137,6 +138,18 @@ impl Trigger {
         reaction: Option<String>,
     ) -> Result<Self, Error> {
         let regex = Regex::new(pattern).map_err(ErrorKind::InvalidRegex)?;
+
+        if callback.is_none() && reaction.is_none() && highlight.is_none() {
+            return Err(ErrorKind::InvalidTrigger(
+                "one of callback, reaction or highlight must be provided".to_owned(),
+            )
+            .into());
+        }
+
+        if let Some(callback) = callback.as_ref() {
+            require_coroutine(py, "Trigger callback", callback)?;
+        }
+
         Ok(Self {
             name,
             enabled: true,
