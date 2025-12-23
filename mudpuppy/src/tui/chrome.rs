@@ -68,6 +68,7 @@ impl Chrome {
         self.active_tab_mut().render(app, f, tab_content)?;
 
         if matches!(app.should_quit, QuitStatus::Requested { .. }) {
+            // TODO(XXX): extract as a widget? Add a progress bar for the timeout?
             let popup_area = centered_rect(tab_content, 50, 25);
             let [msg_area, help_area] = Layout::vertical([Max(2), Max(2)]).areas(popup_area);
 
