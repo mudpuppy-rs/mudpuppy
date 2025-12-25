@@ -53,7 +53,7 @@ pub(super) struct Session {
     telnet_state: telnet::negotiation::Table,
     gmcp_packages: HashSet<String>,
     #[allow(dead_code)] // TODO(XXX): use user_module for reload support.
-    user_module: Option<Py<PyModule>>,
+    pub(super) user_module: Option<Py<PyModule>>,
     config: Py<Config>,
 
     conn_event_tx: UnboundedSender<connection::Event>,
@@ -67,6 +67,7 @@ impl Session {
         config: &Py<Config>,
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
+        error_tx: UnboundedSender<String>,
     ) -> Result<Self, Error> {
         let output = Buffer::new(OUTPUT_BUFFER_NAME.to_string())?;
         let scrollback = Buffer::new(SCROLL_BUFFER_NAME.to_string())?;
@@ -79,8 +80,12 @@ impl Session {
             .into());
         };
 
-        let user_module = Python::attach(|py| py_character.borrow(py).module.clone())
-            .and_then(|module| python::run_character_setup(id, &character, module).ok());
+        let character_module = Python::attach(|py| py_character.borrow(py).module.clone());
+
+        if let Some(module) = character_module {
+            // TODO(XXX): hold onto Py module for reloads.
+            python::run_character_setup(id, &character, module, error_tx);
+        }
 
         Ok(Self {
             id,
@@ -97,7 +102,7 @@ impl Session {
             state: ConnectionState::default(),
             telnet_state: telnet::negotiation::Table::default(),
             gmcp_packages: HashSet::default(),
-            user_module,
+            user_module: None,
             config: Python::attach(|py| config.clone_ref(py)),
             character,
 
@@ -295,7 +300,15 @@ impl Session {
                 while let Some(result) = futures.next().await {
                     if let Err(err) = result {
                         // Note: Error::from() to collect backtrace from PyErr.
-                        error!("{session_name} alias callback error: {}", Error::from(err));
+                        let error_msg = Error::from(err);
+                        error!("{session_name} alias callback error: {error_msg}");
+                        Python::attach(|py| {
+                            if let Some(error_tx) = python::ERROR_TX.get(py) {
+                                let _ = error_tx.send(format!(
+                                    "Alias callback error for '{session_name}': {error_msg}"
+                                ));
+                            }
+                        });
                     }
                 }
             });

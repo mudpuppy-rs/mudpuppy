@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::ops::Add;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, Instant};
 
 use futures::{StreamExt, future};
 use notify::event::Event as NotifyEvent;
@@ -15,6 +13,7 @@ use tokio::task::JoinHandle;
 use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::config::{self, Config};
+use crate::dialog::DialogManager;
 use crate::error::{Error, ErrorKind};
 use crate::headless::Headless;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
@@ -61,18 +60,19 @@ impl App {
 
         python::init_python_env(&self.args).await?;
 
-        let modules = Python::attach(|py| self.data.config.borrow(py).modules.clone());
-        debug!(?modules, "loading user setup for global modules");
-        if let Err(e) = python::run_user_setup(&modules).await {
-            error!("python user setup failed: {e}");
-        }
-        info!("Python setup completed successfully");
+        python::run_user_setup(&self.data.config, &self.data.dialog_manager).await;
 
         // Drain Python command queue to ensure new session handlers are registered
         // before auto-connect runs (handlers are registered via commands sent during init)
         while let Ok(py_cmd) = py_rx.try_recv() {
-            if let Err(err) = py_cmd.exec(&mut self.frontend, &mut self.data) {
+            if let Err(err) = py_cmd.exec(&mut self.frontend, &mut self.data).await {
                 error!("python command during init failed: {err}");
+                Python::attach(|py| {
+                    self.data
+                        .dialog_manager
+                        .borrow_mut(py)
+                        .show_error(format!("Python command during init failed: {err}"));
+                });
             }
         }
         debug!(
@@ -83,28 +83,18 @@ impl App {
         self.data.auto_connect(&mut self.frontend)?;
 
         let result = loop {
-            let confirm_quit = Python::attach(|py| self.data.config.borrow(py).confirm_quit);
-            let now = Instant::now();
-            match self.data.should_quit {
-                QuitStatus::Requested { .. } if !confirm_quit => {
-                    info!("quitting. Goodbye!");
-                    break Ok(());
-                }
-                QuitStatus::Requested { expires_at } if expires_at < now => {
-                    info!("quit request timed out.");
-                    self.data.should_quit = QuitStatus::default();
-                }
-                QuitStatus::Confirmed => {
-                    info!("quit request confirmed. Goodbye!");
-                    break Ok(());
-                }
-                QuitStatus::Requested { .. } | QuitStatus::None => {}
+            Python::attach(|py| self.data.dialog_manager.borrow_mut(py).tick());
+
+            if self.data.should_quit {
+                info!("quitting. Goodbye!");
+                break Ok(());
             }
+
             select! {
                 // Configuration reload
                 Some(event) = config_event_rx.next() => {
                     if let Ok(event) = event {
-                        self.data.config_reloaded(&event)?;
+                        self.data.config_reloaded(&event);
                     }
                 }
                 // Connection event dispatch
@@ -115,6 +105,8 @@ impl App {
                     };
                     if let Err(err) = session.handle_event(&event) {
                         error!("session event error: {err}");
+                        Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
+                                format!("Session event error: {err}")));
                     }
                 }
                 // Python event dispatch (sending events from app -> Python)
@@ -125,17 +117,21 @@ impl App {
                     };
                     if let Err(err) = session.event_handlers.session_event(&event) {
                         error!("python event dispatch error: {err}");
+                        Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
+                                format!("Python event dispatch error: {err}")));
                     }
                 }
                 // Python API command dispatch (processing reqs from Python -> app)
                 Some(py_cmd) = py_rx.recv() => {
-                    match py_cmd.exec(&mut self.frontend, &mut self.data) {
+                    match py_cmd.exec(&mut self.frontend, &mut self.data).await {
                         Ok(true) => {
                             info!("quitting");
                             break Ok(());
                         }
                         Err(err) => {
                             error!("python error: {err}");
+                            Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
+                                    format!("Python error: {err}")));
                         }
                         _ => {}
                     }
@@ -157,7 +153,8 @@ impl App {
 
 #[derive(Debug)]
 pub(super) struct AppData {
-    pub(super) should_quit: QuitStatus,
+    pub(super) should_quit: bool,
+    pub(super) dialog_manager: Py<DialogManager>,
     pub(super) args: cli::Args,
     pub(super) config: Py<Config>,
     pub(super) active_session: Option<u32>,
@@ -167,20 +164,29 @@ pub(super) struct AppData {
 
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
     python_event_tx: Option<UnboundedSender<(u32, python::Event)>>,
+    error_tx: Option<UnboundedSender<String>>,
 }
 
 impl AppData {
     fn new(args: cli::Args, config: &Py<Config>) -> Self {
+        let (dialog_manager, config) = Python::attach(|py| {
+            (
+                Py::new(py, DialogManager::new()).unwrap(),
+                config.clone_ref(py),
+            )
+        });
         Self {
-            should_quit: QuitStatus::default(),
+            should_quit: false,
+            dialog_manager,
             args,
-            config: Python::attach(|py| config.clone_ref(py)),
+            config,
             active_session: None,
             sessions: HashMap::new(),
             new_session_handlers: Vec::new(),
             shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
             python_event_tx: None,
+            error_tx: None,
         }
     }
 
@@ -245,22 +251,23 @@ impl AppData {
         &mut self,
         character: &str,
     ) -> Result<(python::Session, Vec<JoinHandle<()>>), Error> {
-        let (Some(conn_event_tx), Some(py_event_tx)) = (&self.conn_event_tx, &self.python_event_tx)
+        let (Some(conn_event_tx), Some(py_event_tx), Some(error_tx)) =
+            (&self.conn_event_tx, &self.python_event_tx, &self.error_tx)
         else {
             return Err(ErrorKind::Internal("App not running".to_owned()).into());
         };
 
         let new_id = SESSION_ID.fetch_add(1, Ordering::SeqCst);
-        self.sessions.insert(
+        let session = Session::new(
             new_id,
-            Session::new(
-                new_id,
-                character.to_owned(),
-                &self.config,
-                conn_event_tx.clone(),
-                py_event_tx.clone(),
-            )?,
-        );
+            character.to_owned(),
+            &self.config,
+            conn_event_tx.clone(),
+            py_event_tx.clone(),
+            error_tx.clone(),
+        )?;
+
+        self.sessions.insert(new_id, session);
 
         let new_sesh = python::Session {
             id: new_id,
@@ -356,13 +363,17 @@ impl AppData {
 
         tokio::spawn(async move {
             join_all(new_session_handlers, "new session handler task panicked").await;
-            if let Err(e) = Python::attach(|py| {
-                for sesh in &sessions {
-                    sesh.connect(py)?;
+            // Try to connect each session individually, don't stop on first failure
+            for sesh in &sessions {
+                if let Err(e) = Python::attach(|py| sesh.connect(py)) {
+                    error!("auto-connect failed for '{}': {e}", sesh.character);
+                    Python::attach(|py| {
+                        if let Some(error_tx) = python::ERROR_TX.get(py) {
+                            let _ = error_tx
+                                .send(format!("Failed to auto-connect '{}': {e}", sesh.character));
+                        }
+                    });
                 }
-                Ok::<(), Error>(())
-            }) {
-                error!("auto-connect failed: {e}");
             }
         });
 
@@ -371,7 +382,7 @@ impl AppData {
 
     // TODO(XXX): Consider reloading python stuff automatically?
     // TODO(XXX): Consider debouncing created->data_changed events.
-    fn config_reloaded(&mut self, event: &NotifyEvent) -> Result<(), Error> {
+    fn config_reloaded(&mut self, event: &NotifyEvent) {
         use notify::EventKind;
 
         let data_changed = matches!(
@@ -380,23 +391,42 @@ impl AppData {
         );
 
         if !event.paths.contains(&config::config_file()) || !data_changed {
-            return Ok(());
+            return;
         }
 
-        Python::attach(|py| {
+        // Try to reload config, but don't exit app on failure
+        if let Err(err) = Python::attach(|py| {
             info!("reloading configuration: data changed");
             self.config
                 .borrow_mut(py)
                 .replace_with(Config::new().map_err(ErrorKind::from)?);
             Ok::<_, Error>(())
-        })?;
-
-        for sesh in self.sessions.values() {
-            let config = Python::attach(|py| self.config.clone_ref(py));
-            sesh.event_handlers
-                .session_event(&python::Event::ConfigReloaded { config })?;
+        }) {
+            error!("config reload failed: {err}");
+            Python::attach(|py| {
+                self.dialog_manager
+                    .borrow_mut(py)
+                    .show_error(format!("Config reload failed: {err}"));
+            });
+            return; // Continue with old config
         }
-        Ok(())
+
+        // Notify sessions of config reload, but don't exit on handler errors
+        Python::attach(|py| {
+            for sesh in self.sessions.values() {
+                if let Err(err) =
+                    sesh.event_handlers
+                        .session_event(&python::Event::ConfigReloaded {
+                            config: self.config.clone_ref(py),
+                        })
+                {
+                    error!("config reload event handler error: {err}");
+                    self.dialog_manager
+                        .borrow_mut(py)
+                        .show_error(format!("config reload event handler error: {err}"));
+                }
+            }
+        });
     }
 }
 
@@ -494,22 +524,6 @@ pub(crate) enum TabAction {
 impl From<TabShortcut> for TabAction {
     fn from(tab_shortcut: TabShortcut) -> Self {
         Self::Shortcut(tab_shortcut)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Display)]
-pub(crate) enum QuitStatus {
-    #[default]
-    None,
-    Requested {
-        expires_at: Instant,
-    },
-    Confirmed,
-}
-
-impl QuitStatus {
-    pub(crate) fn default_expires() -> Instant {
-        Instant::now().add(Duration::from_secs(25))
     }
 }
 

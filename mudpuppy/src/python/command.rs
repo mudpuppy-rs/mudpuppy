@@ -29,7 +29,7 @@ pub(crate) enum Command {
 
 impl Command {
     #[instrument(level = Level::TRACE, skip(self, fe, app), fields(app.active_session))]
-    pub(crate) fn exec(self, fe: &mut Frontend, app: &mut AppData) -> Result<bool> {
+    pub(crate) async fn exec(self, fe: &mut Frontend, app: &mut AppData) -> Result<bool> {
         match self {
             Command::Config(tx) => {
                 let _ = tx.send(Python::attach(|py| app.config.clone_ref(py)));

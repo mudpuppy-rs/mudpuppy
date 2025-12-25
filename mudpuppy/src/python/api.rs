@@ -773,7 +773,8 @@ pub(crate) mod pup {
 
     use super::{Command, FutureResult, Result, dispatch_async_command, dispatch_command};
     use crate::app::TabAction;
-    use crate::python::{NewSessionHandler, SessionCommand};
+    use crate::error::ErrorKind;
+    use crate::python::{ERROR_TX, NewSessionHandler, SessionCommand};
 
     #[pymodule_export]
     use super::{Gmcp, Prompt, Session, Tab, Telnet};
@@ -792,7 +793,9 @@ pub(crate) mod pup {
     #[pymodule_export]
     use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};
     #[pymodule_export]
-    use crate::tui::{Constraint, Direction, Section};
+    use crate::tui::{
+        Constraint, Dialog, DialogKind, DialogManager, DialogPriority, Direction, Section,
+    };
 
     #[pyfunction]
     fn config(py: Python<'_>) -> FutureResult<'_> {
@@ -812,6 +815,18 @@ pub(crate) mod pup {
     #[pyfunction]
     fn quit(py: Python<'_>) -> Result {
         dispatch_command(py, Command::Quit)
+    }
+
+    #[pyfunction]
+    fn show_error(py: Python<'_>, message: String) -> Result {
+        if let Some(error_tx) = ERROR_TX.get(py) {
+            error_tx.send(message).map_err(|_| {
+                crate::error::Error::from(ErrorKind::Internal(
+                    "Failed to send error message".to_owned(),
+                ))
+            })?;
+        }
+        Ok(())
     }
 
     #[pyfunction]

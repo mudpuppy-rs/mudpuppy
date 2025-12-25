@@ -1,12 +1,13 @@
+use async_trait::async_trait;
+use pyo3::Python;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-
-use async_trait::async_trait;
-use pyo3::Python;
+use std::time::Duration;
 use tracing::error;
 
-use crate::app::{self, AppData, QuitStatus, TabAction};
+use crate::app::{self, AppData, TabAction};
+use crate::dialog;
 use crate::error::{Error, ErrorKind};
 use crate::session::OutputItem;
 use crate::shortcut::TabShortcut;
@@ -52,13 +53,18 @@ impl SlashCommand for QuitCommand {
     }
 
     async fn execute(&self, app: &mut AppData, _line: String) -> Result<Option<TabAction>, Error> {
-        app.should_quit = if matches!(app.should_quit, QuitStatus::Requested { .. }) {
-            QuitStatus::Confirmed
-        } else {
-            QuitStatus::Requested {
-                expires_at: QuitStatus::default_expires(),
+        Python::attach(|py| {
+            if app.config.borrow(py).confirm_quit {
+                app.dialog_manager.borrow_mut(py).show_confirmation(
+                    "Are you sure you want to quit?".to_string(),
+                    'q',
+                    dialog::ConfirmAction::Quit {},
+                    Some(Duration::from_secs(25)),
+                );
+            } else {
+                app.should_quit = true;
             }
-        };
+        });
 
         if let Some(active_session) = app.active_session_mut() {
             active_session.output.add(OutputItem::CommandResult {
@@ -92,10 +98,16 @@ impl SlashCommand for NewSession {
 
         let session_clone = session.clone();
         let session_id = session.id;
+        let character = session.character.clone();
         tokio::spawn(async move {
             app::join_all(new_session_handlers, "new session handler panicked").await;
             if let Err(e) = Python::attach(|py| session_clone.connect(py)) {
                 error!("failed to connect session {session_id}: {e}");
+                Python::attach(|py| {
+                    if let Some(error_tx) = crate::python::ERROR_TX.get(py) {
+                        let _ = error_tx.send(format!("Failed to connect '{character}': {e}"));
+                    }
+                });
             }
         });
 

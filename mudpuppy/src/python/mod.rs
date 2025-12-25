@@ -19,9 +19,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Level, debug, error, instrument, trace};
 
 use crate::cli;
-use crate::config::config_dir;
+use crate::config::{Config, config_dir};
 use crate::error::Error;
 
+use crate::dialog::DialogManager;
 pub(crate) use api::*;
 pub(crate) use command::*;
 pub(crate) use events::*;
@@ -114,12 +115,13 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
     Ok(())
 }
 
-#[instrument(level = Level::DEBUG)]
-pub(super) async fn run_user_setup(modules: &Vec<String>) -> Result {
+#[instrument(level = Level::DEBUG, skip(config, dm))]
+pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) {
     let mut py_futures = FuturesUnordered::new();
 
-    Python::attach(|py| {
-        for module in modules {
+    let import_result = Python::attach(|py| {
+        // TODO(XXX): retain module handles for reload?
+        for module in &config.borrow(py).modules {
             debug!(module, "loading");
             let module = PyModule::import(py, module)?;
 
@@ -130,25 +132,34 @@ pub(super) async fn run_user_setup(modules: &Vec<String>) -> Result {
             }
         }
         Ok::<(), PyErr>(())
-    })?;
+    });
+
+    if let Err(err) = import_result {
+        // Note: Error::from() to collect backtrace from PyErr.
+        let err = Error::from(err);
+        error!("python user module setup error: {err}");
+        Python::attach(|py| dm.borrow_mut(py).show_error(err.to_string()));
+        return;
+    }
 
     while let Some(result) = py_futures.next().await {
         if let Err(err) = result {
             // Note: Error::from() to collect backtrace from PyErr.
-            error!("python config module setup error: {}", Error::from(err));
+            let err = Error::from(err);
+            error!("python user module setup error: {err}");
+            Python::attach(|py| dm.borrow_mut(py).show_error(err.to_string()));
         }
     }
-
-    Ok(())
 }
 
 // TOOO(XXX): pretty ugly, would be nice to get errors into session output too.
-#[instrument(level = Level::DEBUG)]
+#[instrument(level = Level::DEBUG, skip(error_tx))]
 pub(super) fn run_character_setup(
     id: u32,
     character: &str,
     module: String,
-) -> Result<Py<PyModule>> {
+    error_tx: UnboundedSender<String>,
+) -> Option<Py<PyModule>> {
     let (future, module) = match Python::attach(|py| {
         let module = PyModule::import(py, module)?;
 
@@ -168,25 +179,28 @@ pub(super) fn run_character_setup(
     }) {
         Ok((future, module)) => (future, module),
         Err(err) => {
-            error!("character {character} setup error: {err}");
-            return Err(err);
+            error!("character {character} module import error: {err}");
+            let _ = error_tx.send(format!("Character {character} module import error: {err}"));
+            return None;
         }
     };
 
+    // Spawn the setup future if it exists
     if let Some(future) = future {
         let character_name = character.to_string();
         tokio::spawn(async move {
             if let Err(err) = future.await {
                 // NOTE: Using Error::from to collect backtrace from PyErr.
-                error!(
-                    "character {character_name} setup error: {}",
-                    Error::from(err)
-                );
+                let error_msg = Error::from(err);
+                error!("character {character_name} module setup error: {error_msg}");
+                let _ = error_tx.send(format!(
+                    "Character {character_name} module setup error: {error_msg}"
+                ));
             }
         });
     }
 
-    Ok(module)
+    Some(module)
 }
 
 pub(super) fn require_coroutine(
@@ -241,6 +255,7 @@ pub(super) fn label_for_coroutine(py: Python<'_>, callback: &Py<PyAny>) -> Optio
 pub(super) type PyFuture = Pin<Box<dyn StdFuture<Output = PyResult<Py<PyAny>>> + Send + 'static>>;
 
 pub(crate) static APP: PyOnceLock<UnboundedSender<Command>> = PyOnceLock::new();
+pub(crate) static ERROR_TX: PyOnceLock<UnboundedSender<String>> = PyOnceLock::new();
 
 type Result<T = ()> = std::result::Result<T, Error>;
 type FutureResult<'a> = PyResult<Bound<'a, PyAny>>;

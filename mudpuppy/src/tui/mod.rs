@@ -21,22 +21,23 @@ use ratatui::layout::Layout;
 use std::fmt::Debug;
 use std::io::{IsTerminal, Stdout, stdout};
 use std::num::NonZeroUsize;
-use std::ops::Add;
 use std::panic;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
 
-use crate::app::{AppData, QuitStatus, TabAction};
+use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::shortcut::{Shortcut, TabShortcut};
-use crate::{cli, python};
+use crate::{cli, dialog, python};
+
 pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab, TabKind};
 pub(super) use custom_tab::CustomTab;
+pub(super) use dialog::{Dialog, DialogKind, DialogManager, DialogPriority};
 pub(super) use layout::{Constraint, Direction, Section};
 pub(super) use session::Character;
 
@@ -158,9 +159,18 @@ impl Tui {
     ) -> Result<Option<TabAction>, Error> {
         Ok(match shortcut {
             Shortcut::Quit {} => {
-                app.should_quit = QuitStatus::Requested {
-                    expires_at: Instant::now().add(Duration::from_secs(15)),
-                };
+                Python::attach(|py| {
+                    if app.config.borrow(py).confirm_quit {
+                        app.dialog_manager.borrow_mut(py).show_confirmation(
+                            "Are you sure you want to quit?".to_string(),
+                            'q',
+                            dialog::ConfirmAction::Quit {},
+                            Some(Duration::from_secs(15)),
+                        );
+                    } else {
+                        app.should_quit = true;
+                    }
+                });
                 None
             }
             Shortcut::Python(shortcut) => {
@@ -289,9 +299,18 @@ impl Tui {
                     }
                 };
                 let (_, Some(removed)) = self.chrome.close_tab(id) else {
-                    app.should_quit = QuitStatus::Requested {
-                        expires_at: QuitStatus::default_expires(),
-                    };
+                    Python::attach(|py| {
+                        if app.config.borrow(py).confirm_quit {
+                            app.dialog_manager.borrow_mut(py).show_confirmation(
+                                "Are you sure you want to quit?".to_string(),
+                                'q',
+                                dialog::ConfirmAction::Quit {},
+                                Some(Duration::from_secs(25)),
+                            );
+                        } else {
+                            app.should_quit = true;
+                        }
+                    });
                     return Ok(());
                 };
                 if let Some(session) = removed.session().map(|s| s.id) {

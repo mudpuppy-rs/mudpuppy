@@ -1,19 +1,20 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use pyo3::types::PyAnyMethods;
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
-use ratatui::layout::Constraint::{Fill, Length, Max};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs};
-use tracing::info;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap};
+use tracing::error;
 
-use crate::app::{AppData, QuitStatus, TabAction};
+use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
+use crate::dialog::{ConfirmAction, DialogKind, Severity};
 use crate::error::{Error, ErrorKind};
-use crate::keyboard::{KeyCode, KeyEvent};
+use crate::keyboard::KeyEvent;
 use crate::shortcut::Shortcut;
 use crate::tui::Section;
 use crate::{python, tui};
@@ -42,7 +43,8 @@ impl Chrome {
     // TODO(XXX): Styling.
     pub(crate) fn render(&mut self, app: &mut AppData, f: &mut Frame) -> Result<(), Error> {
         // TODO(XXX): Py<Layout>!
-        let [tab_bar, tab_content] = Layout::vertical([Length(3), Fill(0)]).areas(f.area());
+        let [tab_bar, tab_content] =
+            Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(f.area());
 
         // Sort tabs by position for rendering
         let sorted_tabs = self.tabs();
@@ -67,37 +69,80 @@ impl Chrome {
 
         self.active_tab_mut().render(app, f, tab_content)?;
 
-        if matches!(app.should_quit, QuitStatus::Requested { .. }) {
-            // TODO(XXX): extract as a widget? Add a progress bar for the timeout?
-            let popup_area = centered_rect(tab_content, 50, 25);
-            let [msg_area, help_area] = Layout::vertical([Max(2), Max(2)]).areas(popup_area);
-
-            f.render_widget(Clear, msg_area);
-            f.render_widget(Clear, help_area);
-
-            f.render_widget(
-                Paragraph::new::<Text>("Are you sure you want to quit?".to_owned().into()).block(
-                    Block::default()
-                        .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
-                        .border_style(Color::Yellow)
-                        .title("Confirm exit"),
-                ),
-                msg_area,
-            );
-
-            let help_text: Text = "Press 'q' to quit or any other key to continue"
-                .to_owned()
-                .into();
-
-            let help_paragraph = Paragraph::new(help_text).block(
-                Block::default()
-                    .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
-                    .border_style(Color::Yellow),
-            );
-            f.render_widget(help_paragraph, help_area);
-        }
+        // Render dialog manager dialogs (if any)
+        Python::attach(|py| {
+            if let Some(dialog) = app.dialog_manager.borrow(py).get_active() {
+                Self::render_dialog(f, dialog, tab_content);
+            }
+        });
 
         Ok(())
+    }
+
+    fn render_dialog(f: &mut Frame, dialog: &crate::dialog::Dialog, area: Rect) {
+        match &dialog.kind {
+            DialogKind::Confirmation {
+                message,
+                confirm_key,
+                ..
+            } => {
+                let popup_area = centered_rect(area, 50, 25);
+                let [msg_area, help_area] =
+                    Layout::vertical([Constraint::Max(2), Constraint::Max(2)]).areas(popup_area);
+
+                f.render_widget(Clear, msg_area);
+                f.render_widget(Clear, help_area);
+
+                f.render_widget(
+                    Paragraph::new::<Text>(message.clone().into()).block(
+                        Block::default()
+                            .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
+                            .border_style(Color::Yellow)
+                            .title("Confirm"),
+                    ),
+                    msg_area,
+                );
+
+                let help = format!("Press '{confirm_key}' to confirm or any other key to cancel");
+                let help_paragraph = Paragraph::new::<Text>(help.into()).block(
+                    Block::default()
+                        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                        .border_style(Color::Yellow),
+                );
+                f.render_widget(help_paragraph, help_area);
+            }
+            DialogKind::Notification {
+                message, severity, ..
+            } => {
+                // Use much more space for dialogs (80% width, 60% height)
+                let (width, height) = match severity {
+                    Severity::Error => (80, 60),
+                    Severity::Warning => (70, 50),
+                    Severity::Info => (60, 40),
+                };
+                let popup_area = centered_rect(area, width, height);
+
+                f.render_widget(Clear, popup_area);
+
+                let (title, border_color) = match severity {
+                    Severity::Error => ("Error", Color::Red),
+                    Severity::Warning => ("Warning", Color::Yellow),
+                    Severity::Info => ("Info", Color::Blue),
+                };
+
+                f.render_widget(
+                    Paragraph::new::<Text>(message.clone().into())
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .border_style(border_color)
+                                .title(title),
+                        )
+                        .wrap(Wrap { trim: false }),
+                    popup_area,
+                );
+            }
+        }
     }
 
     pub(crate) fn active_tab(&self) -> &Tab {
@@ -383,16 +428,8 @@ impl Tab {
         app: &mut AppData,
         key_event: &KeyEvent,
     ) -> Result<Option<TabAction>, Error> {
-        if matches!(app.should_quit, QuitStatus::Requested { .. }) {
-            if key_event.code == KeyCode::Char('q') {
-                app.should_quit = QuitStatus::Confirmed;
-            } else {
-                info!(
-                    ?key_event,
-                    "cancelling quit status for non-confirm key press"
-                );
-                app.should_quit = QuitStatus::default();
-            }
+        // Check if a dialog should handle this key event
+        if Self::dialog_key_action(app, key_event) {
             return Ok(None);
         }
 
@@ -435,6 +472,53 @@ impl Tab {
             .iter()
             .map(|(key_event, shortcut)| (*key_event, shortcut.to_string()))
             .collect()
+    }
+
+    fn dialog_key_action(app: &mut AppData, key_event: &KeyEvent) -> bool {
+        let (consumed, action) =
+            Python::attach(|py| app.dialog_manager.borrow_mut(py).handle_key(key_event));
+        let Some(action) = action else {
+            return consumed;
+        };
+        match action {
+            ConfirmAction::Quit {} => {
+                app.should_quit = true;
+            }
+            ConfirmAction::PyCallback(callback) => {
+                // Spawn the Python callback
+                let dm = Python::attach(|py| app.dialog_manager.clone_ref(py));
+                tokio::spawn(async move {
+                    let future_result = Python::attach(|py| {
+                        pyo3_async_runtimes::tokio::into_future(callback.bind(py).call0()?)
+                    });
+
+                    let future = match future_result {
+                        Ok(f) => f,
+                        Err(err) => {
+                            // Note: Error::from on PyErr to collect backtrace.
+                            let err = Error::from(err);
+                            error!("dialog callback error: {err}");
+                            Python::attach(|py| {
+                                dm.borrow_mut(py)
+                                    .show_error(format!("Dialog callback failed: {err}"));
+                            });
+                            return;
+                        }
+                    };
+
+                    if let Err(err) = future.await {
+                        // Note: Error::from on PyErr to collect backtrace.
+                        let err = Error::from(err);
+                        error!("dialog callback error: {err}");
+                        Python::attach(|py| {
+                            dm.borrow_mut(py)
+                                .show_error(format!("Dialog callback failed: {err}"));
+                        });
+                    }
+                });
+            }
+        }
+        consumed
     }
 }
 
