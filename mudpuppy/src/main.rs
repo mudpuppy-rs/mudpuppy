@@ -1,6 +1,7 @@
 mod app;
 mod cli;
 mod config;
+mod dialog;
 mod error;
 mod headless;
 mod keyboard;

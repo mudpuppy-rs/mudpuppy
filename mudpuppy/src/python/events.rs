@@ -13,7 +13,7 @@ use tracing::{error, trace};
 use crate::config::Config;
 use crate::error::Error;
 use crate::net::connection;
-use crate::python::{self, PyFuture, label_for_coroutine, require_coroutine};
+use crate::python::{self, ERROR_TX, PyFuture, label_for_coroutine, require_coroutine};
 use crate::session::{Input, InputLine, MudLine, PromptMode};
 
 #[derive(Debug)]
@@ -41,10 +41,14 @@ impl NewSessionHandler {
         Ok(tokio::spawn(async move {
             if let Err(err) = future.await {
                 // Note: Error::from() to collect backtrace from PyErr.
-                error!(
-                    "NewSessionHandler {label} callback error: {}",
-                    Error::from(err)
-                );
+                let error_msg = Error::from(err);
+                error!("NewSessionHandler {label} callback error: {error_msg}");
+                Python::attach(|py| {
+                    if let Some(error_tx) = ERROR_TX.get(py) {
+                        let _ = error_tx
+                            .send(format!("New session handler '{label}' failed: {error_msg}"));
+                    }
+                });
             }
         }))
     }
@@ -296,10 +300,15 @@ impl Handlers {
             while let Some(result) = futures.next().await {
                 if let Err(err) = result {
                     // Note: Error::from() to collect backtrace from PyErr.
-                    error!(
-                        "event type {event_type_name} callback error: {}",
-                        Error::from(err)
-                    );
+                    let error_msg = Error::from(err);
+                    error!("event type {event_type_name} callback error: {error_msg}");
+                    Python::attach(|py| {
+                        if let Some(error_tx) = ERROR_TX.get(py) {
+                            let _ = error_tx.send(format!(
+                                "Event handler for '{event_type_name}' failed: {error_msg}"
+                            ));
+                        }
+                    });
                 }
             }
         });

@@ -139,10 +139,17 @@ impl CharacterMenu {
                 let (session, handles) = app.new_session(name)?;
 
                 let session_clone = session.clone();
+                let character = session.character.clone();
                 tokio::spawn(async move {
                     app::join_all(handles, "new session handler panicked").await;
                     if let Err(e) = Python::attach(|py| session_clone.connect(py)) {
                         error!("failed to connect session: {e}");
+                        Python::attach(|py| {
+                            if let Some(error_tx) = crate::python::ERROR_TX.get(py) {
+                                let _ =
+                                    error_tx.send(format!("Failed to connect '{character}': {e}"));
+                            }
+                        });
                     }
                 });
 

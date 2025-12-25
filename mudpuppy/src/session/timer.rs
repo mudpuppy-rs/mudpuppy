@@ -163,7 +163,11 @@ async fn run_timer_loop(py_config: Py<Timer>) {
             {
                 Ok(callback) => callback,
                 Err(err) => {
-                    error!(name, "timer failed: {}", Error::from(err));
+                    let error_msg = Error::from(err);
+                    error!(name, "timer failed: {error_msg}");
+                    if let Some(error_tx) = python::ERROR_TX.get(py) {
+                        let _ = error_tx.send(format!("Timer '{name}' failed: {error_msg}"));
+                    }
                     return None;
                 }
             };
@@ -177,7 +181,14 @@ async fn run_timer_loop(py_config: Py<Timer>) {
             let name = Python::attach(|py| py_config.borrow(py).name.clone());
             debug!(name, "invoking timer callback");
             if let Err(err) = callback.await {
-                error!(name, "timer failed: {err}");
+                let error_msg = Error::from(err);
+                error!(name, "timer failed: {error_msg}");
+                Python::attach(|py| {
+                    if let Some(error_tx) = python::ERROR_TX.get(py) {
+                        let _ =
+                            error_tx.send(format!("Timer '{name}' callback failed: {error_msg}"));
+                    }
+                });
                 return;
             }
         }
