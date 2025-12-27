@@ -86,7 +86,7 @@ impl Timer {
         )?;
 
         if start.unwrap_or_default() {
-            Self::start(t.bind(py))
+            Self::start(t.bind(py));
         }
 
         Ok(t)

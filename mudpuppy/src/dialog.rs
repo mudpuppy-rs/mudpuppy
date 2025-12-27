@@ -44,6 +44,11 @@ impl DialogManager {
         self.active.front()
     }
 
+    /// Get all active dialogs (for rendering).
+    pub(crate) fn get_all_active(&self) -> impl DoubleEndedIterator<Item = &Py<Dialog>> {
+        self.active.iter()
+    }
+
     /// Check for expired dialogs and clean up old error tracking.
     pub(crate) fn tick(&mut self) {
         let now = Instant::now();
@@ -117,7 +122,7 @@ impl DialogManager {
     }
 
     /// Add a dialog to the manager.
-    fn add_dialog(&mut self, py: Python<'_>, dialog: Py<Dialog>) {
+    fn add_dialog(&mut self, py: Python<'_>, dialog: &Py<Dialog>) {
         let d = dialog.borrow(py);
         debug!(id = ?d.id, priority = ?d.priority, "adding dialog");
 
@@ -200,7 +205,7 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog.clone_ref(py));
+        self.add_dialog(py, &py_dialog);
 
         // Track this error
         let now = Instant::now();
@@ -231,7 +236,7 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog.clone_ref(py));
+        self.add_dialog(py, &py_dialog);
         py_dialog
     }
 
@@ -250,7 +255,7 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog.clone_ref(py));
+        self.add_dialog(py, &py_dialog);
         py_dialog
     }
 
@@ -275,7 +280,7 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog.clone_ref(py));
+        self.add_dialog(py, &py_dialog);
         py_dialog
     }
 
@@ -310,7 +315,7 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog.clone_ref(py));
+        self.add_dialog(py, &py_dialog);
         py_dialog
     }
 
@@ -414,6 +419,7 @@ impl Debug for Dialog {
         f.debug_struct("Dialog")
             .field("id", &self.id)
             .field("kind", &self.kind)
+            .field("expires_at", &self.expires_at)
             .field("priority", &self.priority)
             .finish()
     }
@@ -614,7 +620,7 @@ mod tests {
                 expires_at: None,
                 priority: DialogPriority::Low,
             };
-            dm.add_dialog(py, Py::new(py, low_dialog).unwrap());
+            dm.add_dialog(py, &Py::new(py, low_dialog).unwrap());
 
             let high_dialog = Dialog {
                 id: "high".to_string(),
@@ -627,7 +633,7 @@ mod tests {
                 expires_at: None,
                 priority: DialogPriority::High,
             };
-            dm.add_dialog(py, Py::new(py, high_dialog).unwrap());
+            dm.add_dialog(py, &Py::new(py, high_dialog).unwrap());
 
             // High priority should be shown first
             let active = dm.get_active().unwrap();

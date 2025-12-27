@@ -30,6 +30,7 @@ global_window_state = {
 session_window_state = {}
 
 global_dialog = None
+absolute_dialog = None
 session_dialogs = {}
 
 
@@ -49,6 +50,7 @@ async def setup_demo(sesh: Session):
     if not hasattr(setup_demo, "_global_setup"):
         setup_demo._global_setup = True
         await setup_global_window()
+        await setup_absolute_window()
 
     # Create per-session stats window
     await setup_session_window(sesh)
@@ -87,6 +89,40 @@ async def setup_global_window():
     Timer("global-window-position", 0.1, callback=update_global_position)
 
     logger.info("Global network monitor started")
+
+
+async def setup_absolute_window():
+    """Create a global floating window with absolute positioning."""
+    global absolute_dialog
+
+    logger.info("Creating absolute positioned window")
+
+    # Create buffer for absolute window
+    buffer = Buffer("absolute-window")
+    buffer.config.all_borders()
+
+    # Create the floating window with ABSOLUTE position and size
+    # Position at column 2, row 2 (absolute cell coordinates)
+    # Size of 40 columns by 10 rows (absolute cell size)
+    window = FloatingWindow(
+        buffer=buffer,
+        position=Position.absolute(2, 2),
+        size=Size.absolute(40, 10),
+        title="Absolute Window",
+    )
+
+    # Get global dialog manager and show window
+    dm = await pup.dialog_manager()
+    absolute_dialog = dm.show_floating_window(
+        window,
+        dismissible=False,
+        priority=DialogPriority.Low,
+    )
+
+    # Create timer for content updates (1 second)
+    Timer("absolute-window-content", 1.0, callback=update_absolute_content)
+
+    logger.info("Absolute positioned window started")
 
 
 async def setup_session_window(sesh: Session):
@@ -187,7 +223,7 @@ async def update_global_content(timer: Timer):
     if buffer_py:
         # Build content
         lines = []
-        lines.append(f"  \x1b[1;36mNetwork Activity Monitor\x1b[0m")
+        lines.append("  \x1b[1;36mNetwork Activity Monitor\x1b[0m")
         lines.append(f"  {datetime.now().strftime('%H:%M:%S')}")
         lines.append("")
         lines.append(f"  \x1b[32m↑\x1b[0m Sent:     {state['packets_sent']:>8} packets")
@@ -299,6 +335,33 @@ async def update_session_content(timer: Timer):
             lines.append("  \x1b[1mCombat Log:\x1b[0m")
             for event in state["combat_log"][-5:]:
                 lines.append(f"  \x1b[90m>\x1b[0m {event}")
+
+        # Update buffer with new content
+        for line in lines:
+            line_bytes = (line + "\n").encode("utf-8")
+            buffer_py.add(OutputItem.mud(MudLine(line_bytes)))
+
+
+async def update_absolute_content(timer: Timer):
+    """Update the content of the absolute positioned window."""
+    global absolute_dialog
+    if not absolute_dialog:
+        return
+
+    # Access buffer directly from the dialog
+    buffer_py = absolute_dialog.kind.window.buffer
+
+    if buffer_py:
+        # Build content
+        lines = []
+        lines.append("  \x1b[1;33mAbsolute Position Demo\x1b[0m")
+        lines.append(f"  {datetime.now().strftime('%H:%M:%S')}")
+        lines.append("")
+        lines.append("  \x1b[1mPosition:\x1b[0m Absolute(2, 2)")
+        lines.append("  \x1b[1mSize:\x1b[0m Absolute(40, 10)")
+        lines.append("")
+        lines.append("  This window uses absolute cell")
+        lines.append("  coordinates instead of percentages!")
 
         # Update buffer with new content
         for line in lines:

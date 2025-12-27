@@ -70,10 +70,11 @@ impl Chrome {
         self.active_tab_mut().render(app, f, tab_content)?;
 
         // Render per-session dialogs first (if the active tab is a session tab)
+        // Render in reverse priority order (low to high) so high priority appears on top
         if let Some(session_id) = self.active_tab().session().map(|s| s.id) {
             if let Ok(session) = app.session(session_id) {
                 Python::attach(|py| {
-                    if let Some(dialog) = session.dialog_manager.borrow(py).get_active() {
+                    for dialog in session.dialog_manager.borrow(py).get_all_active().rev() {
                         Self::render_dialog(f, py, dialog, tab_content);
                     }
                 });
@@ -81,8 +82,9 @@ impl Chrome {
         }
 
         // Render global dialog manager dialogs (if any) - these take precedence
+        // Render in reverse priority order (low to high) so high priority appears on top
         Python::attach(|py| {
-            if let Some(dialog) = app.dialog_manager.borrow(py).get_active() {
+            for dialog in app.dialog_manager.borrow(py).get_all_active().rev() {
                 Self::render_dialog(f, py, dialog, tab_content);
             }
         });
@@ -161,7 +163,7 @@ impl Chrome {
             }
             DialogKind::FloatingWindow { window, .. } => {
                 let window = window.borrow(py);
-                let popup_area = calculate_window_rect(area, &window.position, &window.size);
+                let popup_area = calculate_window_rect(area, window.position, window.size);
 
                 f.render_widget(Clear, popup_area);
 
@@ -592,11 +594,12 @@ fn centered_rect(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     )
 }
 
-fn calculate_window_rect(area: Rect, position: &Position, size: &Size) -> Rect {
+#[expect(clippy::cast_possible_truncation)] // TODO(XXX): revisit truncation risk.
+fn calculate_window_rect(area: Rect, position: Position, size: Size) -> Rect {
     let (x, y) = match position {
         Position::Percent { x, y } => {
-            let x_pos = (u32::from(area.width) * u32::from(*x) / 100) as u16;
-            let y_pos = (u32::from(area.height) * u32::from(*y) / 100) as u16;
+            let x_pos = (u32::from(area.width) * u32::from(x) / 100) as u16;
+            let y_pos = (u32::from(area.height) * u32::from(y) / 100) as u16;
             (area.x + x_pos, area.y + y_pos)
         }
         Position::Absolute { x, y } => (area.x + x, area.y + y),
@@ -604,11 +607,11 @@ fn calculate_window_rect(area: Rect, position: &Position, size: &Size) -> Rect {
 
     let (width, height) = match size {
         Size::Percent { width, height } => {
-            let w = (u32::from(area.width) * u32::from(*width) / 100) as u16;
-            let h = (u32::from(area.height) * u32::from(*height) / 100) as u16;
+            let w = (u32::from(area.width) * u32::from(width) / 100) as u16;
+            let h = (u32::from(area.height) * u32::from(height) / 100) as u16;
             (w, h)
         }
-        Size::Absolute { width, height } => (*width, *height),
+        Size::Absolute { width, height } => (width, height),
     };
 
     // Ensure the window doesn't go beyond the area bounds
