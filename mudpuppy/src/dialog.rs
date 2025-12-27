@@ -85,7 +85,7 @@ impl Size {
 /// A floating window with a buffer and optional title.
 #[derive(Clone)]
 #[pyclass]
-pub struct FloatingWindow {
+pub(crate) struct FloatingWindow {
     #[pyo3(get, set)]
     pub title: Option<String>,
     #[pyo3(get, set)]
@@ -132,7 +132,7 @@ impl std::fmt::Debug for FloatingWindow {
 /// Type of dialog to display.
 #[derive(Clone)]
 #[pyclass]
-pub enum DialogKind {
+pub(crate) enum DialogKind {
     /// Confirmation dialog: requires specific key to confirm, any other key cancels.
     Confirmation {
         message: String,
@@ -191,14 +191,14 @@ impl std::fmt::Debug for DialogKind {
 /// A modal dialog overlay.
 #[derive(Clone)]
 #[pyclass]
-pub struct Dialog {
+pub(crate) struct Dialog {
     #[pyo3(get, set)]
-    pub id: String,
+    pub(crate) id: String,
     #[pyo3(get, set)]
-    pub kind: DialogKind,
+    pub(crate) kind: DialogKind,
     pub(crate) expires_at: Option<Instant>,
     #[pyo3(get, set)]
-    pub priority: DialogPriority,
+    pub(crate) priority: DialogPriority,
 }
 
 impl std::fmt::Debug for Dialog {
@@ -214,7 +214,7 @@ impl std::fmt::Debug for Dialog {
 #[pymethods]
 impl Dialog {
     #[new]
-    pub fn new(id: String, kind: DialogKind, priority: DialogPriority) -> Self {
+    pub(crate) fn new(id: String, kind: DialogKind, priority: DialogPriority) -> Self {
         Self {
             id,
             kind,
@@ -284,7 +284,7 @@ impl Default for DialogManager {
 
 impl DialogManager {
     /// Create a new dialog manager with default settings.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             active: VecDeque::new(),
             recent_errors: HashMap::new(),
@@ -294,17 +294,12 @@ impl DialogManager {
     }
 
     /// Get the currently active (topmost) dialog.
-    pub fn get_active(&self) -> Option<&Py<Dialog>> {
+    pub(crate) fn get_active(&self) -> Option<&Py<Dialog>> {
         self.active.front()
     }
 
-    /// Get a mutable reference to the currently active dialog.
-    pub fn get_active_mut(&mut self) -> Option<&mut Py<Dialog>> {
-        self.active.front_mut()
-    }
-
     /// Check for expired dialogs and clean up old error tracking.
-    pub fn tick(&mut self) {
+    pub(crate) fn tick(&mut self) {
         let now = Instant::now();
 
         // Remove expired dialogs
@@ -402,7 +397,7 @@ impl DialogManager {
 #[pymethods]
 impl DialogManager {
     /// Add a dialog to the manager.
-    pub fn add_dialog(&mut self, py: Python<'_>, dialog: Py<Dialog>) {
+    pub(crate) fn add_dialog(&mut self, py: Python<'_>, dialog: Py<Dialog>) {
         let d = dialog.borrow(py);
         debug!(id = ?d.id, priority = ?d.priority, "adding dialog");
 
@@ -554,7 +549,7 @@ impl DialogManager {
 
     /// Show a floating window. Returns the dialog so Python can hold onto it and mutate it.
     #[pyo3(signature = (window, *, id=None, dismissible=true, priority=DialogPriority::Low, timeout=None))]
-    pub fn show_floating_window(
+    pub(crate) fn show_floating_window(
         &mut self,
         py: Python<'_>,
         window: FloatingWindow,

@@ -192,6 +192,13 @@ impl BufferConfig {
 
 #[pymethods]
 impl BufferConfig {
+    fn all_borders(&mut self) {
+        self.border_top = true;
+        self.border_bottom = true;
+        self.border_right = true;
+        self.border_left = true;
+    }
+
     fn __str__(&self) -> String {
         // TODO(XXX): nicer str format
         format!("{self:?}")

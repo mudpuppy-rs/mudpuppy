@@ -1,7 +1,6 @@
 import logging
 import random
 import math
-import asyncio
 from datetime import datetime
 
 import pup
@@ -30,11 +29,6 @@ global_window_state = {
 
 session_window_state = {}
 
-# Store timers to prevent garbage collection
-global_timers = []
-session_timers = {}
-
-# Store dialog objects so we can update their positions
 global_dialog = None
 session_dialogs = {}
 
@@ -68,10 +62,7 @@ async def setup_global_window():
 
     # Create buffer for global window
     buffer = Buffer("network-monitor")
-    buffer.config.border_top = True
-    buffer.config.border_bottom = True
-    buffer.config.border_left = True
-    buffer.config.border_right = True
+    buffer.config.all_borders()
 
     # Create the floating window
     window = FloatingWindow(
@@ -90,16 +81,10 @@ async def setup_global_window():
     )
 
     # Create timer for content updates (1 second)
-    content_timer = Timer("global-window-content", 1.0, callback=update_global_content)
-    content_timer.start()
-    global_timers.append(content_timer)
+    Timer("global-window-content", 1.0, callback=update_global_content)
 
     # Create timer for position animation (100ms for smooth movement)
-    position_timer = Timer(
-        "global-window-position", 0.1, callback=update_global_position
-    )
-    position_timer.start()
-    global_timers.append(position_timer)
+    Timer("global-window-position", 0.1, callback=update_global_position)
 
     logger.info("Global network monitor started")
 
@@ -110,10 +95,7 @@ async def setup_session_window(sesh: Session):
 
     # Create buffer for session window
     buffer = Buffer(f"session-stats-{sesh.id}")
-    buffer.config.border_top = True
-    buffer.config.border_bottom = True
-    buffer.config.border_left = True
-    buffer.config.border_right = True
+    buffer.config.all_borders()
 
     # Create the floating window
     window = FloatingWindow(
@@ -133,31 +115,25 @@ async def setup_session_window(sesh: Session):
     session_dialogs[sesh.id] = session_dialog  # Store for position updates
 
     # Create timer for content updates with session attached (1 second)
-    content_timer = Timer(
+    Timer(
         f"session-window-content-{sesh.id}",
         1.0,
         callback=update_session_content,
         session=sesh,
     )
-    content_timer.start()
-    if sesh.id not in session_timers:
-        session_timers[sesh.id] = []
-    session_timers[sesh.id].append(content_timer)
 
     # Create timer for position animation (100ms for smooth movement)
-    position_timer = Timer(
+    Timer(
         f"session-window-position-{sesh.id}",
         0.1,
         callback=update_session_position,
         session=sesh,
     )
-    position_timer.start()
-    session_timers[sesh.id].append(position_timer)
 
     logger.info(f"Session stats window started for {sesh.character}")
 
 
-async def update_global_position(timer: Timer):
+async def update_global_position(_timer: Timer):
     """Animate the global window position (circular motion)."""
     global global_dialog
     if not global_dialog:

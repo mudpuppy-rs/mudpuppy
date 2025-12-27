@@ -40,7 +40,7 @@ pub(crate) struct Timer {
 #[pymethods]
 impl Timer {
     #[new]
-    #[pyo3(signature = (name, duration_seconds, *, callback=None, reaction=None, session=None))]
+    #[pyo3(signature = (name, duration_seconds, *, callback=None, reaction=None, session=None, start=true))]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         py: Python<'_>,
@@ -49,6 +49,7 @@ impl Timer {
         callback: Option<Py<PyAny>>,
         reaction: Option<String>,
         session: Option<python::Session>,
+        start: Option<bool>
     ) -> Result<Py<Self>, Error> {
         // Accept float for sub-second precision (e.g., 0.1 for 100ms)
         let duration = Duration::from_secs_f64(duration_seconds);
@@ -71,7 +72,7 @@ impl Timer {
             require_coroutine(py, "Timer callback", callback)?;
         }
 
-        let t = Self {
+        let t = Py::new(py, Self {
             name,
             duration,
             callback,
@@ -79,9 +80,13 @@ impl Timer {
             session,
             hit_count: 0,
             task: None,
-        };
+        })?;
 
-        Ok(Py::new(py, t)?)
+        if start.unwrap_or_default() {
+            Self::start(t.bind(py))
+        }
+
+        Ok(t)
     }
 
     #[getter(duration)]
