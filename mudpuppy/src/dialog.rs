@@ -8,6 +8,7 @@ use strum::Display;
 use tracing::{debug, trace};
 
 use crate::keyboard::{KeyCode, KeyEvent};
+use crate::mouse::{MouseButton, MouseEvent, MouseEventKind};
 use crate::session::Buffer;
 
 /// Manages modal dialogs and notifications.
@@ -26,6 +27,9 @@ pub struct DialogManager {
     /// Maximum number of dialogs to keep in queue.
     #[pyo3(get, set)]
     max_concurrent: usize,
+
+    /// Current drag operation state.
+    drag_state: Option<DragState>,
 }
 
 impl DialogManager {
@@ -36,6 +40,7 @@ impl DialogManager {
             recent_errors: HashMap::new(),
             error_cooldown: Duration::from_secs(5),
             max_concurrent: 3,
+            drag_state: None,
         }
     }
 
@@ -78,47 +83,160 @@ impl DialogManager {
     /// Handle a key event. Returns Some(action) if a confirmation was accepted, or None.
     /// Also returns a bool indicating if the event was consumed.
     pub(crate) fn handle_key(&mut self, key: &KeyEvent) -> (bool, Option<ConfirmAction>) {
-        let KeyCode::Char(key_char) = key.code else {
-            return (false, None);
-        };
-
-        let py_dialog = Python::attach(|py| self.get_active().map(|d| d.clone_ref(py)));
+        // Only the topmost dialog (highest priority, front of queue) gets keyboard events
+        let py_dialog = Python::attach(|py| self.active.front().map(|d| d.clone_ref(py)));
 
         let Some(py_dialog) = py_dialog else {
+            trace!("handle_key: no active dialogs");
             return (false, None);
         };
 
         Python::attach(|py| {
             let dialog = py_dialog.borrow(py);
+            trace!(id = ?dialog.id, kind = ?dialog.kind, priority = ?dialog.priority, "handle_key: checking topmost dialog");
 
             match &dialog.kind {
                 DialogKind::Confirmation { confirm_key, .. } => {
-                    if key_char == *confirm_key {
+                    // Check if this is the confirm key (must be a char)
+                    let is_confirm = matches!(key.code, KeyCode::Char(c) if c == *confirm_key);
+
+                    if is_confirm {
                         debug!(id = ?dialog.id, "confirmation accepted");
                         let py_dialog = self.active.pop_front().unwrap();
                         if let DialogKind::Confirmation { action, .. } = &py_dialog.borrow(py).kind
                         {
-                            return (true, Some(action.clone()));
+                            (true, Some(action.clone()))
+                        } else {
+                            (true, None)
                         }
                     } else {
                         debug!(id = ?dialog.id, ?key, "confirmation cancelled");
                         self.active.pop_front();
-                    }
-                    (true, None)
-                }
-                DialogKind::Notification { dismissible, .. }
-                | DialogKind::FloatingWindow { dismissible, .. } => {
-                    if *dismissible {
-                        debug!(id = ?dialog.id, kind = ?dialog.kind, "dialog dismissed by key press");
-                        self.active.pop_front();
                         (true, None)
+                    }
+                }
+                DialogKind::Notification { dismissible, .. } => {
+                    if *dismissible {
+                        // Only dismiss on char keys to avoid issues with special keys
+                        if matches!(key.code, KeyCode::Char(_)) {
+                            debug!(id = ?dialog.id, kind = ?dialog.kind, "dialog dismissed by key press");
+                            self.active.pop_front();
+                            (true, None)
+                        } else {
+                            // Non-char keys don't dismiss notifications
+                            (false, None)
+                        }
                     } else {
                         // Non-dismissible dialogs ignore key presses
                         (false, None)
                     }
                 }
+                DialogKind::FloatingWindow { .. } => {
+                    // Floating windows don't respond to keyboard events - they're mouse-only
+                    // Event is not consumed, so it falls through to the app
+                    (false, None)
+                }
             }
         })
+    }
+
+    /// Handle a mouse event for dragging floating windows.
+    /// Takes the mouse event and a list of (dialog_index, rect) pairs for hit testing.
+    /// Returns true if the event was consumed.
+    pub(crate) fn handle_mouse(
+        &mut self,
+        py: Python<'_>,
+        mouse: &MouseEvent,
+        window_rects: &[(usize, (u16, u16, u16, u16))],
+    ) -> bool {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                // Check if we clicked on a floating window
+                for &(dialog_idx, (x, y, width, height)) in window_rects {
+                    if mouse.column >= x
+                        && mouse.column < x + width
+                        && mouse.row >= y
+                        && mouse.row < y + height
+                    {
+                        // Start dragging this window
+                        if let Some(py_dialog) = self.active.get(dialog_idx) {
+                            let dialog = py_dialog.borrow(py);
+                            if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
+                                let mut window = window.borrow_mut(py);
+
+                                // Convert percentage position to absolute if needed
+                                let (abs_x, abs_y) = match window.position {
+                                    Position::Absolute { x, y } => (x, y),
+                                    Position::Percent { .. } => {
+                                        // Already calculated in window_rects
+                                        (x, y)
+                                    }
+                                };
+
+                                // Update to absolute positioning
+                                window.position = Position::Absolute { x: abs_x, y: abs_y };
+
+                                self.drag_state = Some(DragState {
+                                    dialog_index: dialog_idx,
+                                    start_mouse_x: mouse.column,
+                                    start_mouse_y: mouse.row,
+                                    start_window_x: abs_x,
+                                    start_window_y: abs_y,
+                                });
+
+                                trace!(
+                                    id = ?dialog.id,
+                                    x = abs_x,
+                                    y = abs_y,
+                                    "started dragging window"
+                                );
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved => {
+                // Update window position if we're dragging
+                if let Some(drag_state) = &self.drag_state {
+                    if let Some(py_dialog) = self.active.get(drag_state.dialog_index) {
+                        let dialog = py_dialog.borrow(py);
+                        if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
+                            let mut window = window.borrow_mut(py);
+
+                            // Calculate new position based on mouse movement
+                            let delta_x = mouse.column as i32 - drag_state.start_mouse_x as i32;
+                            let delta_y = mouse.row as i32 - drag_state.start_mouse_y as i32;
+
+                            let new_x = (drag_state.start_window_x as i32 + delta_x).max(0) as u16;
+                            let new_y = (drag_state.start_window_y as i32 + delta_y).max(0) as u16;
+
+                            window.position = Position::Absolute { x: new_x, y: new_y };
+
+                            trace!(
+                                id = ?dialog.id,
+                                x = new_x,
+                                y = new_y,
+                                "dragging window"
+                            );
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                // End dragging
+                if self.drag_state.is_some() {
+                    trace!("ended dragging window");
+                    self.drag_state = None;
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
     }
 
     /// Add a dialog to the manager.
@@ -597,6 +715,19 @@ struct ErrorTracker {
     count: usize,
     last_shown: Instant,
     expires_at: Instant,
+}
+
+/// Tracking information for window drag operations.
+#[derive(Debug, Clone)]
+struct DragState {
+    /// Index of the dialog being dragged in the active queue.
+    dialog_index: usize,
+    /// Mouse position where drag started.
+    start_mouse_x: u16,
+    start_mouse_y: u16,
+    /// Window position when drag started (always absolute).
+    start_window_x: u16,
+    start_window_y: u16,
 }
 
 #[cfg(test)]

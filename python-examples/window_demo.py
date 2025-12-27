@@ -86,7 +86,7 @@ async def setup_global_window():
     Timer("global-window-content", 1.0, callback=update_global_content)
 
     # Create timer for position animation (100ms for smooth movement)
-    Timer("global-window-position", 0.1, callback=update_global_position)
+    #Timer("global-window-position", 0.1, callback=update_global_position)
 
     logger.info("Global network monitor started")
 
@@ -159,12 +159,12 @@ async def setup_session_window(sesh: Session):
     )
 
     # Create timer for position animation (100ms for smooth movement)
-    Timer(
-        f"session-window-position-{sesh.id}",
-        0.1,
-        callback=update_session_position,
-        session=sesh,
-    )
+    #Timer(
+    #    f"session-window-position-{sesh.id}",
+    #    0.1,
+    #    callback=update_session_position,
+    #    session=sesh,
+    #)
 
     logger.info(f"Session stats window started for {sesh.character}")
 

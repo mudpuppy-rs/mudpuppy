@@ -15,6 +15,7 @@ use crate::config::{CRATE_NAME, Config};
 use crate::dialog::{ConfirmAction, DialogKind, Position, Severity, Size};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
+use crate::mouse::MouseEvent;
 use crate::shortcut::Shortcut;
 use crate::tui::{Section, buffer};
 use crate::{python, tui};
@@ -476,20 +477,38 @@ impl Tab {
         }
     }
 
+    pub(crate) fn dialog_key_consumed(&mut self, app: &mut AppData, key_event: &KeyEvent) -> bool {
+        Self::dialog_key_action(app, key_event)
+    }
+
     pub(crate) fn key_event(
         &mut self,
         app: &mut AppData,
         key_event: &KeyEvent,
     ) -> Result<Option<TabAction>, Error> {
-        // Check if a dialog should handle this key event
-        if Self::dialog_key_action(app, key_event) {
-            return Ok(None);
-        }
+        // Dialogs are now checked earlier in the event flow (before shortcuts)
+        // So we don't need to check them again here
 
         match &mut self.kind {
             TabKind::Menu(_) | TabKind::Custom(_) => Ok(None),
             TabKind::Session(session) => session.key_event(app, key_event),
         }
+    }
+
+    pub(crate) fn mouse_event(
+        &mut self,
+        app: &mut AppData,
+        mouse_event: &MouseEvent,
+        area: Rect,
+    ) -> Result<Option<TabAction>, Error> {
+        // Check if a dialog should handle this mouse event
+        if Self::dialog_mouse_action(app, mouse_event, area) {
+            return Ok(None);
+        }
+
+        // For now, only dialogs handle mouse events
+        // Future: forward to tabs if needed
+        Ok(None)
     }
 
     pub(crate) async fn shortcut(
@@ -528,26 +547,38 @@ impl Tab {
     }
 
     fn dialog_key_action(app: &mut AppData, key_event: &KeyEvent) -> bool {
-        let (consumed, action) =
+        // Check global dialogs first (they're rendered on top and have precedence)
+        let (global_consumed, action) =
             Python::attach(|py| app.dialog_manager.borrow_mut(py).handle_key(key_event));
-        let Some(action) = action else {
-            return consumed;
-        };
-        match action {
-            ConfirmAction::Quit {} => {
-                app.should_quit = true;
-            }
-            ConfirmAction::PyCallback(callback) => {
-                // Spawn the Python callback
-                let dm = Python::attach(|py| app.dialog_manager.clone_ref(py));
-                tokio::spawn(async move {
-                    let future_result = Python::attach(|py| {
-                        pyo3_async_runtimes::tokio::into_future(callback.bind(py).call0()?)
-                    });
 
-                    let future = match future_result {
-                        Ok(f) => f,
-                        Err(err) => {
+        if let Some(action) = action {
+            match action {
+                ConfirmAction::Quit {} => {
+                    app.should_quit = true;
+                }
+                ConfirmAction::PyCallback(callback) => {
+                    // Spawn the Python callback
+                    let dm = Python::attach(|py| app.dialog_manager.clone_ref(py));
+                    tokio::spawn(async move {
+                        let future_result = Python::attach(|py| {
+                            pyo3_async_runtimes::tokio::into_future(callback.bind(py).call0()?)
+                        });
+
+                        let future = match future_result {
+                            Ok(f) => f,
+                            Err(err) => {
+                                // Note: Error::from on PyErr to collect backtrace.
+                                let err = Error::from(err);
+                                error!("dialog callback error: {err}");
+                                Python::attach(|py| {
+                                    dm.borrow_mut(py)
+                                        .show_error(py, format!("Dialog callback failed: {err}"));
+                                });
+                                return;
+                            }
+                        };
+
+                        if let Err(err) = future.await {
                             // Note: Error::from on PyErr to collect backtrace.
                             let err = Error::from(err);
                             error!("dialog callback error: {err}");
@@ -555,23 +586,92 @@ impl Tab {
                                 dm.borrow_mut(py)
                                     .show_error(py, format!("Dialog callback failed: {err}"));
                             });
-                            return;
                         }
-                    };
+                    });
+                }
+            }
+            return true;
+        }
 
-                    if let Err(err) = future.await {
-                        // Note: Error::from on PyErr to collect backtrace.
-                        let err = Error::from(err);
-                        error!("dialog callback error: {err}");
-                        Python::attach(|py| {
-                            dm.borrow_mut(py)
-                                .show_error(py, format!("Dialog callback failed: {err}"));
-                        });
+        if global_consumed {
+            return true;
+        }
+
+        // Check session-level dialogs if global dialogs didn't consume the event
+        if let Some(session_id) = app.active_session {
+            if let Ok(session) = app.session(session_id) {
+                let (session_consumed, _action) = Python::attach(|py| {
+                    session.dialog_manager.borrow_mut(py).handle_key(key_event)
+                });
+                // Session-level dialog confirmations don't have actions, so we ignore them
+                return session_consumed;
+            }
+        }
+
+        false
+    }
+
+    fn dialog_mouse_action(app: &mut AppData, mouse_event: &MouseEvent, area: Rect) -> bool {
+        // Check global dialogs first (they're rendered on top and have precedence)
+        let global_window_rects = Python::attach(|py| {
+            let dm = app.dialog_manager.borrow(py);
+            dm.get_all_active()
+                .enumerate()
+                .filter_map(|(idx, py_dialog)| {
+                    let dialog = py_dialog.borrow(py);
+                    if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
+                        let window = window.borrow(py);
+                        let rect = calculate_window_rect(area, window.position, window.size);
+                        Some((idx, (rect.x, rect.y, rect.width, rect.height)))
+                    } else {
+                        None
                     }
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let global_consumed = Python::attach(|py| {
+            app.dialog_manager
+                .borrow_mut(py)
+                .handle_mouse(py, mouse_event, &global_window_rects)
+        });
+
+        if global_consumed {
+            return true;
+        }
+
+        // Check session-level dialogs if global dialogs didn't consume the event
+        if let Some(session_id) = app.active_session {
+            if let Ok(session) = app.session(session_id) {
+                let session_window_rects = Python::attach(|py| {
+                    let dm = session.dialog_manager.borrow(py);
+                    dm.get_all_active()
+                        .enumerate()
+                        .filter_map(|(idx, py_dialog)| {
+                            let dialog = py_dialog.borrow(py);
+                            if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
+                                let window = window.borrow(py);
+                                let rect =
+                                    calculate_window_rect(area, window.position, window.size);
+                                Some((idx, (rect.x, rect.y, rect.width, rect.height)))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                });
+
+                return Python::attach(|py| {
+                    session.dialog_manager.borrow_mut(py).handle_mouse(
+                        py,
+                        mouse_event,
+                        &session_window_rects,
+                    )
                 });
             }
         }
-        consumed
+
+        false
     }
 }
 

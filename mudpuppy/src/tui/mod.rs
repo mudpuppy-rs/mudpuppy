@@ -11,6 +11,8 @@ use crossterm::ExecutableCommand;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream as CrosstermEventStream, KeyCode as CrosstermKeyCode,
     KeyEvent as CrosstermKeyEvent, KeyEventKind, KeyModifiers as CrosstermKeyModifiers,
+    MouseButton as CrosstermMouseButton, MouseEvent as CrosstermMouseEvent,
+    MouseEventKind as CrosstermMouseEventKind,
 };
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use futures::{FutureExt, StreamExt};
@@ -31,6 +33,7 @@ use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
+use crate::mouse::{MouseButton, MouseEvent, MouseEventKind};
 use crate::shortcut::{Shortcut, TabShortcut};
 use crate::{cli, dialog, python};
 
@@ -98,56 +101,89 @@ impl Tui {
         // Uncomment for VERY VERBOSE logging :)
         //trace!(event=?event);
 
-        // TODO(XXX): Mouse.
         // TODO(XXX): Bracketed paste.
         // TODO(XXX): Focus gained/lost ?
 
-        let CrosstermEvent::Key(key_event) = event else {
-            return Ok(None);
-        };
+        match event {
+            CrosstermEvent::Key(key_event) => {
+                // We don't do anything special with release/repeat.
+                if key_event.kind != KeyEventKind::Press {
+                    return Ok(None);
+                }
 
-        // We don't do anything special with release/repeat.
-        if key_event.kind != KeyEventKind::Press {
-            return Ok(None);
+                // Not all native crossterm key events can be translated to our Python-friendly
+                // domain repr.
+                let Ok(key_event) = KeyEvent::try_from(key_event) else {
+                    return Ok(None);
+                };
+
+                // Check dialogs first - they have the highest priority
+                // Dialogs must be checked before shortcuts so they can intercept keys like Esc
+                if self
+                    .chrome
+                    .active_tab_mut()
+                    .dialog_key_consumed(app, &key_event)
+                {
+                    return Ok(None);
+                }
+
+                // Handle app-level shortcuts, these aren't specific to the active tab and so we
+                // either process them or discard them. They aren't forwarded to the active tab.
+                // Note: taking the GIL to allow cloning the PyObject in PythonShortcut.
+                let shortcut = Python::attach(|_| app.shortcuts.get(&key_event).cloned());
+                if let Some(shortcut) = shortcut {
+                    trace!(
+                        key_event = key_event.to_string(),
+                        shortcut = shortcut.to_string(),
+                        "global shortcut matched"
+                    );
+                    return self
+                        .process_shortcut(app, shortcut, &key_event, false)
+                        .await;
+                }
+
+                // Handle tab-level shortcuts. These are forwarded to the active tab if we don't handle
+                // them ourselves (e.g. quit, python shortcuts).
+                let active_tab = self.chrome.active_tab_mut();
+                let shortcut = active_tab.lookup_shortcut(&key_event);
+                if let Some(shortcut) = shortcut {
+                    trace!(
+                        key_event = key_event.to_string(),
+                        shortcut = shortcut.to_string(),
+                        active_tab = active_tab.data.title,
+                        "tab shortcut matched"
+                    );
+                    return self.process_shortcut(app, shortcut, &key_event, true).await;
+                }
+
+                // Otherwise, forward the crossterm event to the active tab.
+                active_tab.key_event(app, &key_event)
+            }
+            CrosstermEvent::Mouse(mouse_event) => {
+                // Translate crossterm mouse event to our domain type
+                let mouse_event = MouseEvent::from(mouse_event);
+
+                // Calculate the tab content area (excluding the 3-line tab bar)
+                // This matches the layout in Chrome::render
+                let size = self.terminal.size()?;
+                let full_area = ratatui::layout::Rect {
+                    x: 0,
+                    y: 0,
+                    width: size.width,
+                    height: size.height,
+                };
+                let [_tab_bar, tab_content] = ratatui::layout::Layout::vertical([
+                    ratatui::layout::Constraint::Length(3),
+                    ratatui::layout::Constraint::Fill(0),
+                ])
+                .areas(full_area);
+
+                self.chrome
+                    .active_tab_mut()
+                    .mouse_event(app, &mouse_event, tab_content)
+            }
+            _ => Ok(None),
         }
-
-        // Not all native crossterm key events can be translated to our Python-friendly
-        // domain repr.
-        let Ok(key_event) = KeyEvent::try_from(key_event) else {
-            return Ok(None);
-        };
-
-        // Handle app-level shortcuts, these aren't specific to the active tab and so we
-        // either process them or discard them. They aren't forwarded to the active tab.
-        // Note: taking the GIL to allow cloning the PyObject in PythonShortcut.
-        let shortcut = Python::attach(|_| app.shortcuts.get(&key_event).cloned());
-        if let Some(shortcut) = shortcut {
-            trace!(
-                key_event = key_event.to_string(),
-                shortcut = shortcut.to_string(),
-                "global shortcut matched"
-            );
-            return self
-                .process_shortcut(app, shortcut, &key_event, false)
-                .await;
-        }
-
-        // Handle tab-level shortcuts. These are forwarded to the active tab if we don't handle
-        // them ourselves (e.g. quit, python shortcuts).
-        let active_tab = self.chrome.active_tab_mut();
-        let shortcut = active_tab.lookup_shortcut(&key_event);
-        if let Some(shortcut) = shortcut {
-            trace!(
-                key_event = key_event.to_string(),
-                shortcut = shortcut.to_string(),
-                active_tab = active_tab.data.title,
-                "tab shortcut matched"
-            );
-            return self.process_shortcut(app, shortcut, &key_event, true).await;
-        }
-
-        // Otherwise, forward the crossterm event to the active tab.
-        active_tab.key_event(app, &key_event)
     }
 
     pub(crate) async fn process_shortcut(
@@ -436,5 +472,41 @@ impl TryFrom<&CrosstermKeyEvent> for KeyEvent {
 impl From<CrosstermKeyModifiers> for KeyModifiers {
     fn from(value: CrosstermKeyModifiers) -> Self {
         KeyModifiers(value.bits())
+    }
+}
+
+impl From<&CrosstermMouseEvent> for MouseEvent {
+    fn from(value: &CrosstermMouseEvent) -> Self {
+        MouseEvent {
+            kind: (&value.kind).into(),
+            column: value.column,
+            row: value.row,
+            modifiers: value.modifiers.into(),
+        }
+    }
+}
+
+impl From<&CrosstermMouseEventKind> for MouseEventKind {
+    fn from(value: &CrosstermMouseEventKind) -> Self {
+        match value {
+            CrosstermMouseEventKind::Down(button) => MouseEventKind::Down(button.into()),
+            CrosstermMouseEventKind::Up(button) => MouseEventKind::Up(button.into()),
+            CrosstermMouseEventKind::Drag(button) => MouseEventKind::Drag(button.into()),
+            CrosstermMouseEventKind::Moved => MouseEventKind::Moved,
+            CrosstermMouseEventKind::ScrollDown => MouseEventKind::ScrollDown,
+            CrosstermMouseEventKind::ScrollUp => MouseEventKind::ScrollUp,
+            CrosstermMouseEventKind::ScrollLeft => MouseEventKind::ScrollLeft,
+            CrosstermMouseEventKind::ScrollRight => MouseEventKind::ScrollRight,
+        }
+    }
+}
+
+impl From<&CrosstermMouseButton> for MouseButton {
+    fn from(value: &CrosstermMouseButton) -> Self {
+        match value {
+            CrosstermMouseButton::Left => MouseButton::Left,
+            CrosstermMouseButton::Right => MouseButton::Right,
+            CrosstermMouseButton::Middle => MouseButton::Middle,
+        }
     }
 }

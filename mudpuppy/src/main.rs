@@ -6,6 +6,7 @@ mod error;
 mod headless;
 mod keyboard;
 mod logging;
+mod mouse;
 mod net;
 mod panic;
 mod python;
