@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
 use pyo3::{Py, PyAny, Python, pyclass, pymethods};
+use strum::Display;
 use tracing::{debug, trace};
 
 use crate::keyboard::{KeyCode, KeyEvent};
@@ -76,7 +77,6 @@ impl DialogManager {
             return (false, None);
         };
 
-        // Clone the Py<Dialog> to avoid holding a borrow of self
         let py_dialog = Python::attach(|py| self.get_active().map(|d| d.clone_ref(py)));
 
         let Some(py_dialog) = py_dialog else {
@@ -90,12 +90,9 @@ impl DialogManager {
                 DialogKind::Confirmation { confirm_key, .. } => {
                     if key_char == *confirm_key {
                         debug!(id = ?dialog.id, "confirmation accepted");
-                        // Drop the borrow before popping
-                        //drop(dialog);
-                        // Take the dialog to get the action
                         let py_dialog = self.active.pop_front().unwrap();
-                        let dialog = py_dialog.borrow(py);
-                        if let DialogKind::Confirmation { action, .. } = &dialog.kind {
+                        if let DialogKind::Confirmation { action, .. } = &py_dialog.borrow(py).kind
+                        {
                             return (true, Some(action.clone()));
                         }
                     } else {
@@ -104,28 +101,41 @@ impl DialogManager {
                     }
                     (true, None)
                 }
-                DialogKind::Notification { dismissible, .. } => {
+                DialogKind::Notification { dismissible, .. }
+                | DialogKind::FloatingWindow { dismissible, .. } => {
                     if *dismissible {
-                        debug!(id = ?dialog.id, "notification dismissed by key press");
+                        debug!(id = ?dialog.id, kind = ?dialog.kind, "dialog dismissed by key press");
                         self.active.pop_front();
                         (true, None)
                     } else {
-                        // Non-dismissible notifications ignore key presses
-                        (false, None)
-                    }
-                }
-                DialogKind::FloatingWindow { dismissible, .. } => {
-                    if *dismissible {
-                        debug!(id = ?dialog.id, "floating window dismissed by key press");
-                        self.active.pop_front();
-                        (true, None)
-                    } else {
-                        // Non-dismissible floating windows ignore key presses
+                        // Non-dismissible dialogs ignore key presses
                         (false, None)
                     }
                 }
             }
         })
+    }
+
+    /// Add a dialog to the manager.
+    fn add_dialog(&mut self, py: Python<'_>, dialog: Py<Dialog>) {
+        let d = dialog.borrow(py);
+        debug!(id = ?d.id, priority = ?d.priority, "adding dialog");
+
+        // Find the insertion point to maintain priority order
+        let insert_pos = self
+            .active
+            .iter()
+            .position(|py_d| py_d.borrow(py).priority < d.priority)
+            .unwrap_or(self.active.len());
+
+        self.active.insert(insert_pos, dialog.clone_ref(py));
+
+        // Trim if we exceed max concurrent
+        while self.active.len() > self.max_concurrent {
+            if let Some(removed) = self.active.pop_back() {
+                debug!(id = ?removed.borrow(py).id, "removing dialog due to queue overflow");
+            }
+        }
     }
 
     /// Calculate a hash for deduplication.
@@ -138,37 +148,8 @@ impl DialogManager {
 
 #[pymethods]
 impl DialogManager {
-    /// Add a dialog to the manager.
-    pub(crate) fn add_dialog(&mut self, py: Python<'_>, dialog: Py<Dialog>) {
-        let d = dialog.borrow(py);
-        debug!(id = ?d.id, priority = ?d.priority, "adding dialog");
-
-        // Find the insertion point to maintain priority order
-        let priority = d.priority;
-        drop(d);
-
-        let insert_pos = self
-            .active
-            .iter()
-            .position(|py_d| {
-                let other = py_d.borrow(py);
-                other.priority < priority
-            })
-            .unwrap_or(self.active.len());
-
-        self.active.insert(insert_pos, dialog.clone_ref(py));
-
-        // Trim if we exceed max concurrent
-        while self.active.len() > self.max_concurrent {
-            if let Some(removed) = self.active.pop_back() {
-                let d = removed.borrow(py);
-                debug!(id = ?d.id, "removing dialog due to queue overflow");
-            }
-        }
-    }
-
     /// Show an error notification with deduplication.
-    pub fn show_error(&mut self, py: Python<'_>, message: String) {
+    pub(crate) fn show_error(&mut self, py: Python<'_>, message: String) -> Py<Dialog> {
         let hash = Self::calculate_hash(&message);
 
         // Check if we've seen this error recently
@@ -178,26 +159,30 @@ impl DialogManager {
                 tracker.count += 1;
 
                 // Update existing dialog message to show count
+                // TODO(XXX): this sucks.
                 let target_id = format!("error_{hash}");
-                if let Some(py_dialog) = self.active.iter().find(|d| {
-                    let dialog = d.borrow(py);
-                    matches!(
-                        &dialog.kind,
-                        DialogKind::Notification {
-                            severity: Severity::Error,
-                            ..
-                        }
-                    ) && dialog.id == target_id
-                }) {
-                    py_dialog.borrow_mut(py).increment_count();
-                    trace!(
-                        hash,
-                        count = tracker.count,
-                        "updated error occurrence count"
-                    );
-                }
+                let py_dialog = self
+                    .active
+                    .iter()
+                    .find(|d| {
+                        let dialog = d.borrow(py);
+                        matches!(
+                            &dialog.kind,
+                            DialogKind::Notification {
+                                severity: Severity::Error,
+                                ..
+                            }
+                        ) && dialog.id == target_id
+                    })
+                    .unwrap();
+                py_dialog.borrow_mut(py).increment_count();
+                trace!(
+                    hash,
+                    count = tracker.count,
+                    "updated error occurrence count"
+                );
 
-                return;
+                return py_dialog.clone_ref(py);
             }
         }
 
@@ -215,7 +200,7 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog);
+        self.add_dialog(py, py_dialog.clone_ref(py));
 
         // Track this error
         let now = Instant::now();
@@ -227,10 +212,12 @@ impl DialogManager {
                 expires_at: now + self.error_cooldown + Duration::from_secs(5),
             },
         );
+
+        py_dialog
     }
 
     /// Show a warning notification.
-    pub fn show_warning(&mut self, py: Python<'_>, message: String) {
+    pub(crate) fn show_warning(&mut self, py: Python<'_>, message: String) -> Py<Dialog> {
         let dialog = Dialog {
             id: format!("warning_{}", Self::calculate_hash(&message)),
             kind: DialogKind::Notification {
@@ -244,11 +231,12 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog);
+        self.add_dialog(py, py_dialog.clone_ref(py));
+        py_dialog
     }
 
     /// Show an info notification.
-    pub fn show_info(&mut self, py: Python<'_>, message: String) {
+    pub(crate) fn show_info(&mut self, py: Python<'_>, message: String) -> Py<Dialog> {
         let dialog = Dialog {
             id: format!("info_{}", Self::calculate_hash(&message)),
             kind: DialogKind::Notification {
@@ -262,18 +250,19 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog);
+        self.add_dialog(py, py_dialog.clone_ref(py));
+        py_dialog
     }
 
     /// Show a confirmation dialog.
-    pub fn show_confirmation(
+    pub(crate) fn show_confirmation(
         &mut self,
         py: Python<'_>,
         message: String,
         confirm_key: char,
         action: ConfirmAction,
         timeout: Option<Duration>,
-    ) {
+    ) -> Py<Dialog> {
         let dialog = Dialog {
             id: format!("confirm_{}", Self::calculate_hash(&message)),
             kind: DialogKind::Confirmation {
@@ -286,7 +275,8 @@ impl DialogManager {
         };
 
         let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, py_dialog);
+        self.add_dialog(py, py_dialog.clone_ref(py));
+        py_dialog
     }
 
     /// Show a floating window. Returns the dialog so Python can hold onto it and mutate it.
@@ -300,7 +290,6 @@ impl DialogManager {
         priority: DialogPriority,
         timeout: Option<Duration>,
     ) -> Py<Dialog> {
-        // Auto-generate id if not provided
         let id = id.unwrap_or_else(|| {
             use std::sync::atomic::{AtomicU64, Ordering};
             static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -326,19 +315,17 @@ impl DialogManager {
     }
 
     /// Dismiss a specific dialog by ID.
-    pub fn dismiss(&mut self, py: Python<'_>, id: &str) {
-        if let Some(pos) = self.active.iter().position(|py_d| {
-            let d = py_d.borrow(py);
-            d.id == id
-        }) {
-            let removed = self.active.remove(pos).unwrap();
-            let d = removed.borrow(py);
-            debug!(id = ?d.id, "dismissed dialog");
-        }
+    pub(crate) fn dismiss(&mut self, py: Python<'_>, id: &str) {
+        let Some(pos) = self.active.iter().position(|d| d.borrow(py).id == id) else {
+            return;
+        };
+        let removed = self.active.remove(pos).unwrap();
+        let removed = removed.borrow(py);
+        debug!(id = ?removed.id, "dismissed dialog");
     }
 
     /// Clear all dialogs.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         debug!(count = self.active.len(), "clearing all dialogs");
         self.active.clear();
     }
@@ -376,8 +363,8 @@ pub(crate) enum DialogKind {
     },
 }
 
-impl std::fmt::Debug for DialogKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for DialogKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             DialogKind::Confirmation {
                 message,
@@ -422,8 +409,8 @@ pub(crate) struct Dialog {
     pub(crate) priority: DialogPriority,
 }
 
-impl std::fmt::Debug for Dialog {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for Dialog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Dialog")
             .field("id", &self.id)
             .field("kind", &self.kind)
@@ -445,7 +432,7 @@ impl Dialog {
     }
 
     /// Update the occurrence count for a notification dialog.
-    pub fn increment_count(&mut self) {
+    pub(crate) fn increment_count(&mut self) {
         let DialogKind::Notification {
             occurrence_count,
             message,
@@ -473,18 +460,18 @@ impl Dialog {
 }
 
 /// Priority for dialog display. Higher priority dialogs are shown first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Display)]
 #[pyclass(frozen, eq, eq_int)]
-pub enum DialogPriority {
+pub(crate) enum DialogPriority {
     Low = 0,
     Normal = 1,
     High = 2,
 }
 
 /// Severity level for notification dialogs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 #[pyclass(frozen, eq, eq_int)]
-pub enum Severity {
+pub(crate) enum Severity {
     Info,
     Warning,
     Error,
@@ -493,15 +480,15 @@ pub enum Severity {
 /// Action to take when a confirmation dialog is confirmed.
 #[derive(Clone)]
 #[pyclass(frozen)]
-pub enum ConfirmAction {
+pub(crate) enum ConfirmAction {
     /// Quit the application.
     Quit {},
     /// Call a Python async callback.
     PyCallback(Py<PyAny>),
 }
 
-impl std::fmt::Debug for ConfirmAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for ConfirmAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ConfirmAction::Quit {} => write!(f, "Quit"),
             ConfirmAction::PyCallback(_) => write!(f, "PyCallback(<callable>)"),
@@ -514,19 +501,24 @@ impl std::fmt::Debug for ConfirmAction {
 #[pyclass]
 pub(crate) struct FloatingWindow {
     #[pyo3(get, set)]
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     #[pyo3(get, set)]
-    pub position: Position,
+    pub(crate) position: Position,
     #[pyo3(get, set)]
-    pub size: Size,
+    pub(crate) size: Size,
     #[pyo3(get)]
-    pub buffer: Py<Buffer>,
+    pub(crate) buffer: Py<Buffer>,
 }
 
 #[pymethods]
 impl FloatingWindow {
     #[new]
-    pub fn new(buffer: Py<Buffer>, position: Position, size: Size, title: Option<String>) -> Self {
+    pub(crate) fn new(
+        buffer: Py<Buffer>,
+        position: Position,
+        size: Size,
+        title: Option<String>,
+    ) -> Self {
         Self {
             title,
             position,
@@ -550,7 +542,7 @@ impl Debug for FloatingWindow {
 /// Position for floating windows (percentage or absolute).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[pyclass]
-pub enum Position {
+pub(crate) enum Position {
     /// Percentage of the screen (0-100).
     Percent { x: u16, y: u16 },
     /// Absolute position in cells.
@@ -560,12 +552,12 @@ pub enum Position {
 #[pymethods]
 impl Position {
     #[staticmethod]
-    pub fn percent(x: u16, y: u16) -> Self {
+    pub(crate) fn percent(x: u16, y: u16) -> Self {
         Self::Percent { x, y }
     }
 
     #[staticmethod]
-    pub fn absolute(x: u16, y: u16) -> Self {
+    pub(crate) fn absolute(x: u16, y: u16) -> Self {
         Self::Absolute { x, y }
     }
 }
@@ -573,7 +565,7 @@ impl Position {
 /// Size for floating windows (percentage or absolute).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[pyclass]
-pub enum Size {
+pub(crate) enum Size {
     /// Percentage of the screen (0-100).
     Percent { width: u16, height: u16 },
     /// Absolute size in cells.
@@ -583,12 +575,12 @@ pub enum Size {
 #[pymethods]
 impl Size {
     #[staticmethod]
-    pub fn percent(width: u16, height: u16) -> Self {
+    pub(crate) fn percent(width: u16, height: u16) -> Self {
         Self::Percent { width, height }
     }
 
     #[staticmethod]
-    pub fn absolute(width: u16, height: u16) -> Self {
+    pub(crate) fn absolute(width: u16, height: u16) -> Self {
         Self::Absolute { width, height }
     }
 }
@@ -607,8 +599,8 @@ mod tests {
 
     #[test]
     fn test_dialog_priority_ordering() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let mut dm = DialogManager::new();
 
             let low_dialog = Dialog {
@@ -645,8 +637,8 @@ mod tests {
 
     #[test]
     fn test_error_deduplication() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let mut dm = DialogManager::new();
 
             dm.show_error(py, "Test error".to_string());
