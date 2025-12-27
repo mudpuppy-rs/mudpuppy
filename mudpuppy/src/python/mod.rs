@@ -152,13 +152,12 @@ pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) 
     }
 }
 
-// TOOO(XXX): pretty ugly, would be nice to get errors into session output too.
-#[instrument(level = Level::DEBUG, skip(error_tx))]
+// TODO(XXX): error dialogs
+#[instrument(level = Level::DEBUG)]
 pub(super) fn run_character_setup(
     id: u32,
     character: &str,
     module: String,
-    error_tx: UnboundedSender<String>,
 ) -> Option<Py<PyModule>> {
     let (future, module) = match Python::attach(|py| {
         let module = PyModule::import(py, module)?;
@@ -180,7 +179,7 @@ pub(super) fn run_character_setup(
         Ok((future, module)) => (future, module),
         Err(err) => {
             error!("character {character} module import error: {err}");
-            let _ = error_tx.send(format!("Character {character} module import error: {err}"));
+            //let _ = error_tx.send(format!("Character {character} module import error: {err}"));
             return None;
         }
     };
@@ -193,9 +192,9 @@ pub(super) fn run_character_setup(
                 // NOTE: Using Error::from to collect backtrace from PyErr.
                 let error_msg = Error::from(err);
                 error!("character {character_name} module setup error: {error_msg}");
-                let _ = error_tx.send(format!(
+                /*let _ = error_tx.send(format!(
                     "Character {character_name} module setup error: {error_msg}"
-                ));
+                ));*/
             }
         });
     }

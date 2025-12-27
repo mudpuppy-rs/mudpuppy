@@ -12,11 +12,11 @@ use tracing::error;
 
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
-use crate::dialog::{ConfirmAction, DialogKind, Severity};
+use crate::dialog::{ConfirmAction, DialogKind, Position, Severity, Size};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::shortcut::Shortcut;
-use crate::tui::Section;
+use crate::tui::{Section, buffer};
 use crate::{python, tui};
 
 #[derive(Debug)]
@@ -69,7 +69,18 @@ impl Chrome {
 
         self.active_tab_mut().render(app, f, tab_content)?;
 
-        // Render dialog manager dialogs (if any)
+        // Render per-session dialogs first (if the active tab is a session tab)
+        if let Some(session_id) = self.active_tab().session().map(|s| s.id) {
+            if let Ok(session) = app.session(session_id) {
+                Python::attach(|py| {
+                    if let Some(dialog) = session.dialog_manager.borrow(py).get_active() {
+                        Self::render_dialog(f, dialog, tab_content);
+                    }
+                });
+            }
+        }
+
+        // Render global dialog manager dialogs (if any) - these take precedence
         Python::attach(|py| {
             if let Some(dialog) = app.dialog_manager.borrow(py).get_active() {
                 Self::render_dialog(f, dialog, tab_content);
@@ -141,6 +152,41 @@ impl Chrome {
                         .wrap(Wrap { trim: false }),
                     popup_area,
                 );
+            }
+            DialogKind::FloatingWindow { window, .. } => {
+                let popup_area = calculate_window_rect(area, &window.position, &window.size);
+
+                f.render_widget(Clear, popup_area);
+
+                Python::attach(|py| {
+                    let mut buffer = window.buffer.borrow_mut(py);
+                    let buffer_config = buffer
+                        .config
+                        .as_ref()
+                        .map(|cfg| cfg.borrow(py).clone())
+                        .unwrap_or_default();
+
+                    // Render the buffer
+                    if let Err(err) = buffer::draw(
+                        f,
+                        &mut buffer,
+                        None,
+                        &buffer_config,
+                        None,
+                        |_| true, // Show all content in floating windows
+                        popup_area,
+                    ) {
+                        error!("failed to render floating window buffer: {err}");
+                    }
+
+                    // Render title if present
+                    if let Some(title) = &window.title {
+                        // Note: The buffer::draw will handle border rendering,
+                        // but we may want to customize the title rendering here
+                        // For now, we rely on the buffer config's border settings
+                        let _ = title; // Suppress unused warning - title is handled by buffer config
+                    }
+                });
             }
         }
     }
@@ -539,4 +585,35 @@ fn centered_rect(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
         Direction::Horizontal,
         percent_x,
     )
+}
+
+fn calculate_window_rect(area: Rect, position: &Position, size: &Size) -> Rect {
+    let (x, y) = match position {
+        Position::Percent { x, y } => {
+            let x_pos = (area.width as u32 * (*x as u32) / 100) as u16;
+            let y_pos = (area.height as u32 * (*y as u32) / 100) as u16;
+            (area.x + x_pos, area.y + y_pos)
+        }
+        Position::Absolute { x, y } => (area.x + x, area.y + y),
+    };
+
+    let (width, height) = match size {
+        Size::Percent { width, height } => {
+            let w = (area.width as u32 * (*width as u32) / 100) as u16;
+            let h = (area.height as u32 * (*height as u32) / 100) as u16;
+            (w, h)
+        }
+        Size::Absolute { width, height } => (*width, *height),
+    };
+
+    // Ensure the window doesn't go beyond the area bounds
+    let width = width.min(area.width.saturating_sub(x - area.x));
+    let height = height.min(area.height.saturating_sub(y - area.y));
+
+    Rect {
+        x,
+        y,
+        width,
+        height,
+    }
 }

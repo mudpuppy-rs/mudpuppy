@@ -8,6 +8,7 @@ use tracing::{Level, debug, instrument, warn};
 
 use crate::app::{self, AppData, Frontend, SlashCommand, TabAction};
 use crate::config::{Character, Config, Mud};
+use crate::dialog::DialogManager;
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::net::connection;
@@ -19,6 +20,7 @@ use crate::tui::{self, TabKind};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
+    DialogManager(oneshot::Sender<Py<DialogManager>>),
     Session(SessionCommand),
     AddNewSessionHandler(python::NewSessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
@@ -33,6 +35,9 @@ impl Command {
         match self {
             Command::Config(tx) => {
                 let _ = tx.send(Python::attach(|py| app.config.clone_ref(py)));
+            }
+            Command::DialogManager(tx) => {
+                let _ = tx.send(Python::attach(|py| app.dialog_manager.clone_ref(py)));
             }
             Command::Session(cmd) => {
                 cmd.exec(app)?;
@@ -89,6 +94,10 @@ pub(crate) enum SessionCommand {
     SessionForCharacter {
         character: String,
         tx: oneshot::Sender<Option<Session>>,
+    },
+    DialogManager {
+        session_id: u32,
+        tx: oneshot::Sender<Py<DialogManager>>,
     },
     CharacterInfo {
         character: String,
@@ -181,6 +190,12 @@ impl SessionCommand {
                         .into_iter()
                         .find(|s| s.character == character),
                 );
+            }
+            Self::DialogManager { session_id, tx } => {
+                let dm = Python::attach(|py| {
+                    Ok::<_, Error>(app.session(session_id)?.dialog_manager.clone_ref(py))
+                })?;
+                let _ = tx.send(dm);
             }
             Self::CharacterInfo { character, tx } => {
                 let _ = tx.send(Python::attach(|py| {

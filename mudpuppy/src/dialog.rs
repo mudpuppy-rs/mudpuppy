@@ -2,10 +2,11 @@ use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-use pyo3::{Py, PyAny, pyclass, pymethods};
+use pyo3::{Py, PyAny, Python, pyclass, pymethods};
 use tracing::{debug, trace};
 
 use crate::keyboard::{KeyCode, KeyEvent};
+use crate::session::Buffer;
 
 /// Priority for dialog display. Higher priority dialogs are shown first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -35,12 +36,96 @@ pub enum ConfirmAction {
     PyCallback(Py<PyAny>),
 }
 
+/// Position for floating windows (percentage or absolute).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass]
+pub enum Position {
+    /// Percentage of the screen (0-100).
+    Percent { x: u16, y: u16 },
+    /// Absolute position in cells.
+    Absolute { x: u16, y: u16 },
+}
+
+#[pymethods]
+impl Position {
+    #[staticmethod]
+    pub fn percent(x: u16, y: u16) -> Self {
+        Self::Percent { x, y }
+    }
+
+    #[staticmethod]
+    pub fn absolute(x: u16, y: u16) -> Self {
+        Self::Absolute { x, y }
+    }
+}
+
+/// Size for floating windows (percentage or absolute).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass]
+pub enum Size {
+    /// Percentage of the screen (0-100).
+    Percent { width: u16, height: u16 },
+    /// Absolute size in cells.
+    Absolute { width: u16, height: u16 },
+}
+
+#[pymethods]
+impl Size {
+    #[staticmethod]
+    pub fn percent(width: u16, height: u16) -> Self {
+        Self::Percent { width, height }
+    }
+
+    #[staticmethod]
+    pub fn absolute(width: u16, height: u16) -> Self {
+        Self::Absolute { width, height }
+    }
+}
+
+/// A floating window with a buffer and optional title.
+#[derive(Clone)]
+#[pyclass]
+pub struct FloatingWindow {
+    #[pyo3(get, set)]
+    pub title: Option<String>,
+    #[pyo3(get, set)]
+    pub position: Position,
+    #[pyo3(get, set)]
+    pub size: Size,
+    #[pyo3(get)]
+    pub buffer: Py<Buffer>,
+}
+
+#[pymethods]
+impl FloatingWindow {
+    #[new]
+    pub fn new(buffer: Py<Buffer>, position: Position, size: Size, title: Option<String>) -> Self {
+        Self {
+            title,
+            position,
+            size,
+            buffer,
+        }
+    }
+}
+
 impl std::fmt::Debug for ConfirmAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConfirmAction::Quit {} => write!(f, "Quit"),
             ConfirmAction::PyCallback(_) => write!(f, "PyCallback(<callable>)"),
         }
+    }
+}
+
+impl std::fmt::Debug for FloatingWindow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FloatingWindow")
+            .field("title", &self.title)
+            .field("position", &self.position)
+            .field("size", &self.size)
+            .field("buffer", &"<Buffer>")
+            .finish()
     }
 }
 
@@ -62,6 +147,12 @@ pub enum DialogKind {
         dismissible: bool,
         occurrence_count: usize,
     },
+
+    /// Floating window: a buffer-backed window with optional title and positioning.
+    FloatingWindow {
+        window: FloatingWindow,
+        dismissible: bool,
+    },
 }
 
 impl std::fmt::Debug for DialogKind {
@@ -82,6 +173,11 @@ impl std::fmt::Debug for DialogKind {
                 .debug_struct("Notification")
                 .field("message", message)
                 .field("severity", severity)
+                .finish(),
+            DialogKind::FloatingWindow { window, dismissible } => f
+                .debug_struct("FloatingWindow")
+                .field("window", window)
+                .field("dismissible", dismissible)
                 .finish(),
         }
     }
@@ -239,6 +335,16 @@ impl DialogManager {
                     (false, None)
                 }
             }
+            DialogKind::FloatingWindow { dismissible, .. } => {
+                if *dismissible {
+                    debug!(id = ?dialog.id, "floating window dismissed by key press");
+                    self.active.pop_front();
+                    (true, None)
+                } else {
+                    // Non-dismissible floating windows ignore key presses
+                    (false, None)
+                }
+            }
         }
     }
 
@@ -386,6 +492,40 @@ impl DialogManager {
         };
 
         self.add_dialog(dialog);
+    }
+
+    /// Show a floating window.
+    pub fn show_floating_window(
+        &mut self,
+        id: String,
+        window: FloatingWindow,
+        dismissible: bool,
+        priority: DialogPriority,
+        timeout: Option<Duration>,
+    ) {
+        let dialog = Dialog {
+            id,
+            kind: DialogKind::FloatingWindow {
+                window,
+                dismissible,
+            },
+            expires_at: timeout.map(|d| Instant::now() + d),
+            priority,
+        };
+
+        self.add_dialog(dialog);
+    }
+
+    /// Get the buffer from a floating window by ID.
+    pub fn get_floating_window_buffer(&self, id: &str) -> Option<Py<Buffer>> {
+        self.active.iter().find_map(|dialog| {
+            if dialog.id == id {
+                if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
+                    return Some(Python::attach(|py| window.buffer.clone_ref(py)));
+                }
+            }
+            None
+        })
     }
 
     /// Dismiss a specific dialog by ID.

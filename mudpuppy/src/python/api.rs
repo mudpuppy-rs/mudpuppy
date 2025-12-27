@@ -197,6 +197,17 @@ impl Session {
         self.into()
     }
 
+    /// Get the per-session dialog manager.
+    pub(crate) fn dialog_manager<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
+        dispatch_async_command(py, |tx| {
+            SessionCommand::DialogManager {
+                session_id: self.id,
+                tx,
+            }
+            .into()
+        })
+    }
+
     fn tab<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
         dispatch_async_command(py, |tx| {
             Command::Tab(TabAction::TabForSession {
@@ -796,6 +807,8 @@ pub(crate) mod pup {
     use crate::tui::{
         Constraint, Dialog, DialogKind, DialogManager, DialogPriority, Direction, Section,
     };
+    #[pymodule_export]
+    use crate::dialog::{ConfirmAction, FloatingWindow, Position, Severity, Size};
 
     #[pyfunction]
     fn config(py: Python<'_>) -> FutureResult<'_> {
@@ -854,6 +867,12 @@ pub(crate) mod pup {
         dispatch_async_command(py, |tx| {
             SessionCommand::SessionForCharacter { character, tx }.into()
         })
+    }
+
+    /// Get the global dialog manager.
+    #[pyfunction]
+    fn dialog_manager(py: Python<'_>) -> FutureResult<'_> {
+        dispatch_async_command(py, Command::DialogManager)
     }
 
     #[pyfunction]

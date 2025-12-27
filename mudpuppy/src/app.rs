@@ -85,6 +85,11 @@ impl App {
         let result = loop {
             Python::attach(|py| self.data.dialog_manager.borrow_mut(py).tick());
 
+            // Tick per-session dialog managers
+            for session in self.data.sessions.values() {
+                Python::attach(|py| session.dialog_manager.borrow_mut(py).tick());
+            }
+
             if self.data.should_quit {
                 info!("quitting. Goodbye!");
                 break Ok(());
@@ -164,7 +169,6 @@ pub(super) struct AppData {
 
     conn_event_tx: Option<UnboundedSender<connection::Event>>,
     python_event_tx: Option<UnboundedSender<(u32, python::Event)>>,
-    error_tx: Option<UnboundedSender<String>>,
 }
 
 impl AppData {
@@ -186,7 +190,7 @@ impl AppData {
             shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
             python_event_tx: None,
-            error_tx: None,
+
         }
     }
 
@@ -251,8 +255,8 @@ impl AppData {
         &mut self,
         character: &str,
     ) -> Result<(python::Session, Vec<JoinHandle<()>>), Error> {
-        let (Some(conn_event_tx), Some(py_event_tx), Some(error_tx)) =
-            (&self.conn_event_tx, &self.python_event_tx, &self.error_tx)
+        let (Some(conn_event_tx), Some(py_event_tx)) =
+            (&self.conn_event_tx, &self.python_event_tx)
         else {
             return Err(ErrorKind::Internal("App not running".to_owned()).into());
         };
@@ -264,7 +268,6 @@ impl AppData {
             &self.config,
             conn_event_tx.clone(),
             py_event_tx.clone(),
-            error_tx.clone(),
         )?;
 
         self.sessions.insert(new_id, session);

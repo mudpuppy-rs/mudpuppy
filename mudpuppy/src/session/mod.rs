@@ -19,6 +19,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::bytes::Bytes;
 use tracing::{Level, debug, error, info, instrument, trace, warn};
 
+use crate::dialog::DialogManager;
 use crate::error::{ConfigError, Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::net::telnet::codec::{Item as TelnetItem, Negotiation as TelnetNegotiation};
@@ -40,6 +41,7 @@ pub(super) struct Session {
     pub(super) id: u32,
     pub(super) character: String,
     pub(super) event_handlers: python::Handlers,
+    pub(super) dialog_manager: Py<DialogManager>,
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
     pub(super) output: Buffer,
@@ -67,7 +69,6 @@ impl Session {
         config: &Py<Config>,
         conn_event_tx: UnboundedSender<connection::Event>,
         python_event_tx: UnboundedSender<(u32, python::Event)>,
-        error_tx: UnboundedSender<String>,
     ) -> Result<Self, Error> {
         let output = Buffer::new(OUTPUT_BUFFER_NAME.to_string())?;
         let scrollback = Buffer::new(SCROLL_BUFFER_NAME.to_string())?;
@@ -84,12 +85,13 @@ impl Session {
 
         if let Some(module) = character_module {
             // TODO(XXX): hold onto Py module for reloads.
-            python::run_character_setup(id, &character, module, error_tx);
+            python::run_character_setup(id, &character, module);
         }
 
         Ok(Self {
             id,
             event_handlers: python::Handlers::new(id),
+            dialog_manager: Python::attach(|py| Py::new(py, DialogManager::new()).unwrap()),
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::attach(|py| Py::new(py, Input::new(py, id, python_event_tx.clone())?))?,
             output,
