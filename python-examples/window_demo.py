@@ -34,6 +34,10 @@ session_window_state = {}
 global_timers = []
 session_timers = {}
 
+# Store dialog objects so we can update their positions
+global_dialog = None
+session_dialogs = {}
+
 
 async def setup_demo(sesh: Session):
     """Setup both global and per-session floating window demos."""
@@ -58,6 +62,8 @@ async def setup_demo(sesh: Session):
 
 async def setup_global_window():
     """Create a global floating window showing fake network activity."""
+    global global_dialog
+
     logger.info("Creating global network monitor window")
 
     # Create buffer for global window
@@ -72,24 +78,28 @@ async def setup_global_window():
         buffer=buffer,
         position=Position.percent(60, 5),
         size=Size.percent(35, 25),
-        title="Network Monitor"
+        title="Network Monitor",
     )
 
-    # Get global dialog manager and show window
+    # Get global dialog manager and show window - store the returned dialog
     dm = await pup.dialog_manager()
-    dm.show_floating_window(
-        id="network-monitor",
-        window=window,
+    global_dialog = dm.show_floating_window(
+        window,
         dismissible=False,
         priority=DialogPriority.Low,
-        timeout=None
     )
 
-    # Create timer for content updates (2 updates per second)
-    # Timer duration is in SECONDS, not milliseconds
-    content_timer = Timer("global-window-content", 1, callback=update_global_content)
+    # Create timer for content updates (1 second)
+    content_timer = Timer("global-window-content", 1.0, callback=update_global_content)
     content_timer.start()
-    global_timers.append(content_timer)  # Store to prevent GC
+    global_timers.append(content_timer)
+
+    # Create timer for position animation (100ms for smooth movement)
+    position_timer = Timer(
+        "global-window-position", 0.1, callback=update_global_position
+    )
+    position_timer.start()
+    global_timers.append(position_timer)
 
     logger.info("Global network monitor started")
 
@@ -110,36 +120,73 @@ async def setup_session_window(sesh: Session):
         buffer=buffer,
         position=Position.percent(5, 60),
         size=Size.percent(35, 30),
-        title=f"{sesh.character} Stats"
+        title=f"{sesh.character} Stats",
     )
 
-    # Get session dialog manager and show window
+    # Get session dialog manager and show window - store the returned dialog
     dm = await sesh.dialog_manager()
-    dm.show_floating_window(
-        id=f"session-stats-{sesh.id}",
-        window=window,
+    session_dialog = dm.show_floating_window(
+        window,
         dismissible=False,
         priority=DialogPriority.Low,
-        timeout=None
     )
+    session_dialogs[sesh.id] = session_dialog  # Store for position updates
 
-    # Create timer for content updates with session attached
-    # Timer duration is in SECONDS, not milliseconds
+    # Create timer for content updates with session attached (1 second)
     content_timer = Timer(
         f"session-window-content-{sesh.id}",
-        1,
+        1.0,
         callback=update_session_content,
-        session=sesh
+        session=sesh,
     )
     content_timer.start()
-    session_timers[sesh.id] = content_timer  # Store to prevent GC
+    if sesh.id not in session_timers:
+        session_timers[sesh.id] = []
+    session_timers[sesh.id].append(content_timer)
+
+    # Create timer for position animation (100ms for smooth movement)
+    position_timer = Timer(
+        f"session-window-position-{sesh.id}",
+        0.1,
+        callback=update_session_position,
+        session=sesh,
+    )
+    position_timer.start()
+    session_timers[sesh.id].append(position_timer)
 
     logger.info(f"Session stats window started for {sesh.character}")
 
 
+async def update_global_position(timer: Timer):
+    """Animate the global window position (circular motion)."""
+    global global_dialog
+    if not global_dialog:
+        return
+
+    state = global_window_state
+
+    # Circular motion (increment adjusted for 100ms timer)
+    state["angle"] += 0.02  # 0.2 / 10 since we're updating 10x per second
+    if state["angle"] > 2 * math.pi:
+        state["angle"] -= 2 * math.pi
+
+    # Calculate new position (circle in upper right quadrant)
+    center_x = 65
+    center_y = 15
+    radius = 10
+    x = int(center_x + radius * math.cos(state["angle"]))
+    y = int(center_y + radius * math.sin(state["angle"]))
+
+    # Directly mutate the dialog's window position - Rust and Python share the same object
+    global_dialog.kind.window.position = Position.percent(x, y)
+
+
 async def update_global_content(timer: Timer):
     """Update the content of the global network monitor."""
-    logger.info(f"update_global_content called! hit_count={timer.hit_count}")
+    global global_dialog
+    if not global_dialog:
+        return
+
     state = global_window_state
 
     # Generate fake network activity
@@ -158,9 +205,8 @@ async def update_global_content(timer: Timer):
     if len(state["graph_data"]) > 20:
         state["graph_data"].pop(0)
 
-    # Render content
-    dm = await pup.dialog_manager()
-    buffer_py = dm.get_floating_window_buffer("network-monitor")
+    # Access buffer directly from the dialog
+    buffer_py = global_dialog.kind.window.buffer
 
     if buffer_py:
         # Build content
@@ -198,12 +244,31 @@ async def update_global_content(timer: Timer):
             buffer_py.add(OutputItem.mud(MudLine(line_bytes)))
 
 
+async def update_session_position(timer: Timer):
+    """Animate the session window position (sine wave)."""
+    sesh = timer.session
+    if not sesh or sesh.id not in session_dialogs:
+        return
+
+    dialog = session_dialogs[sesh.id]
+
+    # Sine wave motion (left-right, adjusted for 100ms timer)
+    time = timer.hit_count * 0.03  # 0.3 / 10 since we're updating 10x per second
+    x = int(5 + 15 * (math.sin(time) + 1) / 2)  # Oscillate between 5% and 20%
+    y = 60  # Keep Y constant
+
+    # Directly mutate the dialog's window position - Rust and Python share the same object
+    dialog.kind.window.position = Position.percent(x, y)
+
+
 async def update_session_content(timer: Timer):
     """Update the content of the session stats window."""
-    logger.info(f"update_session_content called! hit_count={timer.hit_count}")
     sesh = timer.session
-    if not sesh or sesh.id not in session_window_state:
-        logger.warning(f"No session found or session not in state")
+    if (
+        not sesh
+        or sesh.id not in session_window_state
+        or sesh.id not in session_dialogs
+    ):
         return
 
     state = session_window_state[sesh.id]
@@ -229,9 +294,9 @@ async def update_session_content(timer: Timer):
         if len(state["combat_log"]) > 6:
             state["combat_log"].pop(0)
 
-    # Get session dialog manager and update buffer
-    dm = await sesh.dialog_manager()
-    buffer_py = dm.get_floating_window_buffer(f"session-stats-{sesh.id}")
+    # Access buffer directly from the dialog
+    dialog = session_dialogs[sesh.id]
+    buffer_py = dialog.kind.window.buffer
 
     if buffer_py:
         # Build content

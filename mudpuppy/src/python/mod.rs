@@ -138,7 +138,7 @@ pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) 
         // Note: Error::from() to collect backtrace from PyErr.
         let err = Error::from(err);
         error!("python user module setup error: {err}");
-        Python::attach(|py| dm.borrow_mut(py).show_error(err.to_string()));
+        Python::attach(|py| dm.borrow_mut(py).show_error(py, err.to_string()));
         return;
     }
 
@@ -147,7 +147,7 @@ pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) 
             // Note: Error::from() to collect backtrace from PyErr.
             let err = Error::from(err);
             error!("python user module setup error: {err}");
-            Python::attach(|py| dm.borrow_mut(py).show_error(err.to_string()));
+            Python::attach(|py| dm.borrow_mut(py).show_error(py, err.to_string()));
         }
     }
 }

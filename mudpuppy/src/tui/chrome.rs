@@ -8,7 +8,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap};
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};
@@ -74,7 +74,7 @@ impl Chrome {
             if let Ok(session) = app.session(session_id) {
                 Python::attach(|py| {
                     if let Some(dialog) = session.dialog_manager.borrow(py).get_active() {
-                        Self::render_dialog(f, dialog, tab_content);
+                        Self::render_dialog(f, py, dialog, tab_content);
                     }
                 });
             }
@@ -83,14 +83,20 @@ impl Chrome {
         // Render global dialog manager dialogs (if any) - these take precedence
         Python::attach(|py| {
             if let Some(dialog) = app.dialog_manager.borrow(py).get_active() {
-                Self::render_dialog(f, dialog, tab_content);
+                Self::render_dialog(f, py, dialog, tab_content);
             }
         });
 
         Ok(())
     }
 
-    fn render_dialog(f: &mut Frame, dialog: &crate::dialog::Dialog, area: Rect) {
+    fn render_dialog(
+        f: &mut Frame,
+        py: Python<'_>,
+        py_dialog: &Py<crate::dialog::Dialog>,
+        area: Rect,
+    ) {
+        let dialog = py_dialog.borrow(py);
         match &dialog.kind {
             DialogKind::Confirmation {
                 message,
@@ -154,39 +160,38 @@ impl Chrome {
                 );
             }
             DialogKind::FloatingWindow { window, .. } => {
+                let window = window.borrow(py);
                 let popup_area = calculate_window_rect(area, &window.position, &window.size);
 
                 f.render_widget(Clear, popup_area);
 
-                Python::attach(|py| {
-                    let mut buffer = window.buffer.borrow_mut(py);
-                    let buffer_config = buffer
-                        .config
-                        .as_ref()
-                        .map(|cfg| cfg.borrow(py).clone())
-                        .unwrap_or_default();
+                let mut buffer = window.buffer.borrow_mut(py);
+                let buffer_config = buffer
+                    .config
+                    .as_ref()
+                    .map(|cfg| cfg.borrow(py).clone())
+                    .unwrap_or_default();
 
-                    // Render the buffer
-                    if let Err(err) = buffer::draw(
-                        f,
-                        &mut buffer,
-                        None,
-                        &buffer_config,
-                        None,
-                        |_| true, // Show all content in floating windows
-                        popup_area,
-                    ) {
-                        error!("failed to render floating window buffer: {err}");
-                    }
+                // Render the buffer
+                if let Err(err) = buffer::draw(
+                    f,
+                    &mut buffer,
+                    None,
+                    &buffer_config,
+                    None,
+                    |_| true, // Show all content in floating windows
+                    popup_area,
+                ) {
+                    error!("failed to render floating window buffer: {err}");
+                }
 
-                    // Render title if present
-                    if let Some(title) = &window.title {
-                        // Note: The buffer::draw will handle border rendering,
-                        // but we may want to customize the title rendering here
-                        // For now, we rely on the buffer config's border settings
-                        let _ = title; // Suppress unused warning - title is handled by buffer config
-                    }
-                });
+                // Render title if present
+                if let Some(title) = &window.title {
+                    // Note: The buffer::draw will handle border rendering,
+                    // but we may want to customize the title rendering here
+                    // For now, we rely on the buffer config's border settings
+                    let _ = title; // Suppress unused warning - title is handled by buffer config
+                }
             }
         }
     }
@@ -546,7 +551,7 @@ impl Tab {
                             error!("dialog callback error: {err}");
                             Python::attach(|py| {
                                 dm.borrow_mut(py)
-                                    .show_error(format!("Dialog callback failed: {err}"));
+                                    .show_error(py, format!("Dialog callback failed: {err}"));
                             });
                             return;
                         }
@@ -558,7 +563,7 @@ impl Tab {
                         error!("dialog callback error: {err}");
                         Python::attach(|py| {
                             dm.borrow_mut(py)
-                                .show_error(format!("Dialog callback failed: {err}"));
+                                .show_error(py, format!("Dialog callback failed: {err}"));
                         });
                     }
                 });
@@ -590,8 +595,8 @@ fn centered_rect(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
 fn calculate_window_rect(area: Rect, position: &Position, size: &Size) -> Rect {
     let (x, y) = match position {
         Position::Percent { x, y } => {
-            let x_pos = (area.width as u32 * (*x as u32) / 100) as u16;
-            let y_pos = (area.height as u32 * (*y as u32) / 100) as u16;
+            let x_pos = (u32::from(area.width) * u32::from(*x) / 100) as u16;
+            let y_pos = (u32::from(area.height) * u32::from(*y) / 100) as u16;
             (area.x + x_pos, area.y + y_pos)
         }
         Position::Absolute { x, y } => (area.x + x, area.y + y),
@@ -599,8 +604,8 @@ fn calculate_window_rect(area: Rect, position: &Position, size: &Size) -> Rect {
 
     let (width, height) = match size {
         Size::Percent { width, height } => {
-            let w = (area.width as u32 * (*width as u32) / 100) as u16;
-            let h = (area.height as u32 * (*height as u32) / 100) as u16;
+            let w = (u32::from(area.width) * u32::from(*width) / 100) as u16;
+            let h = (u32::from(area.height) * u32::from(*height) / 100) as u16;
             (w, h)
         }
         Size::Absolute { width, height } => (*width, *height),

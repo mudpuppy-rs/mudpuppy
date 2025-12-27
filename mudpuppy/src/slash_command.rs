@@ -56,6 +56,7 @@ impl SlashCommand for QuitCommand {
         Python::attach(|py| {
             if app.config.borrow(py).confirm_quit {
                 app.dialog_manager.borrow_mut(py).show_confirmation(
+                    py,
                     "Are you sure you want to quit?".to_string(),
                     'q',
                     dialog::ConfirmAction::Quit {},

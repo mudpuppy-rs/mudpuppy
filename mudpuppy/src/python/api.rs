@@ -802,13 +802,13 @@ pub(crate) mod pup {
     };
 
     #[pymodule_export]
+    use crate::dialog::{ConfirmAction, FloatingWindow, Position, Severity, Size};
+    #[pymodule_export]
     use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};
     #[pymodule_export]
     use crate::tui::{
         Constraint, Dialog, DialogKind, DialogManager, DialogPriority, Direction, Section,
     };
-    #[pymodule_export]
-    use crate::dialog::{ConfirmAction, FloatingWindow, Position, Severity, Size};
 
     #[pyfunction]
     fn config(py: Python<'_>) -> FutureResult<'_> {

@@ -45,13 +45,13 @@ impl Timer {
     pub(crate) fn new(
         py: Python<'_>,
         name: String,
-        duration_seconds: u64,
+        duration_seconds: f64,
         callback: Option<Py<PyAny>>,
         reaction: Option<String>,
         session: Option<python::Session>,
     ) -> Result<Py<Self>, Error> {
-        // TODO(XXX): better duration parsing. Chrono?
-        let duration = Duration::from_secs(duration_seconds);
+        // Accept float for sub-second precision (e.g., 0.1 for 100ms)
+        let duration = Duration::from_secs_f64(duration_seconds);
 
         if callback.is_none() && reaction.is_none() {
             return Err(ErrorKind::InvalidTimer(

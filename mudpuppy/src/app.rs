@@ -71,7 +71,7 @@ impl App {
                     self.data
                         .dialog_manager
                         .borrow_mut(py)
-                        .show_error(format!("Python command during init failed: {err}"));
+                        .show_error(py, format!("Python command during init failed: {err}"));
                 });
             }
         }
@@ -111,7 +111,7 @@ impl App {
                     if let Err(err) = session.handle_event(&event) {
                         error!("session event error: {err}");
                         Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
-                                format!("Session event error: {err}")));
+                                py, format!("Session event error: {err}")));
                     }
                 }
                 // Python event dispatch (sending events from app -> Python)
@@ -123,7 +123,7 @@ impl App {
                     if let Err(err) = session.event_handlers.session_event(&event) {
                         error!("python event dispatch error: {err}");
                         Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
-                                format!("Python event dispatch error: {err}")));
+                                py, format!("Python event dispatch error: {err}")));
                     }
                 }
                 // Python API command dispatch (processing reqs from Python -> app)
@@ -136,7 +136,7 @@ impl App {
                         Err(err) => {
                             error!("python error: {err}");
                             Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
-                                    format!("Python error: {err}")));
+                                    py, format!("Python error: {err}")));
                         }
                         _ => {}
                     }
@@ -190,7 +190,6 @@ impl AppData {
             shortcuts: Self::default_shortcuts(),
             conn_event_tx: None,
             python_event_tx: None,
-
         }
     }
 
@@ -255,8 +254,7 @@ impl AppData {
         &mut self,
         character: &str,
     ) -> Result<(python::Session, Vec<JoinHandle<()>>), Error> {
-        let (Some(conn_event_tx), Some(py_event_tx)) =
-            (&self.conn_event_tx, &self.python_event_tx)
+        let (Some(conn_event_tx), Some(py_event_tx)) = (&self.conn_event_tx, &self.python_event_tx)
         else {
             return Err(ErrorKind::Internal("App not running".to_owned()).into());
         };
@@ -409,7 +407,7 @@ impl AppData {
             Python::attach(|py| {
                 self.dialog_manager
                     .borrow_mut(py)
-                    .show_error(format!("Config reload failed: {err}"));
+                    .show_error(py, format!("Config reload failed: {err}"));
             });
             return; // Continue with old config
         }
@@ -426,7 +424,7 @@ impl AppData {
                     error!("config reload event handler error: {err}");
                     self.dialog_manager
                         .borrow_mut(py)
-                        .show_error(format!("config reload event handler error: {err}"));
+                        .show_error(py, format!("config reload event handler error: {err}"));
                 }
             }
         });
