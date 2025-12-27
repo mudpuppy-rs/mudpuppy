@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
@@ -7,257 +8,6 @@ use tracing::{debug, trace};
 
 use crate::keyboard::{KeyCode, KeyEvent};
 use crate::session::Buffer;
-
-/// Priority for dialog display. Higher priority dialogs are shown first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[pyclass(frozen, eq, eq_int)]
-pub enum DialogPriority {
-    Low = 0,
-    Normal = 1,
-    High = 2,
-}
-
-/// Severity level for notification dialogs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[pyclass(frozen, eq, eq_int)]
-pub enum Severity {
-    Info,
-    Warning,
-    Error,
-}
-
-/// Action to take when a confirmation dialog is confirmed.
-#[derive(Clone)]
-#[pyclass(frozen)]
-pub enum ConfirmAction {
-    /// Quit the application.
-    Quit {},
-    /// Call a Python async callback.
-    PyCallback(Py<PyAny>),
-}
-
-/// Position for floating windows (percentage or absolute).
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[pyclass]
-pub enum Position {
-    /// Percentage of the screen (0-100).
-    Percent { x: u16, y: u16 },
-    /// Absolute position in cells.
-    Absolute { x: u16, y: u16 },
-}
-
-#[pymethods]
-impl Position {
-    #[staticmethod]
-    pub fn percent(x: u16, y: u16) -> Self {
-        Self::Percent { x, y }
-    }
-
-    #[staticmethod]
-    pub fn absolute(x: u16, y: u16) -> Self {
-        Self::Absolute { x, y }
-    }
-}
-
-/// Size for floating windows (percentage or absolute).
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[pyclass]
-pub enum Size {
-    /// Percentage of the screen (0-100).
-    Percent { width: u16, height: u16 },
-    /// Absolute size in cells.
-    Absolute { width: u16, height: u16 },
-}
-
-#[pymethods]
-impl Size {
-    #[staticmethod]
-    pub fn percent(width: u16, height: u16) -> Self {
-        Self::Percent { width, height }
-    }
-
-    #[staticmethod]
-    pub fn absolute(width: u16, height: u16) -> Self {
-        Self::Absolute { width, height }
-    }
-}
-
-/// A floating window with a buffer and optional title.
-#[derive(Clone)]
-#[pyclass]
-pub(crate) struct FloatingWindow {
-    #[pyo3(get, set)]
-    pub title: Option<String>,
-    #[pyo3(get, set)]
-    pub position: Position,
-    #[pyo3(get, set)]
-    pub size: Size,
-    #[pyo3(get)]
-    pub buffer: Py<Buffer>,
-}
-
-#[pymethods]
-impl FloatingWindow {
-    #[new]
-    pub fn new(buffer: Py<Buffer>, position: Position, size: Size, title: Option<String>) -> Self {
-        Self {
-            title,
-            position,
-            size,
-            buffer,
-        }
-    }
-}
-
-impl std::fmt::Debug for ConfirmAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConfirmAction::Quit {} => write!(f, "Quit"),
-            ConfirmAction::PyCallback(_) => write!(f, "PyCallback(<callable>)"),
-        }
-    }
-}
-
-impl std::fmt::Debug for FloatingWindow {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FloatingWindow")
-            .field("title", &self.title)
-            .field("position", &self.position)
-            .field("size", &self.size)
-            .field("buffer", &"<Buffer>")
-            .finish()
-    }
-}
-
-/// Type of dialog to display.
-#[derive(Clone)]
-#[pyclass]
-pub(crate) enum DialogKind {
-    /// Confirmation dialog: requires specific key to confirm, any other key cancels.
-    Confirmation {
-        message: String,
-        confirm_key: char,
-        action: ConfirmAction,
-    },
-
-    /// Notification: auto-dismiss or any-key-dismiss.
-    Notification {
-        message: String,
-        severity: Severity,
-        dismissible: bool,
-        occurrence_count: usize,
-    },
-
-    /// Floating window: a buffer-backed window with optional title and positioning.
-    FloatingWindow {
-        window: Py<FloatingWindow>,
-        dismissible: bool,
-    },
-}
-
-impl std::fmt::Debug for DialogKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DialogKind::Confirmation {
-                message,
-                confirm_key,
-                ..
-            } => f
-                .debug_struct("Confirmation")
-                .field("message", message)
-                .field("confirm_key", confirm_key)
-                .finish(),
-            DialogKind::Notification {
-                message, severity, ..
-            } => f
-                .debug_struct("Notification")
-                .field("message", message)
-                .field("severity", severity)
-                .finish(),
-            DialogKind::FloatingWindow {
-                window,
-                dismissible,
-            } => Python::attach(|py| {
-                let w = window.borrow(py);
-                f.debug_struct("FloatingWindow")
-                    .field("window", &*w)
-                    .field("dismissible", dismissible)
-                    .finish()
-            }),
-        }
-    }
-}
-
-/// A modal dialog overlay.
-#[derive(Clone)]
-#[pyclass]
-pub(crate) struct Dialog {
-    #[pyo3(get, set)]
-    pub(crate) id: String,
-    #[pyo3(get, set)]
-    pub(crate) kind: DialogKind,
-    pub(crate) expires_at: Option<Instant>,
-    #[pyo3(get, set)]
-    pub(crate) priority: DialogPriority,
-}
-
-impl std::fmt::Debug for Dialog {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Dialog")
-            .field("id", &self.id)
-            .field("kind", &self.kind)
-            .field("priority", &self.priority)
-            .finish()
-    }
-}
-
-#[pymethods]
-impl Dialog {
-    #[new]
-    pub(crate) fn new(id: String, kind: DialogKind, priority: DialogPriority) -> Self {
-        Self {
-            id,
-            kind,
-            expires_at: None,
-            priority,
-        }
-    }
-
-    /// Update the occurrence count for a notification dialog.
-    pub fn increment_count(&mut self) {
-        let DialogKind::Notification {
-            occurrence_count,
-            message,
-            ..
-        } = &mut self.kind
-        else {
-            return;
-        };
-
-        *occurrence_count += 1;
-
-        // TODO(XXX): This is stupid:
-        // Update message to include count
-        if message.contains("(occurred") {
-            // Extract base message and update count
-            if let Some(idx) = message.find(" (occurred") {
-                let base_message = &message[..idx];
-                *message = format!("{base_message} (occurred {occurrence_count} times)");
-            }
-        } else {
-            let base_message = message.clone();
-            *message = format!("{base_message} (occurred {occurrence_count} times)");
-        }
-    }
-}
-
-/// Tracking information for error deduplication.
-#[derive(Debug)]
-struct ErrorTracker {
-    count: usize,
-    last_shown: Instant,
-    expires_at: Instant,
-}
 
 /// Manages modal dialogs and notifications.
 #[derive(Debug)]
@@ -273,13 +23,8 @@ pub struct DialogManager {
     error_cooldown: Duration,
 
     /// Maximum number of dialogs to keep in queue.
+    #[pyo3(get, set)]
     max_concurrent: usize,
-}
-
-impl Default for DialogManager {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl DialogManager {
@@ -346,7 +91,7 @@ impl DialogManager {
                     if key_char == *confirm_key {
                         debug!(id = ?dialog.id, "confirmation accepted");
                         // Drop the borrow before popping
-                        drop(dialog);
+                        //drop(dialog);
                         // Take the dialog to get the action
                         let py_dialog = self.active.pop_front().unwrap();
                         let dialog = py_dialog.borrow(py);
@@ -355,7 +100,6 @@ impl DialogManager {
                         }
                     } else {
                         debug!(id = ?dialog.id, ?key, "confirmation cancelled");
-                        drop(dialog);
                         self.active.pop_front();
                     }
                     (true, None)
@@ -363,7 +107,6 @@ impl DialogManager {
                 DialogKind::Notification { dismissible, .. } => {
                     if *dismissible {
                         debug!(id = ?dialog.id, "notification dismissed by key press");
-                        drop(dialog);
                         self.active.pop_front();
                         (true, None)
                     } else {
@@ -374,7 +117,6 @@ impl DialogManager {
                 DialogKind::FloatingWindow { dismissible, .. } => {
                     if *dismissible {
                         debug!(id = ?dialog.id, "floating window dismissed by key press");
-                        drop(dialog);
                         self.active.pop_front();
                         (true, None)
                     } else {
@@ -600,6 +342,263 @@ impl DialogManager {
         debug!(count = self.active.len(), "clearing all dialogs");
         self.active.clear();
     }
+}
+
+impl Default for DialogManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Type of dialog to display.
+#[derive(Clone)]
+#[pyclass]
+pub(crate) enum DialogKind {
+    /// Confirmation dialog: requires specific key to confirm, any other key cancels.
+    Confirmation {
+        message: String,
+        confirm_key: char,
+        action: ConfirmAction,
+    },
+
+    /// Notification: auto-dismiss or any-key-dismiss.
+    Notification {
+        message: String,
+        severity: Severity,
+        dismissible: bool,
+        occurrence_count: usize,
+    },
+
+    /// Floating window: a buffer-backed window with optional title and positioning.
+    FloatingWindow {
+        window: Py<FloatingWindow>,
+        dismissible: bool,
+    },
+}
+
+impl std::fmt::Debug for DialogKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DialogKind::Confirmation {
+                message,
+                confirm_key,
+                ..
+            } => f
+                .debug_struct("Confirmation")
+                .field("message", message)
+                .field("confirm_key", confirm_key)
+                .finish(),
+            DialogKind::Notification {
+                message, severity, ..
+            } => f
+                .debug_struct("Notification")
+                .field("message", message)
+                .field("severity", severity)
+                .finish(),
+            DialogKind::FloatingWindow {
+                window,
+                dismissible,
+            } => Python::attach(|py| {
+                let w = window.borrow(py);
+                f.debug_struct("FloatingWindow")
+                    .field("window", &*w)
+                    .field("dismissible", dismissible)
+                    .finish()
+            }),
+        }
+    }
+}
+
+/// A modal dialog overlay.
+#[derive(Clone)]
+#[pyclass]
+pub(crate) struct Dialog {
+    #[pyo3(get, set)]
+    pub(crate) id: String,
+    #[pyo3(get, set)]
+    pub(crate) kind: DialogKind,
+    pub(crate) expires_at: Option<Instant>,
+    #[pyo3(get, set)]
+    pub(crate) priority: DialogPriority,
+}
+
+impl std::fmt::Debug for Dialog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Dialog")
+            .field("id", &self.id)
+            .field("kind", &self.kind)
+            .field("priority", &self.priority)
+            .finish()
+    }
+}
+
+#[pymethods]
+impl Dialog {
+    #[new]
+    pub(crate) fn new(id: String, kind: DialogKind, priority: DialogPriority) -> Self {
+        Self {
+            id,
+            kind,
+            expires_at: None,
+            priority,
+        }
+    }
+
+    /// Update the occurrence count for a notification dialog.
+    pub fn increment_count(&mut self) {
+        let DialogKind::Notification {
+            occurrence_count,
+            message,
+            ..
+        } = &mut self.kind
+        else {
+            return;
+        };
+
+        *occurrence_count += 1;
+
+        // TODO(XXX): This is stupid:
+        // Update message to include count
+        if message.contains("(occurred") {
+            // Extract base message and update count
+            if let Some(idx) = message.find(" (occurred") {
+                let base_message = &message[..idx];
+                *message = format!("{base_message} (occurred {occurrence_count} times)");
+            }
+        } else {
+            let base_message = message.clone();
+            *message = format!("{base_message} (occurred {occurrence_count} times)");
+        }
+    }
+}
+
+/// Priority for dialog display. Higher priority dialogs are shown first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[pyclass(frozen, eq, eq_int)]
+pub enum DialogPriority {
+    Low = 0,
+    Normal = 1,
+    High = 2,
+}
+
+/// Severity level for notification dialogs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[pyclass(frozen, eq, eq_int)]
+pub enum Severity {
+    Info,
+    Warning,
+    Error,
+}
+
+/// Action to take when a confirmation dialog is confirmed.
+#[derive(Clone)]
+#[pyclass(frozen)]
+pub enum ConfirmAction {
+    /// Quit the application.
+    Quit {},
+    /// Call a Python async callback.
+    PyCallback(Py<PyAny>),
+}
+
+impl std::fmt::Debug for ConfirmAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfirmAction::Quit {} => write!(f, "Quit"),
+            ConfirmAction::PyCallback(_) => write!(f, "PyCallback(<callable>)"),
+        }
+    }
+}
+
+/// A floating window with a buffer and optional title.
+#[derive(Clone)]
+#[pyclass]
+pub(crate) struct FloatingWindow {
+    #[pyo3(get, set)]
+    pub title: Option<String>,
+    #[pyo3(get, set)]
+    pub position: Position,
+    #[pyo3(get, set)]
+    pub size: Size,
+    #[pyo3(get)]
+    pub buffer: Py<Buffer>,
+}
+
+#[pymethods]
+impl FloatingWindow {
+    #[new]
+    pub fn new(buffer: Py<Buffer>, position: Position, size: Size, title: Option<String>) -> Self {
+        Self {
+            title,
+            position,
+            size,
+            buffer,
+        }
+    }
+}
+
+impl Debug for FloatingWindow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FloatingWindow")
+            .field("title", &self.title)
+            .field("position", &self.position)
+            .field("size", &self.size)
+            .field("buffer", &"<Buffer>")
+            .finish()
+    }
+}
+
+/// Position for floating windows (percentage or absolute).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass]
+pub enum Position {
+    /// Percentage of the screen (0-100).
+    Percent { x: u16, y: u16 },
+    /// Absolute position in cells.
+    Absolute { x: u16, y: u16 },
+}
+
+#[pymethods]
+impl Position {
+    #[staticmethod]
+    pub fn percent(x: u16, y: u16) -> Self {
+        Self::Percent { x, y }
+    }
+
+    #[staticmethod]
+    pub fn absolute(x: u16, y: u16) -> Self {
+        Self::Absolute { x, y }
+    }
+}
+
+/// Size for floating windows (percentage or absolute).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass]
+pub enum Size {
+    /// Percentage of the screen (0-100).
+    Percent { width: u16, height: u16 },
+    /// Absolute size in cells.
+    Absolute { width: u16, height: u16 },
+}
+
+#[pymethods]
+impl Size {
+    #[staticmethod]
+    pub fn percent(width: u16, height: u16) -> Self {
+        Self::Percent { width, height }
+    }
+
+    #[staticmethod]
+    pub fn absolute(width: u16, height: u16) -> Self {
+        Self::Absolute { width, height }
+    }
+}
+
+/// Tracking information for error deduplication.
+#[derive(Debug)]
+struct ErrorTracker {
+    count: usize,
+    last_shown: Instant,
+    expires_at: Instant,
 }
 
 #[cfg(test)]

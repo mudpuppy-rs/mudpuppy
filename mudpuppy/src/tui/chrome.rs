@@ -8,7 +8,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap};
-use tracing::{error};
+use tracing::error;
 
 use crate::app::{AppData, TabAction};
 use crate::config::{CRATE_NAME, Config};

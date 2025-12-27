@@ -49,7 +49,7 @@ impl Timer {
         callback: Option<Py<PyAny>>,
         reaction: Option<String>,
         session: Option<python::Session>,
-        start: Option<bool>
+        start: Option<bool>,
     ) -> Result<Py<Self>, Error> {
         // Accept float for sub-second precision (e.g., 0.1 for 100ms)
         let duration = Duration::from_secs_f64(duration_seconds);
@@ -72,15 +72,18 @@ impl Timer {
             require_coroutine(py, "Timer callback", callback)?;
         }
 
-        let t = Py::new(py, Self {
-            name,
-            duration,
-            callback,
-            reaction,
-            session,
-            hit_count: 0,
-            task: None,
-        })?;
+        let t = Py::new(
+            py,
+            Self {
+                name,
+                duration,
+                callback,
+                reaction,
+                session,
+                hit_count: 0,
+                task: None,
+            },
+        )?;
 
         if start.unwrap_or_default() {
             Self::start(t.bind(py))
