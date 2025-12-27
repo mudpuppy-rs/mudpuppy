@@ -477,7 +477,7 @@ impl Tab {
         }
     }
 
-    pub(crate) fn dialog_key_consumed(&mut self, app: &mut AppData, key_event: &KeyEvent) -> bool {
+    pub(crate) fn dialog_key_consumed(app: &mut AppData, key_event: &KeyEvent) -> bool {
         Self::dialog_key_action(app, key_event)
     }
 
@@ -496,19 +496,18 @@ impl Tab {
     }
 
     pub(crate) fn mouse_event(
-        &mut self,
         app: &mut AppData,
-        mouse_event: &MouseEvent,
+        mouse_event: MouseEvent,
         area: Rect,
-    ) -> Result<Option<TabAction>, Error> {
+    ) -> Option<TabAction> {
         // Check if a dialog should handle this mouse event
         if Self::dialog_mouse_action(app, mouse_event, area) {
-            return Ok(None);
+            return None;
         }
 
         // For now, only dialogs handle mouse events
         // Future: forward to tabs if needed
-        Ok(None)
+        None
     }
 
     pub(crate) async fn shortcut(
@@ -611,7 +610,7 @@ impl Tab {
         false
     }
 
-    fn dialog_mouse_action(app: &mut AppData, mouse_event: &MouseEvent, area: Rect) -> bool {
+    fn dialog_mouse_action(app: &mut AppData, mouse_event: MouseEvent, area: Rect) -> bool {
         // Check global dialogs first (they're rendered on top and have precedence)
         let global_window_rects = Python::attach(|py| {
             let dm = app.dialog_manager.borrow(py);

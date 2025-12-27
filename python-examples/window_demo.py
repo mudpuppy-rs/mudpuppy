@@ -1,6 +1,5 @@
 import logging
 import random
-import math
 from datetime import datetime
 
 import pup
@@ -85,9 +84,6 @@ async def setup_global_window():
     # Create timer for content updates (1 second)
     Timer("global-window-content", 1.0, callback=update_global_content)
 
-    # Create timer for position animation (100ms for smooth movement)
-    #Timer("global-window-position", 0.1, callback=update_global_position)
-
     logger.info("Global network monitor started")
 
 
@@ -158,42 +154,10 @@ async def setup_session_window(sesh: Session):
         session=sesh,
     )
 
-    # Create timer for position animation (100ms for smooth movement)
-    #Timer(
-    #    f"session-window-position-{sesh.id}",
-    #    0.1,
-    #    callback=update_session_position,
-    #    session=sesh,
-    #)
-
     logger.info(f"Session stats window started for {sesh.character}")
 
 
-async def update_global_position(_timer: Timer):
-    """Animate the global window position (circular motion)."""
-    global global_dialog
-    if not global_dialog:
-        return
-
-    state = global_window_state
-
-    # Circular motion (increment adjusted for 100ms timer)
-    state["angle"] += 0.02  # 0.2 / 10 since we're updating 10x per second
-    if state["angle"] > 2 * math.pi:
-        state["angle"] -= 2 * math.pi
-
-    # Calculate new position (circle in upper right quadrant)
-    center_x = 65
-    center_y = 15
-    radius = 10
-    x = int(center_x + radius * math.cos(state["angle"]))
-    y = int(center_y + radius * math.sin(state["angle"]))
-
-    # Directly mutate the dialog's window position - Rust and Python share the same object
-    global_dialog.kind.window.position = Position.percent(x, y)
-
-
-async def update_global_content(timer: Timer):
+async def update_global_content(_timer: Timer):
     """Update the content of the global network monitor."""
     global global_dialog
     if not global_dialog:
@@ -254,23 +218,6 @@ async def update_global_content(timer: Timer):
         for line in lines:
             line_bytes = (line + "\n").encode("utf-8")
             buffer_py.add(OutputItem.mud(MudLine(line_bytes)))
-
-
-async def update_session_position(timer: Timer):
-    """Animate the session window position (sine wave)."""
-    sesh = timer.session
-    if not sesh or sesh.id not in session_dialogs:
-        return
-
-    dialog = session_dialogs[sesh.id]
-
-    # Sine wave motion (left-right, adjusted for 100ms timer)
-    time = timer.hit_count * 0.03  # 0.3 / 10 since we're updating 10x per second
-    x = int(5 + 15 * (math.sin(time) + 1) / 2)  # Oscillate between 5% and 20%
-    y = 60  # Keep Y constant
-
-    # Directly mutate the dialog's window position - Rust and Python share the same object
-    dialog.kind.window.position = Position.percent(x, y)
 
 
 async def update_session_content(timer: Timer):

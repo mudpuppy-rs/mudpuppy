@@ -44,11 +44,6 @@ impl DialogManager {
         }
     }
 
-    /// Get the currently active (topmost) dialog.
-    pub(crate) fn get_active(&self) -> Option<&Py<Dialog>> {
-        self.active.front()
-    }
-
     /// Get all active dialogs (for rendering).
     pub(crate) fn get_all_active(&self) -> impl DoubleEndedIterator<Item = &Py<Dialog>> {
         self.active.iter()
@@ -141,13 +136,14 @@ impl DialogManager {
     }
 
     /// Handle a mouse event for dragging floating windows.
-    /// Takes the mouse event and a list of (dialog_index, rect) pairs for hit testing.
+    /// Takes the mouse event and a list of (`dialog_index`, rect) pairs for hit testing.
     /// Returns true if the event was consumed.
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // TODO(XXX): tidy up
     pub(crate) fn handle_mouse(
         &mut self,
         py: Python<'_>,
-        mouse: &MouseEvent,
-        window_rects: &[(usize, (u16, u16, u16, u16))],
+        mouse: MouseEvent,
+        window_rects: WindowIndexRect,
     ) -> bool {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
@@ -206,11 +202,15 @@ impl DialogManager {
                             let mut window = window.borrow_mut(py);
 
                             // Calculate new position based on mouse movement
-                            let delta_x = mouse.column as i32 - drag_state.start_mouse_x as i32;
-                            let delta_y = mouse.row as i32 - drag_state.start_mouse_y as i32;
+                            let delta_x =
+                                i32::from(mouse.column) - i32::from(drag_state.start_mouse_x);
+                            let delta_y =
+                                i32::from(mouse.row) - i32::from(drag_state.start_mouse_y);
 
-                            let new_x = (drag_state.start_window_x as i32 + delta_x).max(0) as u16;
-                            let new_y = (drag_state.start_window_y as i32 + delta_y).max(0) as u16;
+                            let new_x =
+                                (i32::from(drag_state.start_window_x) + delta_x).max(0) as u16;
+                            let new_y =
+                                (i32::from(drag_state.start_window_y) + delta_y).max(0) as u16;
 
                             window.position = Position::Absolute { x: new_x, y: new_y };
 
@@ -459,6 +459,8 @@ impl Default for DialogManager {
         Self::new()
     }
 }
+
+type WindowIndexRect<'a> = &'a [(usize, (u16, u16, u16, u16))];
 
 /// Type of dialog to display.
 #[derive(Clone)]
@@ -767,7 +769,7 @@ mod tests {
             dm.add_dialog(py, &Py::new(py, high_dialog).unwrap());
 
             // High priority should be shown first
-            let active = dm.get_active().unwrap();
+            let active = dm.active.front().unwrap();
             assert_eq!(active.borrow(py).id, "high");
         });
     }

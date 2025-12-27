@@ -119,11 +119,7 @@ impl Tui {
 
                 // Check dialogs first - they have the highest priority
                 // Dialogs must be checked before shortcuts so they can intercept keys like Esc
-                if self
-                    .chrome
-                    .active_tab_mut()
-                    .dialog_key_consumed(app, &key_event)
-                {
+                if Tab::dialog_key_consumed(app, &key_event) {
                     return Ok(None);
                 }
 
@@ -172,15 +168,13 @@ impl Tui {
                     width: size.width,
                     height: size.height,
                 };
-                let [_tab_bar, tab_content] = ratatui::layout::Layout::vertical([
+                let [_tab_bar, tab_content] = Layout::vertical([
                     ratatui::layout::Constraint::Length(3),
                     ratatui::layout::Constraint::Fill(0),
                 ])
                 .areas(full_area);
 
-                self.chrome
-                    .active_tab_mut()
-                    .mouse_event(app, &mouse_event, tab_content)
+                Ok(Tab::mouse_event(app, mouse_event, tab_content))
             }
             _ => Ok(None),
         }

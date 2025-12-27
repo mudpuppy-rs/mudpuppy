@@ -13,23 +13,6 @@ pub(crate) struct MouseEvent {
     pub(crate) modifiers: KeyModifiers,
 }
 
-impl MouseEvent {
-    #[must_use]
-    pub(crate) fn new(
-        kind: MouseEventKind,
-        column: u16,
-        row: u16,
-        modifiers: KeyModifiers,
-    ) -> Self {
-        Self {
-            kind,
-            column,
-            row,
-            modifiers,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MouseEventKind {
     Down(MouseButton),
