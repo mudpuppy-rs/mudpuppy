@@ -7,6 +7,7 @@ use pyo3::{Py, PyAny, Python, pyclass, pymethods};
 use strum::Display;
 use tracing::{debug, trace};
 
+use crate::config::Config;
 use crate::keyboard::{KeyCode, KeyEvent};
 use crate::mouse::{MouseButton, MouseEvent, MouseEventKind};
 use crate::session::Buffer;
@@ -144,9 +145,12 @@ impl DialogManager {
         py: Python<'_>,
         mouse: MouseEvent,
         window_rects: WindowIndexRect,
+        config: &Py<Config>,
     ) -> bool {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
+                let mouse_enabled = config.borrow(py).mouse_enabled;
+
                 // Check if we clicked on a floating window
                 for &(dialog_idx, (x, y, width, height)) in window_rects {
                     if mouse.column >= x
@@ -154,11 +158,53 @@ impl DialogManager {
                         && mouse.row >= y
                         && mouse.row < y + height
                     {
-                        // Start dragging this window
                         if let Some(py_dialog) = self.active.get(dialog_idx) {
+                            // First, check if we should dismiss via close button
+                            let should_dismiss = {
+                                let dialog = py_dialog.borrow(py);
+                                if let DialogKind::FloatingWindow {
+                                    window: py_window,
+                                    dismissible,
+                                } = &dialog.kind
+                                {
+                                    let window = py_window.borrow(py);
+
+                                    // Check if we clicked on the close button
+                                    if mouse_enabled && *dismissible && window.title.is_some() {
+                                        // Title bar is 3 lines tall (top border, content, bottom border)
+                                        // Click should be on the content line (y + 1)
+                                        let in_title_bar = mouse.row == y + 1;
+                                        // Close button " [X]" occupies 4 characters at the right
+                                        // But we need to account for the border (1 char on left, 1 on right)
+                                        // So the clickable area is from (x + width - 5) to (x + width - 2)
+                                        let close_button_start = x + width.saturating_sub(5);
+                                        let close_button_end = x + width.saturating_sub(1);
+                                        let in_close_button = mouse.column >= close_button_start
+                                            && mouse.column < close_button_end;
+
+                                        in_title_bar && in_close_button
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            };
+
+                            if should_dismiss {
+                                let dialog_id = py_dialog.borrow(py).id.clone();
+                                self.dismiss(py, &dialog_id);
+                                debug!(id = ?dialog_id, "dismissed dialog via close button");
+                                return true;
+                            }
+
+                            // Not clicking on close button - start dragging
                             let dialog = py_dialog.borrow(py);
-                            if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
-                                let mut window = window.borrow_mut(py);
+                            if let DialogKind::FloatingWindow {
+                                window: py_window, ..
+                            } = &dialog.kind
+                            {
+                                let mut window = py_window.borrow_mut(py);
 
                                 // Convert percentage position to absolute if needed
                                 let (abs_x, abs_y) = match window.position {

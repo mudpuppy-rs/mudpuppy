@@ -76,7 +76,7 @@ impl Chrome {
             if let Ok(session) = app.session(session_id) {
                 Python::attach(|py| {
                     for dialog in session.dialog_manager.borrow(py).get_all_active().rev() {
-                        Self::render_dialog(f, py, dialog, tab_content);
+                        Self::render_dialog(f, py, dialog, tab_content, &app.config);
                     }
                 });
             }
@@ -86,7 +86,7 @@ impl Chrome {
         // Render in reverse priority order (low to high) so high priority appears on top
         Python::attach(|py| {
             for dialog in app.dialog_manager.borrow(py).get_all_active().rev() {
-                Self::render_dialog(f, py, dialog, tab_content);
+                Self::render_dialog(f, py, dialog, tab_content, &app.config);
             }
         });
 
@@ -98,6 +98,7 @@ impl Chrome {
         py: Python<'_>,
         py_dialog: &Py<crate::dialog::Dialog>,
         area: Rect,
+        config: &Py<Config>,
     ) {
         let dialog = py_dialog.borrow(py);
         match &dialog.kind {
@@ -162,11 +163,63 @@ impl Chrome {
                     popup_area,
                 );
             }
-            DialogKind::FloatingWindow { window, .. } => {
+            DialogKind::FloatingWindow {
+                window,
+                dismissible,
+            } => {
                 let window = window.borrow(py);
                 let popup_area = calculate_window_rect(area, window.position, window.size);
 
                 f.render_widget(Clear, popup_area);
+
+                // Check if mouse mode is enabled
+                let mouse_enabled = config.borrow(py).mouse_enabled;
+
+                // Split the window area into title bar and content
+                let (title_area, content_area) = if window.title.is_some() {
+                    let areas = Layout::vertical([
+                        Constraint::Length(3), // Title bar (1 top border + 1 content + 1 bottom border)
+                        Constraint::Min(0),    // Content
+                    ])
+                    .split(popup_area);
+                    (Some(areas[0]), areas[1])
+                } else {
+                    (None, popup_area)
+                };
+
+                // Render title bar if present
+                if let (Some(title_area), Some(title)) = (title_area, &window.title) {
+                    let title_text = if mouse_enabled && *dismissible {
+                        // Add close button when mouse mode is enabled and window is dismissible
+                        let close_button = " [X]";
+                        let title_with_button = format!("{title}{close_button}");
+
+                        // Account for left and right borders (2 chars total)
+                        let max_width = title_area.width.saturating_sub(2) as usize;
+                        if title_with_button.len() > max_width {
+                            format!(
+                                "{}{close_button}",
+                                &title[..max_width.saturating_sub(close_button.len())]
+                            )
+                        } else {
+                            // Pad to fill the width, positioning close button on the right
+                            let padding =
+                                max_width.saturating_sub(title.len() + close_button.len());
+                            format!("{title}{}{close_button}", " ".repeat(padding))
+                        }
+                    } else {
+                        title.clone()
+                    };
+
+                    f.render_widget(
+                        Paragraph::new(title_text).block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .border_style(Color::Cyan),
+                        ),
+                        title_area,
+                    );
+                }
 
                 let mut buffer = window.buffer.borrow_mut(py);
                 let buffer_config = buffer
@@ -175,7 +228,7 @@ impl Chrome {
                     .map(|cfg| cfg.borrow(py).clone())
                     .unwrap_or_default();
 
-                // Render the buffer
+                // Render the buffer in the content area
                 if let Err(err) = buffer::draw(
                     f,
                     &mut buffer,
@@ -183,17 +236,9 @@ impl Chrome {
                     &buffer_config,
                     None,
                     |_| true, // Show all content in floating windows
-                    popup_area,
+                    content_area,
                 ) {
                     error!("failed to render floating window buffer: {err}");
-                }
-
-                // Render title if present
-                if let Some(title) = &window.title {
-                    // Note: The buffer::draw will handle border rendering,
-                    // but we may want to customize the title rendering here
-                    // For now, we rely on the buffer config's border settings
-                    let _ = title; // Suppress unused warning - title is handled by buffer config
                 }
             }
         }
@@ -630,9 +675,12 @@ impl Tab {
         });
 
         let global_consumed = Python::attach(|py| {
-            app.dialog_manager
-                .borrow_mut(py)
-                .handle_mouse(py, mouse_event, &global_window_rects)
+            app.dialog_manager.borrow_mut(py).handle_mouse(
+                py,
+                mouse_event,
+                &global_window_rects,
+                &app.config,
+            )
         });
 
         if global_consumed {
@@ -665,6 +713,7 @@ impl Tab {
                         py,
                         mouse_event,
                         &session_window_rects,
+                        &app.config,
                     )
                 });
             }

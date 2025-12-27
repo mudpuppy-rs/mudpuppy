@@ -77,7 +77,7 @@ async def setup_global_window():
     dm = await pup.dialog_manager()
     global_dialog = dm.show_floating_window(
         window,
-        dismissible=False,
+        dismissible=True,
         priority=DialogPriority.Low,
     )
 
@@ -111,7 +111,7 @@ async def setup_absolute_window():
     dm = await pup.dialog_manager()
     absolute_dialog = dm.show_floating_window(
         window,
-        dismissible=False,
+        dismissible=True,
         priority=DialogPriority.Low,
     )
 
@@ -141,7 +141,7 @@ async def setup_session_window(sesh: Session):
     dm = await sesh.dialog_manager()
     session_dialog = dm.show_floating_window(
         window,
-        dismissible=False,
+        dismissible=True,
         priority=DialogPriority.Low,
     )
     session_dialogs[sesh.id] = session_dialog  # Store for position updates
