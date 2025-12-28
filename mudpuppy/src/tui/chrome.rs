@@ -93,6 +93,7 @@ impl Chrome {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines)] // TODO(XXX): refactor this hot slop mess.
     fn render_dialog(
         f: &mut Frame,
         py: Python<'_>,

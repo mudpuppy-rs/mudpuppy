@@ -45,7 +45,7 @@ pub(super) use layout::{Constraint, Direction, Section};
 pub(super) use session::Character;
 
 #[derive(Debug)]
-pub(super) struct Tui {
+pub(crate) struct Tui {
     terminal: Terminal<CrosstermBackend<Stdout>>,
     draw_interval: Interval,
     event_stream: CrosstermEventStream,

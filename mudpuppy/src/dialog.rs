@@ -139,7 +139,11 @@ impl DialogManager {
     /// Handle a mouse event for dragging floating windows.
     /// Takes the mouse event and a list of (`dialog_index`, rect) pairs for hit testing.
     /// Returns true if the event was consumed.
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // TODO(XXX): tidy up
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::too_many_lines
+    )] // TODO(XXX): tidy up
     pub(crate) fn handle_mouse(
         &mut self,
         py: Python<'_>,

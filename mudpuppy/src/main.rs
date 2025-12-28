@@ -3,7 +3,6 @@ mod cli;
 mod config;
 mod dialog;
 mod error;
-mod headless;
 mod keyboard;
 mod logging;
 mod mouse;
@@ -36,12 +35,10 @@ fn main() -> Result<(), Error> {
         pyo3_pylogger::register(CRATE_NAME);
 
         let (py_tx, py_rx) = unbounded_channel();
-        Python::attach(|py| {
+        let config = Python::attach(|py| {
             APP.set(py, py_tx).unwrap();
-        });
-
-        let config = Config::new().map_err(ErrorKind::from)?;
-        let config = Python::attach(|py| Py::new(py, config))?;
+            Ok::<_, Error>(Py::new(py, Config::new().map_err(ErrorKind::from)?)?)
+        })?;
 
         App::new(args, &config)?.run(py_rx).await
     }

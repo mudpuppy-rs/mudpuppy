@@ -15,7 +15,6 @@ use tracing::{Level, debug, error, info, instrument, trace, warn};
 use crate::config::{self, Config};
 use crate::dialog::DialogManager;
 use crate::error::{Error, ErrorKind};
-use crate::headless::Headless;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
 use crate::python::{BufferCommand, NewSessionHandler};
@@ -27,20 +26,15 @@ use crate::{cli, python};
 
 #[derive(Debug)]
 pub(super) struct App {
-    args: cli::Args,
     data: AppData,
-    frontend: Frontend,
+    tui: Tui,
 }
 
 impl App {
     pub(super) fn new(args: cli::Args, config: &Py<Config>) -> Result<Self, Error> {
         Ok(Self {
-            data: AppData::new(args.clone(), config),
-            frontend: match args.headless {
-                true => Headless::new(config).into(),
-                false => Tui::new(&args, config)?.into(),
-            },
-            args,
+            tui: Tui::new(&args, config)?,
+            data: AppData::new(args, config),
         })
     }
 
@@ -58,14 +52,14 @@ impl App {
         self.data.conn_event_tx = Some(conn_event_tx);
         self.data.python_event_tx = Some(python_event_tx);
 
-        python::init_python_env(&self.args).await?;
+        python::init_python_env().await?;
 
         python::run_user_setup(&self.data.config, &self.data.dialog_manager).await;
 
         // Drain Python command queue to ensure new session handlers are registered
         // before auto-connect runs (handlers are registered via commands sent during init)
         while let Ok(py_cmd) = py_rx.try_recv() {
-            if let Err(err) = py_cmd.exec(&mut self.frontend, &mut self.data).await {
+            if let Err(err) = py_cmd.exec(&mut self.tui, &mut self.data).await {
                 error!("python command during init failed: {err}");
                 Python::attach(|py| {
                     self.data
@@ -80,7 +74,7 @@ impl App {
             "new session handlers registered"
         );
 
-        self.data.auto_connect(&mut self.frontend)?;
+        self.data.auto_connect(&mut self.tui)?;
 
         let result = loop {
             Python::attach(|py| self.data.dialog_manager.borrow_mut(py).tick());
@@ -128,7 +122,7 @@ impl App {
                 }
                 // Python API command dispatch (processing reqs from Python -> app)
                 Some(py_cmd) = py_rx.recv() => {
-                    match py_cmd.exec(&mut self.frontend, &mut self.data).await {
+                    match py_cmd.exec(&mut self.tui, &mut self.data).await {
                         Ok(true) => {
                             info!("quitting");
                             break Ok(());
@@ -142,7 +136,7 @@ impl App {
                     }
                 }
                 // Frontend processing
-                result = self.frontend.run(&mut self.data) => {
+                result = self.tui.run(&mut self.data) => {
                     if let Err(err) = result {
                         error!("app error: {err}");
                         break Err(err);
@@ -151,7 +145,7 @@ impl App {
             }
         };
 
-        self.frontend.exit();
+        self.tui.exit();
         result
     }
 }
@@ -347,7 +341,7 @@ impl AppData {
         Ok(())
     }
 
-    fn auto_connect(&mut self, fe: &mut Frontend) -> Result<(), Error> {
+    fn auto_connect(&mut self, tui: &mut Tui) -> Result<(), Error> {
         let auto_connect = self.args.connect.clone();
 
         trace!(?auto_connect, "auto-connecting");
@@ -359,7 +353,7 @@ impl AppData {
             sessions.push(sesh.clone());
             new_session_handlers.extend(handles);
             // Create tab immediately so handlers can access it
-            fe.tab_action(self, TabAction::CreateSessionTab { session: sesh })?;
+            tui.handle_tab_action(self, TabAction::CreateSessionTab { session: sesh })?;
         }
 
         tokio::spawn(async move {
@@ -428,51 +422,6 @@ impl AppData {
                 }
             }
         });
-    }
-}
-
-#[derive(Debug)]
-pub(super) enum Frontend {
-    Headless(Headless),
-    Tui(Tui),
-}
-
-impl Frontend {
-    async fn run(&mut self, app: &mut AppData) -> Result<(), Error> {
-        match self {
-            Frontend::Headless(headless) => headless.run(app).await,
-            Frontend::Tui(tui) => tui.run(app).await,
-        }
-    }
-
-    #[instrument(skip(self, app, action) fields(action=action.to_string()))]
-    pub(crate) fn tab_action(&mut self, app: &mut AppData, action: TabAction) -> Result<(), Error> {
-        let Frontend::Tui(tui) = self else {
-            warn!(action=?action, "ignoring tab action in headless mode");
-            return Ok(());
-        };
-        tui.handle_tab_action(app, action)
-    }
-
-    fn exit(&mut self) {
-        // Headless mode doesn't require any exit cleanup.
-        let Frontend::Tui(tui) = self else {
-            return;
-        };
-
-        tui.exit();
-    }
-}
-
-impl From<Headless> for Frontend {
-    fn from(h: Headless) -> Self {
-        Frontend::Headless(h)
-    }
-}
-
-impl From<Tui> for Frontend {
-    fn from(t: Tui) -> Self {
-        Frontend::Tui(t)
     }
 }
 

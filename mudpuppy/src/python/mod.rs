@@ -18,7 +18,6 @@ use pyo3::{Bound, Py, PyAny, PyErr, PyResult, Python};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Level, debug, error, instrument, trace};
 
-use crate::cli;
 use crate::config::{Config, config_dir};
 use crate::error::Error;
 
@@ -28,8 +27,8 @@ pub(crate) use command::*;
 pub(crate) use events::*;
 
 // TODO(XXX): restore macro for loading built-in modules in a more DRY way.
-#[instrument(skip(args))]
-pub(super) async fn init_python_env(args: &cli::Args) -> Result {
+#[instrument]
+pub(super) async fn init_python_env() -> Result {
     Python::attach(|py| {
         trace!(dir=?config_dir(), "adding config dir to sys.path");
         py.import("sys")?
@@ -92,23 +91,14 @@ pub(super) async fn init_python_env(args: &cli::Args) -> Result {
         )
         .map(|_| ())?;
 
-        if args.headless {
-            trace!("loading built-in headless.py");
-            PyModule::from_code(
-                py,
-                c_str!(include_str!("headless.py")),
-                c_str!("headless.py"),
-                c_str!("headless"),
-            )?;
-        } else {
-            trace!("loading built-in tui.py");
-            PyModule::from_code(
-                py,
-                c_str!(include_str!("tui.py")),
-                c_str!("tui.py"),
-                c_str!("tui"),
-            )?;
-        }
+        trace!("loading built-in tui.py");
+        PyModule::from_code(
+            py,
+            c_str!(include_str!("tui.py")),
+            c_str!("tui.py"),
+            c_str!("tui"),
+        )?;
+
         Ok::<(), Error>(())
     })?;
 

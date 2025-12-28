@@ -6,7 +6,7 @@ use strum::Display;
 use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument, warn};
 
-use crate::app::{self, AppData, Frontend, SlashCommand, TabAction};
+use crate::app::{self, AppData, SlashCommand, TabAction};
 use crate::config::{Character, Config, Mud};
 use crate::dialog::DialogManager;
 use crate::error::{Error, ErrorKind};
@@ -16,7 +16,7 @@ use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
 use crate::session::{Alias, Buffer, Input, InputLine, OutputItem, PromptMode, Trigger};
 use crate::shortcut::{Shortcut, TabShortcut};
-use crate::tui::{self, TabKind};
+use crate::tui::{self, TabKind, Tui};
 
 pub(crate) enum Command {
     Config(oneshot::Sender<Py<Config>>),
@@ -30,8 +30,8 @@ pub(crate) enum Command {
 }
 
 impl Command {
-    #[instrument(level = Level::TRACE, skip(self, fe, app), fields(app.active_session))]
-    pub(crate) async fn exec(self, fe: &mut Frontend, app: &mut AppData) -> Result<bool> {
+    #[instrument(level = Level::TRACE, skip(self, tui, app), fields(app.active_session))]
+    pub(crate) async fn exec(self, tui: &mut Tui, app: &mut AppData) -> Result<bool> {
         match self {
             Command::Config(tx) => {
                 let _ = tx.send(Python::attach(|py| app.config.clone_ref(py)));
@@ -57,7 +57,7 @@ impl Command {
                 app.shortcuts.insert(key_event, shortcut);
             }
             Command::Tab(tab_action) => {
-                fe.tab_action(app, tab_action)?;
+                tui.handle_tab_action(app, tab_action)?;
             }
             Command::Quit => return Ok(true),
         }

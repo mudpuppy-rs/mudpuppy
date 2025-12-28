@@ -25,14 +25,11 @@ pub struct Args {
     )]
     pub log_level: LevelFilter,
 
-    #[arg(long, default_value = "false", help = "Run in headless mode (no TUI).")]
-    pub headless: bool,
-
     #[arg(
         short,
         long,
         value_name = "FLOAT",
-        help = "Frame rate, i.e. number of frames per second. Ignored with --headless.",
+        help = "Frame rate, i.e. number of frames per second.",
         default_value_t = 60.0
     )]
     pub frame_rate: f64,
