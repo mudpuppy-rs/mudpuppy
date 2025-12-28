@@ -12,6 +12,8 @@ use crate::app::{self, AppData, TabAction};
 use crate::config::{Config, config_file};
 use crate::error::Error;
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
+use crate::python;
+use crate::python::{DialogCommand, SessionCommand};
 use crate::shortcut::{MenuShortcut, Shortcut};
 use crate::tui::chrome::{TabData, TabKind};
 use crate::tui::{Constraint, Section, Tab};
@@ -139,16 +141,18 @@ impl CharacterMenu {
                 let (session, handles) = app.new_session(name)?;
 
                 let session_clone = session.clone();
-                let character = session.character.clone();
                 tokio::spawn(async move {
                     app::join_all(handles, "new session handler panicked").await;
-                    if let Err(e) = Python::attach(|py| session_clone.connect(py)) {
-                        error!("failed to connect session: {e}");
+                    if let Err(error) = Python::attach(|py| session_clone.connect(py)) {
+                        error!("failed to connect session: {error}");
                         Python::attach(|py| {
-                            if let Some(error_tx) = crate::python::ERROR_TX.get(py) {
-                                let _ =
-                                    error_tx.send(format!("Failed to connect '{character}': {e}"));
-                            }
+                            let _ = python::dispatch_command(
+                                py,
+                                SessionCommand::Dialog {
+                                    session_id: session_clone.id,
+                                    cmd: DialogCommand::Error(error),
+                                },
+                            );
                         });
                     }
                 });

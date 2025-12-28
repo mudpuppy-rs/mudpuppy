@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use pyo3::types::PyAnyMethods;
 use pyo3::{Py, PyRef, Python};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -16,7 +15,6 @@ use crate::dialog::{ConfirmAction, DialogKind, Position, Severity, Size};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::mouse::MouseEvent;
-use crate::python::{APP, Command, DialogCommand, SessionCommand};
 use crate::shortcut::Shortcut;
 use crate::tui::{Dialog, Section, buffer};
 use crate::{python, tui};
@@ -586,53 +584,12 @@ impl Tab {
         // Check global dialogs first (they're rendered on top and have precedence)
         let (global_consumed, action) = app.dialog_manager.handle_key(key_event);
 
-        if let Some(action) = action {
-            match action {
-                ConfirmAction::Quit {} => {
-                    app.should_quit = true;
-                }
-                ConfirmAction::PyCallback(callback) => {
-                    // Spawn the Python callback
-                    let cmd_tx = Python::attach(|py| APP.get(py).unwrap().clone());
-                    let session_id = app.active_session;
-                    tokio::spawn(async move {
-                        let future_result = Python::attach(|py| {
-                            pyo3_async_runtimes::tokio::into_future(callback.bind(py).call0()?)
-                        });
-
-                        let future = match future_result {
-                            Ok(f) => f,
-                            Err(err) => {
-                                // Note: Error::from on PyErr to collect backtrace.
-                                let error = Error::from(err);
-                                error!("dialog callback error: {error}");
-                                let cmd = DialogCommand::Error(error);
-                                let _ = cmd_tx.send(match session_id {
-                                    Some(session_id) => {
-                                        Command::Session(SessionCommand::Dialog { session_id, cmd })
-                                    }
-                                    None => Command::GlobalDialog(cmd),
-                                });
-                                return;
-                            }
-                        };
-
-                        if let Err(err) = future.await {
-                            // Note: Error::from on PyErr to collect backtrace.
-                            let error = Error::from(err);
-                            error!("dialog callback error: {error}");
-                            let cmd = DialogCommand::Error(error);
-                            let _ = cmd_tx.send(match session_id {
-                                Some(session_id) => {
-                                    Command::Session(SessionCommand::Dialog { session_id, cmd })
-                                }
-                                None => Command::GlobalDialog(cmd),
-                            });
-                        }
-                    });
-                }
+        #[expect(clippy::single_match)] // TODO(XXX): expand.
+        match action {
+            Some(ConfirmAction::Quit) => {
+                app.should_quit = true;
             }
-            return true;
+            _ => {}
         }
 
         if global_consumed {
@@ -642,9 +599,14 @@ impl Tab {
         // Check session-level dialogs if global dialogs didn't consume the event
         if let Some(session_id) = app.active_session {
             if let Ok(session) = app.session_mut(session_id) {
-                let (session_consumed, _action) = session.dialog_manager.handle_key(key_event);
-                // Session-level dialog confirmations don't have actions, so we ignore them
-                // TODO(XXX): uh, why?
+                let (session_consumed, action) = session.dialog_manager.handle_key(key_event);
+                #[expect(clippy::single_match)] // TODO(XXX): expand.
+                match action {
+                    Some(ConfirmAction::Quit) => {
+                        app.should_quit = true;
+                    }
+                    _ => {}
+                }
                 return session_consumed;
             }
         }

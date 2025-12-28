@@ -28,6 +28,7 @@ use crate::{python, slash_command};
 
 use crate::app::SlashCommand;
 use crate::config::{Character, Config, Mud};
+use crate::python::{DialogCommand, SessionCommand};
 pub(crate) use alias::*;
 pub(crate) use buffer::*;
 pub(crate) use input::*;
@@ -298,18 +299,21 @@ impl Session {
             }
 
             let session_name = self.character.clone();
+            let session_id = self.id;
             tokio::spawn(async move {
                 while let Some(result) = futures.next().await {
-                    if let Err(err) = result {
+                    if let Err(error) = result {
                         // Note: Error::from() to collect backtrace from PyErr.
-                        let error_msg = Error::from(err);
-                        error!("{session_name} alias callback error: {error_msg}");
+                        let error = Error::from(error);
+                        error!("{session_name} alias callback error: {error}");
                         Python::attach(|py| {
-                            if let Some(error_tx) = python::ERROR_TX.get(py) {
-                                let _ = error_tx.send(format!(
-                                    "Alias callback error for '{session_name}': {error_msg}"
-                                ));
-                            }
+                            let _ = python::dispatch_command(
+                                py,
+                                SessionCommand::Dialog {
+                                    session_id,
+                                    cmd: DialogCommand::Error(error),
+                                },
+                            );
                         });
                     }
                 }

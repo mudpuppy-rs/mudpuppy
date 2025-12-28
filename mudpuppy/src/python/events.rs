@@ -13,7 +13,9 @@ use tracing::{error, trace};
 use crate::config::Config;
 use crate::error::Error;
 use crate::net::connection;
-use crate::python::{self, ERROR_TX, PyFuture, label_for_coroutine, require_coroutine};
+use crate::python::{
+    self, DialogCommand, PyFuture, SessionCommand, label_for_coroutine, require_coroutine,
+};
 use crate::session::{Input, InputLine, MudLine, PromptMode};
 
 #[derive(Debug)]
@@ -32,6 +34,7 @@ impl NewSessionHandler {
     }
 
     pub(crate) fn execute(&self, sesh: python::Session) -> Result<JoinHandle<()>, Error> {
+        let session_id = sesh.id;
         let future = Python::attach(|py| {
             let awaitable = self.awaitable.bind(py).call1((sesh,))?;
             pyo3_async_runtimes::tokio::into_future(awaitable)
@@ -39,15 +42,18 @@ impl NewSessionHandler {
 
         let label = self.label.clone();
         Ok(tokio::spawn(async move {
-            if let Err(err) = future.await {
+            if let Err(error) = future.await {
                 // Note: Error::from() to collect backtrace from PyErr.
-                let error_msg = Error::from(err);
-                error!("NewSessionHandler {label} callback error: {error_msg}");
+                let error = Error::from(error);
+                error!("NewSessionHandler {label} callback error: {error}");
                 Python::attach(|py| {
-                    if let Some(error_tx) = ERROR_TX.get(py) {
-                        let _ = error_tx
-                            .send(format!("New session handler '{label}' failed: {error_msg}"));
-                    }
+                    let _ = python::dispatch_command(
+                        py,
+                        SessionCommand::Dialog {
+                            session_id,
+                            cmd: DialogCommand::Error(error),
+                        },
+                    );
                 });
             }
         }))
@@ -296,18 +302,22 @@ impl Handlers {
         }
 
         let event_type_name = event.r#type().to_string();
+        let session_id = self.session_id;
         tokio::spawn(async move {
             while let Some(result) = futures.next().await {
-                if let Err(err) = result {
+                if let Err(error) = result {
                     // Note: Error::from() to collect backtrace from PyErr.
-                    let error_msg = Error::from(err);
-                    error!("event type {event_type_name} callback error: {error_msg}");
+                    let error = Error::from(error);
+                    error!("event type {event_type_name} callback error: {error}");
+
                     Python::attach(|py| {
-                        if let Some(error_tx) = ERROR_TX.get(py) {
-                            let _ = error_tx.send(format!(
-                                "Event handler for '{event_type_name}' failed: {error_msg}"
-                            ));
-                        }
+                        let _ = python::dispatch_command(
+                            py,
+                            SessionCommand::Dialog {
+                                session_id,
+                                cmd: DialogCommand::Error(error),
+                            },
+                        );
                     });
                 }
             }

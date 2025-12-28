@@ -7,10 +7,11 @@ use std::time::Duration;
 use tracing::error;
 
 use crate::app::{self, AppData, TabAction};
-use crate::dialog;
 use crate::error::{Error, ErrorKind};
+use crate::python::{DialogCommand, SessionCommand};
 use crate::session::OutputItem;
 use crate::shortcut::TabShortcut;
+use crate::{dialog, python};
 
 #[async_trait]
 pub(super) trait SlashCommand: Debug + Send + Sync {
@@ -97,15 +98,18 @@ impl SlashCommand for NewSession {
 
         let session_clone = session.clone();
         let session_id = session.id;
-        let character = session.character.clone();
         tokio::spawn(async move {
             app::join_all(new_session_handlers, "new session handler panicked").await;
-            if let Err(e) = Python::attach(|py| session_clone.connect(py)) {
-                error!("failed to connect session {session_id}: {e}");
+            if let Err(error) = Python::attach(|py| session_clone.connect(py)) {
+                error!("failed to connect session {session_id}: {error}");
                 Python::attach(|py| {
-                    if let Some(error_tx) = crate::python::ERROR_TX.get(py) {
-                        let _ = error_tx.send(format!("Failed to connect '{character}': {e}"));
-                    }
+                    let _ = python::dispatch_command(
+                        py,
+                        SessionCommand::Dialog {
+                            session_id,
+                            cmd: DialogCommand::Error(error),
+                        },
+                    );
                 });
             }
         });

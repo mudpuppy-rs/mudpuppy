@@ -17,7 +17,7 @@ use crate::dialog::DialogManager;
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::net::connection::{self};
-use crate::python::{BufferCommand, NewSessionHandler};
+use crate::python::{BufferCommand, Command, DialogCommand, NewSessionHandler, SessionCommand};
 use crate::session::{Buffer, Session};
 use crate::shortcut::{Shortcut, TabShortcut};
 pub(crate) use crate::slash_command::SlashCommand;
@@ -350,15 +350,18 @@ impl AppData {
             join_all(new_session_handlers, "new session handler task panicked").await;
             // Try to connect each session individually, don't stop on first failure
             for sesh in &sessions {
-                if let Err(e) = Python::attach(|py| sesh.connect(py)) {
-                    error!("auto-connect failed for '{}': {e}", sesh.character);
-                    Python::attach(|py| {
-                        if let Some(error_tx) = python::ERROR_TX.get(py) {
-                            let _ = error_tx
-                                .send(format!("Failed to auto-connect '{}': {e}", sesh.character));
-                        }
-                    });
-                }
+                Python::attach(|py| {
+                    if let Err(e) = sesh.connect(py) {
+                        error!("auto-connect failed for '{}': {e}", sesh.character);
+                        let _ = python::dispatch_command(
+                            py,
+                            Command::Session(SessionCommand::Dialog {
+                                session_id: sesh.id,
+                                cmd: DialogCommand::Error(e),
+                            }),
+                        );
+                    }
+                });
             }
         });
 

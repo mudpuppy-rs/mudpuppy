@@ -3,7 +3,7 @@ use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-use pyo3::{Py, PyAny, Python, pyclass, pymethods};
+use pyo3::{Py, Python, pyclass, pymethods};
 use strum::Display;
 use tracing::{debug, trace};
 
@@ -407,7 +407,6 @@ type WindowIndexRect<'a> = &'a [(usize, (u16, u16, u16, u16))];
 
 /// Type of dialog to display.
 #[derive(Clone)]
-#[pyclass]
 pub(crate) enum DialogKind {
     /// Confirmation dialog: requires specific key to confirm, any other key cancels.
     Confirmation {
@@ -466,14 +465,10 @@ impl Debug for DialogKind {
 
 /// A modal dialog overlay.
 #[derive(Clone)]
-#[pyclass]
 pub(crate) struct Dialog {
-    #[pyo3(get, set)]
     pub(crate) id: String,
-    #[pyo3(get, set)]
     pub(crate) kind: DialogKind,
     pub(crate) expires_at: Option<Instant>,
-    #[pyo3(get, set)]
     pub(crate) priority: DialogPriority,
 }
 
@@ -488,18 +483,7 @@ impl Debug for Dialog {
     }
 }
 
-#[pymethods]
 impl Dialog {
-    #[new]
-    pub(crate) fn new(id: String, kind: DialogKind, priority: DialogPriority) -> Self {
-        Self {
-            id,
-            kind,
-            expires_at: None,
-            priority,
-        }
-    }
-
     /// Update the occurrence count for a notification dialog.
     pub(crate) fn increment_count(&mut self) {
         let DialogKind::Notification {
@@ -539,7 +523,7 @@ pub(crate) enum DialogPriority {
 
 /// Severity level for notification dialogs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
-#[pyclass(frozen, eq, eq_int)]
+#[expect(dead_code)] // Info + Warning not used yet.
 pub(crate) enum Severity {
     Info,
     Warning,
@@ -547,22 +531,10 @@ pub(crate) enum Severity {
 }
 
 /// Action to take when a confirmation dialog is confirmed.
-#[derive(Clone)]
-#[pyclass(frozen)]
+#[derive(Clone, Debug)]
 pub(crate) enum ConfirmAction {
     /// Quit the application.
-    Quit {},
-    /// Call a Python async callback.
-    PyCallback(Py<PyAny>),
-}
-
-impl Debug for ConfirmAction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfirmAction::Quit {} => write!(f, "Quit"),
-            ConfirmAction::PyCallback(_) => write!(f, "PyCallback(<callable>)"),
-        }
-    }
+    Quit,
 }
 
 /// A floating window with a buffer and optional title.

@@ -8,7 +8,10 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::error::{Error, ErrorKind};
-use crate::python::{self, SessionCommand, dispatch_command, require_coroutine};
+use crate::python::Command::GlobalDialog;
+use crate::python::{
+    self, Command, DialogCommand, SessionCommand, dispatch_command, require_coroutine,
+};
 use crate::session::InputLine;
 
 // TODO(XXX): flagset instead of bools
@@ -170,12 +173,21 @@ async fn run_timer_loop(py_config: Py<Timer>) {
                 .transpose()
             {
                 Ok(callback) => callback,
-                Err(err) => {
-                    let error_msg = Error::from(err);
-                    error!(name, "timer failed: {error_msg}");
-                    if let Some(error_tx) = python::ERROR_TX.get(py) {
-                        let _ = error_tx.send(format!("Timer '{name}' failed: {error_msg}"));
-                    }
+                Err(error) => {
+                    let error = Error::from(error);
+                    error!(name, "timer failed: {error}");
+                    let cmd = DialogCommand::Error(error);
+
+                    let _ = dispatch_command(
+                        py,
+                        match session {
+                            Some(sesh) => Command::Session(SessionCommand::Dialog {
+                                session_id: sesh.id,
+                                cmd,
+                            }),
+                            None => GlobalDialog(cmd),
+                        },
+                    );
                     return None;
                 }
             };
@@ -188,14 +200,21 @@ async fn run_timer_loop(py_config: Py<Timer>) {
         if let Some(callback) = callback {
             let name = Python::attach(|py| py_config.borrow(py).name.clone());
             debug!(name, "invoking timer callback");
-            if let Err(err) = callback.await {
-                let error_msg = Error::from(err);
-                error!(name, "timer failed: {error_msg}");
+            if let Err(error) = callback.await {
+                let error = Error::from(error);
+                error!(name, "timer failed: {error}");
                 Python::attach(|py| {
-                    if let Some(error_tx) = python::ERROR_TX.get(py) {
-                        let _ =
-                            error_tx.send(format!("Timer '{name}' callback failed: {error_msg}"));
-                    }
+                    let cmd = DialogCommand::Error(error);
+                    let _ = dispatch_command(
+                        py,
+                        match session {
+                            Some(sesh) => Command::Session(SessionCommand::Dialog {
+                                session_id: sesh.id,
+                                cmd,
+                            }),
+                            None => GlobalDialog(cmd),
+                        },
+                    );
                 });
                 return;
             }

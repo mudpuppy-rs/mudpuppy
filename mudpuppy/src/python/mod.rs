@@ -244,7 +244,6 @@ pub(super) fn label_for_coroutine(py: Python<'_>, callback: &Py<PyAny>) -> Optio
 pub(super) type PyFuture = Pin<Box<dyn StdFuture<Output = PyResult<Py<PyAny>>> + Send + 'static>>;
 
 pub(crate) static APP: PyOnceLock<UnboundedSender<Command>> = PyOnceLock::new();
-pub(crate) static ERROR_TX: PyOnceLock<UnboundedSender<String>> = PyOnceLock::new();
 
 type Result<T = ()> = std::result::Result<T, Error>;
 type FutureResult<'a> = PyResult<Bound<'a, PyAny>>;
