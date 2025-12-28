@@ -417,6 +417,10 @@ impl AppData {
 #[derive(Debug, Display)]
 pub(crate) enum TabAction {
     Shortcut(TabShortcut),
+    /// Force close a tab without confirmation (used when confirming a close dialog).
+    ForceCloseTab {
+        tab_id: u32,
+    },
     CreateSessionTab {
         session: python::Session,
     },

@@ -217,6 +217,9 @@ settings! {
         /// Whether to echo raw received GMCP messages as debug output
         gmcp_echo: bool = false,
 
+        /// Whether to confirm before closing a tab.
+        confirm_close: bool = true,
+
         /// How the output buffer is configured (word wrap, etc).
         output_buffer: BufferConfig = BufferConfig::default(),
 

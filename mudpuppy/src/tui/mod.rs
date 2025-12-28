@@ -1,11 +1,8 @@
-mod buffer;
-mod char_menu;
-mod chrome;
-mod commandline;
-mod custom_tab;
-mod layout;
-mod reflow;
-mod session;
+use std::fmt::Debug;
+use std::io::{IsTerminal, Stdout, stdout};
+use std::num::NonZeroUsize;
+use std::panic;
+use std::time::Duration;
 
 use crossterm::ExecutableCommand;
 use crossterm::event::{
@@ -20,11 +17,6 @@ use pyo3::{Py, Python};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Layout, Rect};
-use std::fmt::Debug;
-use std::io::{IsTerminal, Stdout, stdout};
-use std::num::NonZeroUsize;
-use std::panic;
-use std::time::Duration;
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 use tracing::{debug, error, info, trace, warn};
@@ -36,6 +28,15 @@ use crate::keyboard::{KeyCode, KeyEvent, KeyModifiers};
 use crate::mouse::{MouseButton, MouseEvent, MouseEventKind};
 use crate::shortcut::{Shortcut, TabShortcut};
 use crate::{cli, dialog, python};
+
+mod buffer;
+mod char_menu;
+mod chrome;
+mod commandline;
+mod custom_tab;
+mod layout;
+mod reflow;
+mod session;
 
 pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab, TabKind};
@@ -119,8 +120,9 @@ impl Tui {
 
                 // Check dialogs first - they have the highest priority
                 // Dialogs must be checked before shortcuts so they can intercept keys like Esc
-                if Tab::dialog_key_consumed(app, &key_event) {
-                    return Ok(None);
+                let (consumed, tab_action) = Tab::dialog_key_consumed(app, &key_event);
+                if consumed {
+                    return Ok(tab_action);
                 }
 
                 // Handle app-level shortcuts, these aren't specific to the active tab and so we
@@ -225,6 +227,46 @@ impl Tui {
         })
     }
 
+    /// Helper to actually close a tab and handle cleanup.
+    /// Returns Ok(()) if the tab was closed, or triggers quit if it was the last tab.
+    fn close_tab_internal(&mut self, app: &mut AppData, tab_id: u32) -> Result<(), Error> {
+        let (_, Some(removed)) = self.chrome.close_tab(tab_id) else {
+            // No tab was removed - this means it was the last tab, so quit instead
+            let confirm_quit = Python::attach(|py| app.config.borrow(py).confirm_quit);
+            if confirm_quit {
+                app.dialog_manager.show_confirmation(
+                    "Are you sure you want to quit?".to_string(),
+                    'q',
+                    dialog::ConfirmAction::Quit {},
+                    Some(Duration::from_secs(25)),
+                );
+            } else {
+                app.should_quit = true;
+            }
+            return Ok(());
+        };
+
+        // Close the associated session if this was a session tab
+        if let Some(session) = removed.session().map(|s| s.id) {
+            info!(session, "closing session");
+            app.close_session(session)?;
+        }
+
+        // Notify all sessions that a tab was closed
+        for session in app.sessions.values() {
+            let _ = session
+                .event_handlers
+                .session_event(&python::Event::TabClosed {
+                    title: removed.data.title.clone(),
+                    tab_id,
+                });
+        }
+
+        // Update active session based on the new active tab
+        app.set_active_session(self.chrome.active_tab().session().map(|s| s.id))?;
+        Ok(())
+    }
+
     pub(crate) fn handle_tab_action(
         &mut self,
         app: &mut AppData,
@@ -233,6 +275,10 @@ impl Tui {
         match tab_action {
             TabAction::Shortcut(tab_shortcut) => {
                 return self.handle_tab_shortcut(app, &tab_shortcut);
+            }
+            TabAction::ForceCloseTab { tab_id } => {
+                // Close the tab without confirmation (already confirmed via dialog)
+                self.close_tab_internal(app, tab_id)?;
             }
             TabAction::CreateCustomTab {
                 title,
@@ -328,7 +374,9 @@ impl Tui {
                         *tab_id
                     }
                 };
-                let (_, Some(removed)) = self.chrome.close_tab(id) else {
+
+                // Tab 0 (character list) can't be closed - if it's the last tab, quit instead
+                if id == 0 {
                     let confirm_quit = Python::attach(|py| app.config.borrow(py).confirm_quit);
                     if confirm_quit {
                         app.dialog_manager.show_confirmation(
@@ -341,20 +389,51 @@ impl Tui {
                         app.should_quit = true;
                     }
                     return Ok(());
+                }
+
+                // Check if we should confirm before closing
+                let tab = self.chrome.get_tab(id)?;
+                let confirm_close = if let Some(session) = tab.session() {
+                    // For session tabs, resolve the setting from the session's character
+                    Python::attach(|py| {
+                        app.config
+                            .borrow(py)
+                            .resolve_settings(py, Some(&session.character))
+                            .map(|s| s.confirm_close)
+                            .unwrap_or(true)
+                    })
+                } else {
+                    // For non-session tabs, use global settings
+                    Python::attach(|py| {
+                        app.config
+                            .borrow(py)
+                            .resolve_settings(py, None)
+                            .map(|s| s.confirm_close)
+                            .unwrap_or(true)
+                    })
                 };
-                if let Some(session) = removed.session().map(|s| s.id) {
-                    info!(session, "closing session");
-                    app.close_session(session)?;
+
+                if confirm_close {
+                    // Show confirmation dialog
+                    let dialog_manager = if let Some(session) = tab.session() {
+                        // Use session dialog manager for session tabs
+                        &mut app.session_mut(session.id)?.dialog_manager
+                    } else {
+                        // Use global dialog manager for other tabs
+                        &mut app.dialog_manager
+                    };
+
+                    dialog_manager.show_confirmation(
+                        "Are you sure you want to close this tab?".to_string(),
+                        'c',
+                        dialog::ConfirmAction::TabClose { tab_id: id },
+                        Some(Duration::from_secs(15)),
+                    );
+                    return Ok(());
                 }
-                for session in app.sessions.values() {
-                    let _ = session
-                        .event_handlers
-                        .session_event(&python::Event::TabClosed {
-                            title: removed.data.title.clone(),
-                            tab_id: id,
-                        });
-                }
-                app.set_active_session(self.chrome.active_tab().session().map(|s| s.id))?;
+
+                // If no confirmation needed, close immediately
+                self.close_tab_internal(app, id)?;
             }
             TabShortcut::SwitchToSession { session } => {
                 info!(session, "switching to session tab");

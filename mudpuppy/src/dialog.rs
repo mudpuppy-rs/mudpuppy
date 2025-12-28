@@ -322,7 +322,6 @@ impl DialogManager {
             expires_at: Some(Instant::now() + Duration::from_secs(15)),
             priority: DialogPriority::Normal,
         };
-
         self.add_dialog(dialog);
 
         let now = Instant::now();
@@ -535,6 +534,8 @@ pub(crate) enum Severity {
 pub(crate) enum ConfirmAction {
     /// Quit the application.
     Quit,
+    /// Close a specific tab.
+    TabClose { tab_id: u32 },
 }
 
 /// A floating window with a buffer and optional title.

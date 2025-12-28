@@ -512,7 +512,10 @@ impl Tab {
         }
     }
 
-    pub(crate) fn dialog_key_consumed(app: &mut AppData, key_event: &KeyEvent) -> bool {
+    pub(crate) fn dialog_key_consumed(
+        app: &mut AppData,
+        key_event: &KeyEvent,
+    ) -> (bool, Option<TabAction>) {
         Self::dialog_key_action(app, key_event)
     }
 
@@ -580,38 +583,48 @@ impl Tab {
             .collect()
     }
 
-    fn dialog_key_action(app: &mut AppData, key_event: &KeyEvent) -> bool {
+    fn dialog_key_action(app: &mut AppData, key_event: &KeyEvent) -> (bool, Option<TabAction>) {
         // Check global dialogs first (they're rendered on top and have precedence)
         let (global_consumed, action) = app.dialog_manager.handle_key(key_event);
 
-        #[expect(clippy::single_match)] // TODO(XXX): expand.
-        match action {
-            Some(ConfirmAction::Quit) => {
-                app.should_quit = true;
-            }
-            _ => {}
+        if let Some(action) = action {
+            return match action {
+                ConfirmAction::Quit => {
+                    app.should_quit = true;
+                    (true, None)
+                }
+                ConfirmAction::TabClose { tab_id } => {
+                    (true, Some(TabAction::ForceCloseTab { tab_id }))
+                }
+            };
         }
 
         if global_consumed {
-            return true;
+            return (true, None);
         }
 
         // Check session-level dialogs if global dialogs didn't consume the event
         if let Some(session_id) = app.active_session {
             if let Ok(session) = app.session_mut(session_id) {
                 let (session_consumed, action) = session.dialog_manager.handle_key(key_event);
-                #[expect(clippy::single_match)] // TODO(XXX): expand.
-                match action {
-                    Some(ConfirmAction::Quit) => {
-                        app.should_quit = true;
-                    }
-                    _ => {}
+                if let Some(action) = action {
+                    return match action {
+                        ConfirmAction::Quit => {
+                            app.should_quit = true;
+                            (true, None)
+                        }
+                        ConfirmAction::TabClose { tab_id } => {
+                            (true, Some(TabAction::ForceCloseTab { tab_id }))
+                        }
+                    };
                 }
-                return session_consumed;
+                if session_consumed {
+                    return (true, None);
+                }
             }
         }
 
-        false
+        (false, None)
     }
 
     fn dialog_mouse_action(app: &mut AppData, mouse_event: MouseEvent, area: Rect) -> bool {
