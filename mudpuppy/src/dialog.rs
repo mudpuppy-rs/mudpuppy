@@ -7,17 +7,15 @@ use pyo3::{Py, PyAny, Python, pyclass, pymethods};
 use strum::Display;
 use tracing::{debug, trace};
 
-use crate::config::Config;
 use crate::keyboard::{KeyCode, KeyEvent};
 use crate::mouse::{MouseButton, MouseEvent, MouseEventKind};
 use crate::session::Buffer;
 
 /// Manages modal dialogs and notifications.
 #[derive(Debug)]
-#[pyclass]
 pub struct DialogManager {
     /// Active dialogs, sorted by priority (highest first).
-    active: VecDeque<Py<Dialog>>,
+    active: VecDeque<Dialog>,
 
     /// Error deduplication tracking.
     recent_errors: HashMap<u64, ErrorTracker>,
@@ -26,7 +24,6 @@ pub struct DialogManager {
     error_cooldown: Duration,
 
     /// Maximum number of dialogs to keep in queue.
-    #[pyo3(get, set)]
     max_concurrent: usize,
 
     /// Current drag operation state.
@@ -46,7 +43,7 @@ impl DialogManager {
     }
 
     /// Get all active dialogs (for rendering).
-    pub(crate) fn get_all_active(&self) -> impl DoubleEndedIterator<Item = &Py<Dialog>> {
+    pub(crate) fn get_all_active(&self) -> impl DoubleEndedIterator<Item = &Dialog> {
         self.active.iter()
     }
 
@@ -55,20 +52,17 @@ impl DialogManager {
         let now = Instant::now();
 
         // Remove expired dialogs
-        self.active.retain(|py_dialog| {
-            Python::attach(|py| {
-                let dialog = py_dialog.borrow(py);
-                let Some(expires_at) = dialog.expires_at else {
-                    return true;
-                };
+        self.active.retain(|dialog| {
+            let Some(expires_at) = dialog.expires_at else {
+                return true;
+            };
 
-                if expires_at < now {
-                    debug!(id = ?dialog.id, "dialog expired");
-                    return false;
-                }
+            if expires_at < now {
+                debug!(id = ?dialog.id, "dialog expired");
+                return false;
+            }
 
-                true
-            })
+            true
         });
 
         // Clean up expired error tracking
@@ -80,233 +74,203 @@ impl DialogManager {
     /// Also returns a bool indicating if the event was consumed.
     pub(crate) fn handle_key(&mut self, key: &KeyEvent) -> (bool, Option<ConfirmAction>) {
         // Only the topmost dialog (highest priority, front of queue) gets keyboard events
-        let py_dialog = Python::attach(|py| self.active.front().map(|d| d.clone_ref(py)));
-
-        let Some(py_dialog) = py_dialog else {
+        let Some(dialog) = self.active.front() else {
             trace!("handle_key: no active dialogs");
             return (false, None);
         };
 
-        Python::attach(|py| {
-            let dialog = py_dialog.borrow(py);
-            trace!(id = ?dialog.id, kind = ?dialog.kind, priority = ?dialog.priority, "handle_key: checking topmost dialog");
+        trace!(id = ?dialog.id, kind = ?dialog.kind, priority = ?dialog.priority, "handle_key: checking topmost dialog");
 
-            match &dialog.kind {
-                DialogKind::Confirmation { confirm_key, .. } => {
-                    // Check if this is the confirm key (must be a char)
-                    let is_confirm = matches!(key.code, KeyCode::Char(c) if c == *confirm_key);
+        match &dialog.kind {
+            DialogKind::Confirmation { confirm_key, .. } => {
+                // Check if this is the confirm key (must be a char)
+                let is_confirm = matches!(key.code, KeyCode::Char(c) if c == *confirm_key);
 
-                    if is_confirm {
-                        debug!(id = ?dialog.id, "confirmation accepted");
-                        let py_dialog = self.active.pop_front().unwrap();
-                        if let DialogKind::Confirmation { action, .. } = &py_dialog.borrow(py).kind
-                        {
-                            (true, Some(action.clone()))
-                        } else {
-                            (true, None)
-                        }
+                if is_confirm {
+                    debug!(id = ?dialog.id, "confirmation accepted");
+                    let dialog = self.active.pop_front().unwrap();
+                    if let DialogKind::Confirmation { action, .. } = &dialog.kind {
+                        (true, Some(action.clone()))
                     } else {
-                        debug!(id = ?dialog.id, ?key, "confirmation cancelled");
-                        self.active.pop_front();
                         (true, None)
                     }
+                } else {
+                    debug!(id = ?dialog.id, ?key, "confirmation cancelled");
+                    self.active.pop_front();
+                    (true, None)
                 }
-                DialogKind::Notification { dismissible, .. } => {
-                    if *dismissible {
-                        // Only dismiss on char keys to avoid issues with special keys
-                        if matches!(key.code, KeyCode::Char(_)) {
-                            debug!(id = ?dialog.id, kind = ?dialog.kind, "dialog dismissed by key press");
-                            self.active.pop_front();
-                            (true, None)
-                        } else {
-                            // Non-char keys don't dismiss notifications
-                            (false, None)
-                        }
+            }
+            DialogKind::Notification { dismissible, .. } => {
+                if *dismissible {
+                    // Only dismiss on char keys to avoid issues with special keys
+                    if matches!(key.code, KeyCode::Char(_)) {
+                        debug!(id = ?dialog.id, kind = ?dialog.kind, "dialog dismissed by key press");
+                        self.active.pop_front();
+                        (true, None)
                     } else {
-                        // Non-dismissible dialogs ignore key presses
+                        // Non-char keys don't dismiss notifications
                         (false, None)
                     }
-                }
-                DialogKind::FloatingWindow { .. } => {
-                    // Floating windows don't respond to keyboard events - they're mouse-only
-                    // Event is not consumed, so it falls through to the app
+                } else {
+                    // Non-dismissible dialogs ignore key presses
                     (false, None)
                 }
             }
-        })
+            DialogKind::FloatingWindow { .. } => {
+                // Floating windows don't respond to keyboard events - they're mouse-only
+                // Event is not consumed, so it falls through to the app
+                (false, None)
+            }
+        }
     }
 
     /// Handle a mouse event for dragging floating windows.
     /// Takes the mouse event and a list of (`dialog_index`, rect) pairs for hit testing.
     /// Returns true if the event was consumed.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::too_many_lines
-    )] // TODO(XXX): tidy up
     pub(crate) fn handle_mouse(
         &mut self,
-        py: Python<'_>,
         mouse: MouseEvent,
         window_rects: WindowIndexRect,
-        config: &Py<Config>,
     ) -> bool {
         match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let mouse_enabled = config.borrow(py).mouse_enabled;
-
-                // Check if we clicked on a floating window
-                for &(dialog_idx, (x, y, width, height)) in window_rects {
-                    if mouse.column >= x
-                        && mouse.column < x + width
-                        && mouse.row >= y
-                        && mouse.row < y + height
-                    {
-                        if let Some(py_dialog) = self.active.get(dialog_idx) {
-                            // First, check if we should dismiss via close button
-                            let should_dismiss = {
-                                let dialog = py_dialog.borrow(py);
-                                if let DialogKind::FloatingWindow {
-                                    window: py_window,
-                                    dismissible,
-                                } = &dialog.kind
-                                {
-                                    let window = py_window.borrow(py);
-
-                                    // Check if we clicked on the close button
-                                    if mouse_enabled && *dismissible && window.title.is_some() {
-                                        // Title bar is 3 lines tall (top border, content, bottom border)
-                                        // Click should be on the content line (y + 1)
-                                        let in_title_bar = mouse.row == y + 1;
-                                        // Close button " [X]" occupies 4 characters at the right
-                                        // But we need to account for the border (1 char on left, 1 on right)
-                                        // So the clickable area is from (x + width - 5) to (x + width - 2)
-                                        let close_button_start = x + width.saturating_sub(5);
-                                        let close_button_end = x + width.saturating_sub(1);
-                                        let in_close_button = mouse.column >= close_button_start
-                                            && mouse.column < close_button_end;
-
-                                        in_title_bar && in_close_button
-                                    } else {
-                                        false
-                                    }
-                                } else {
-                                    false
-                                }
-                            };
-
-                            if should_dismiss {
-                                let dialog_id = py_dialog.borrow(py).id.clone();
-                                self.dismiss(py, &dialog_id);
-                                debug!(id = ?dialog_id, "dismissed dialog via close button");
-                                return true;
-                            }
-
-                            // Not clicking on close button - start dragging
-                            let dialog = py_dialog.borrow(py);
-                            if let DialogKind::FloatingWindow {
-                                window: py_window, ..
-                            } = &dialog.kind
-                            {
-                                let mut window = py_window.borrow_mut(py);
-
-                                // Convert percentage position to absolute if needed
-                                let (abs_x, abs_y) = match window.position {
-                                    Position::Absolute { x, y } => (x, y),
-                                    Position::Percent { .. } => {
-                                        // Already calculated in window_rects
-                                        (x, y)
-                                    }
-                                };
-
-                                // Update to absolute positioning
-                                window.position = Position::Absolute { x: abs_x, y: abs_y };
-
-                                self.drag_state = Some(DragState {
-                                    dialog_index: dialog_idx,
-                                    start_mouse_x: mouse.column,
-                                    start_mouse_y: mouse.row,
-                                    start_window_x: abs_x,
-                                    start_window_y: abs_y,
-                                });
-
-                                trace!(
-                                    id = ?dialog.id,
-                                    x = abs_x,
-                                    y = abs_y,
-                                    "started dragging window"
-                                );
-                                return true;
-                            }
-                        }
-                    }
-                }
-                false
-            }
+            MouseEventKind::Down(MouseButton::Left) => self.handle_mouse_down(mouse, window_rects),
             MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved => {
-                // Update window position if we're dragging
-                if let Some(drag_state) = &self.drag_state {
-                    if let Some(py_dialog) = self.active.get(drag_state.dialog_index) {
-                        let dialog = py_dialog.borrow(py);
-                        if let DialogKind::FloatingWindow { window, .. } = &dialog.kind {
-                            let mut window = window.borrow_mut(py);
-
-                            // Calculate new position based on mouse movement
-                            let delta_x =
-                                i32::from(mouse.column) - i32::from(drag_state.start_mouse_x);
-                            let delta_y =
-                                i32::from(mouse.row) - i32::from(drag_state.start_mouse_y);
-
-                            let new_x =
-                                (i32::from(drag_state.start_window_x) + delta_x).max(0) as u16;
-                            let new_y =
-                                (i32::from(drag_state.start_window_y) + delta_y).max(0) as u16;
-
-                            window.position = Position::Absolute { x: new_x, y: new_y };
-
-                            trace!(
-                                id = ?dialog.id,
-                                x = new_x,
-                                y = new_y,
-                                "dragging window"
-                            );
-                            return true;
-                        }
-                    }
-                }
-                false
+                self.handle_mouse_drag(mouse)
             }
-            MouseEventKind::Up(MouseButton::Left) => {
-                // End dragging
-                if self.drag_state.is_some() {
-                    trace!("ended dragging window");
-                    self.drag_state = None;
-                    return true;
-                }
-                false
-            }
+            MouseEventKind::Up(MouseButton::Left) => self.handle_mouse_up(),
             _ => false,
         }
     }
 
+    fn handle_mouse_down(&mut self, mouse: MouseEvent, window_rects: WindowIndexRect) -> bool {
+        for &(dialog_idx, (x, y, width, height)) in window_rects {
+            if mouse.column < x
+                || mouse.column >= x + width
+                || mouse.row < y
+                || mouse.row >= y + height
+            {
+                continue;
+            }
+
+            let Some(dialog) = self.active.get(dialog_idx) else {
+                continue;
+            };
+
+            let DialogKind::FloatingWindow {
+                window: py_window,
+                dismissible,
+            } = &dialog.kind
+            else {
+                continue;
+            };
+
+            let window = Python::attach(|py| py_window.borrow(py).clone());
+
+            if *dismissible && window.title.is_some() {
+                let in_title_bar = mouse.row == y + 1;
+                let close_button_start = x + width.saturating_sub(5);
+                let close_button_end = x + width.saturating_sub(1);
+                let in_close_button =
+                    mouse.column >= close_button_start && mouse.column < close_button_end;
+
+                if in_title_bar && in_close_button {
+                    let dialog_id = dialog.id.clone();
+                    self.dismiss(&dialog_id);
+                    debug!(id = ?dialog_id, "dismissed dialog via close button");
+                    return true;
+                }
+            }
+
+            let (abs_x, abs_y) = match window.position {
+                Position::Absolute { x, y } => (x, y),
+                Position::Percent { .. } => (x, y),
+            };
+
+            let dialog_id = dialog.id.clone();
+
+            self.drag_state = Some(DragState {
+                dialog_index: dialog_idx,
+                start_mouse_x: mouse.column,
+                start_mouse_y: mouse.row,
+                start_window_x: abs_x,
+                start_window_y: abs_y,
+            });
+
+            trace!(
+                id = ?dialog_id,
+                x = abs_x,
+                y = abs_y,
+                "started dragging window"
+            );
+            return true;
+        }
+
+        false
+    }
+
+    fn handle_mouse_drag(&mut self, mouse: MouseEvent) -> bool {
+        let Some(drag_state) = &self.drag_state else {
+            return false;
+        };
+
+        let Some(dialog) = self.active.get(drag_state.dialog_index) else {
+            return false;
+        };
+
+        let DialogKind::FloatingWindow { window, .. } = &dialog.kind else {
+            return false;
+        };
+
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        // TODO(XXX): I think this will fall away w/ ratatui update.
+        Python::attach(|py| {
+            let mut window_mut = window.borrow_mut(py);
+
+            let delta_x = i32::from(mouse.column) - i32::from(drag_state.start_mouse_x);
+            let delta_y = i32::from(mouse.row) - i32::from(drag_state.start_mouse_y);
+
+            let new_x = (i32::from(drag_state.start_window_x) + delta_x).max(0) as u16;
+            let new_y = (i32::from(drag_state.start_window_y) + delta_y).max(0) as u16;
+
+            window_mut.position = Position::Absolute { x: new_x, y: new_y };
+            trace!(
+                id = ?dialog.id,
+                x = new_x,
+                y = new_y,
+                "dragging window"
+            );
+        });
+
+        true
+    }
+
+    fn handle_mouse_up(&mut self) -> bool {
+        if self.drag_state.is_none() {
+            return false;
+        }
+
+        trace!("ended dragging window");
+        self.drag_state = None;
+        true
+    }
+
     /// Add a dialog to the manager.
-    fn add_dialog(&mut self, py: Python<'_>, dialog: &Py<Dialog>) {
-        let d = dialog.borrow(py);
+    fn add_dialog(&mut self, d: Dialog) {
         debug!(id = ?d.id, priority = ?d.priority, "adding dialog");
 
         // Find the insertion point to maintain priority order
         let insert_pos = self
             .active
             .iter()
-            .position(|py_d| py_d.borrow(py).priority < d.priority)
+            .position(|d2| d2.priority < d.priority)
             .unwrap_or(self.active.len());
 
-        self.active.insert(insert_pos, dialog.clone_ref(py));
+        self.active.insert(insert_pos, d);
 
         // Trim if we exceed max concurrent
         while self.active.len() > self.max_concurrent {
             if let Some(removed) = self.active.pop_back() {
-                debug!(id = ?removed.borrow(py).id, "removing dialog due to queue overflow");
+                debug!(id = ?removed.id, "removing dialog due to queue overflow");
             }
         }
     }
@@ -317,49 +281,36 @@ impl DialogManager {
         s.hash(&mut hasher);
         hasher.finish()
     }
-}
 
-#[pymethods]
-impl DialogManager {
     /// Show an error notification with deduplication.
-    pub(crate) fn show_error(&mut self, py: Python<'_>, message: String) -> Py<Dialog> {
+    pub(crate) fn show_error(&mut self, message: String) {
         let hash = Self::calculate_hash(&message);
 
-        // Check if we've seen this error recently
         if let Some(tracker) = self.recent_errors.get_mut(&hash) {
             if tracker.last_shown.elapsed() < self.error_cooldown {
-                // Still in cooldown - increment count
                 tracker.count += 1;
 
-                // Update existing dialog message to show count
-                // TODO(XXX): this sucks.
                 let target_id = format!("error_{hash}");
-                let py_dialog = self
-                    .active
-                    .iter()
-                    .find(|d| {
-                        let dialog = d.borrow(py);
-                        matches!(
-                            &dialog.kind,
-                            DialogKind::Notification {
-                                severity: Severity::Error,
-                                ..
-                            }
-                        ) && dialog.id == target_id
-                    })
-                    .unwrap();
-                py_dialog.borrow_mut(py).increment_count();
-                trace!(
-                    hash,
-                    count = tracker.count,
-                    "updated error occurrence count"
-                );
-
-                return py_dialog.clone_ref(py);
+                if let Some(dialog) = self.active.iter_mut().find(|d| {
+                    matches!(
+                        d.kind,
+                        DialogKind::Notification {
+                            severity: Severity::Error,
+                            ..
+                        }
+                    ) && d.id == target_id
+                }) {
+                    dialog.increment_count();
+                    trace!(
+                        hash,
+                        count = tracker.count,
+                        "updated error occurrence count"
+                    );
+                }
+                return;
             }
         }
 
-        // Not in cooldown or first occurrence - show dialog
         let dialog = Dialog {
             id: format!("error_{hash}"),
             kind: DialogKind::Notification {
@@ -372,10 +323,8 @@ impl DialogManager {
             priority: DialogPriority::Normal,
         };
 
-        let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, &py_dialog);
+        self.add_dialog(dialog);
 
-        // Track this error
         let now = Instant::now();
         self.recent_errors.insert(
             hash,
@@ -385,57 +334,16 @@ impl DialogManager {
                 expires_at: now + self.error_cooldown + Duration::from_secs(5),
             },
         );
-
-        py_dialog
-    }
-
-    /// Show a warning notification.
-    pub(crate) fn show_warning(&mut self, py: Python<'_>, message: String) -> Py<Dialog> {
-        let dialog = Dialog {
-            id: format!("warning_{}", Self::calculate_hash(&message)),
-            kind: DialogKind::Notification {
-                message,
-                severity: Severity::Warning,
-                dismissible: true,
-                occurrence_count: 1,
-            },
-            expires_at: Some(Instant::now() + Duration::from_secs(10)),
-            priority: DialogPriority::Normal,
-        };
-
-        let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, &py_dialog);
-        py_dialog
-    }
-
-    /// Show an info notification.
-    pub(crate) fn show_info(&mut self, py: Python<'_>, message: String) -> Py<Dialog> {
-        let dialog = Dialog {
-            id: format!("info_{}", Self::calculate_hash(&message)),
-            kind: DialogKind::Notification {
-                message,
-                severity: Severity::Info,
-                dismissible: true,
-                occurrence_count: 1,
-            },
-            expires_at: Some(Instant::now() + Duration::from_secs(5)),
-            priority: DialogPriority::Low,
-        };
-
-        let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, &py_dialog);
-        py_dialog
     }
 
     /// Show a confirmation dialog.
     pub(crate) fn show_confirmation(
         &mut self,
-        py: Python<'_>,
         message: String,
         confirm_key: char,
         action: ConfirmAction,
         timeout: Option<Duration>,
-    ) -> Py<Dialog> {
+    ) {
         let dialog = Dialog {
             id: format!("confirm_{}", Self::calculate_hash(&message)),
             kind: DialogKind::Confirmation {
@@ -447,22 +355,17 @@ impl DialogManager {
             priority: DialogPriority::High,
         };
 
-        let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, &py_dialog);
-        py_dialog
+        self.add_dialog(dialog);
     }
 
-    /// Show a floating window. Returns the dialog so Python can hold onto it and mutate it.
-    #[pyo3(signature = (window, *, id=None, dismissible=true, priority=DialogPriority::Low, timeout=None))]
     pub(crate) fn show_floating_window(
         &mut self,
-        py: Python<'_>,
-        window: FloatingWindow,
+        window: Py<FloatingWindow>,
         id: Option<String>,
         dismissible: bool,
         priority: DialogPriority,
         timeout: Option<Duration>,
-    ) -> Py<Dialog> {
+    ) {
         let id = id.unwrap_or_else(|| {
             use std::sync::atomic::{AtomicU64, Ordering};
             static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -471,36 +374,26 @@ impl DialogManager {
                 COUNTER.fetch_add(1, Ordering::Relaxed)
             )
         });
-        let py_window = Py::new(py, window).unwrap();
         let dialog = Dialog {
             id,
             kind: DialogKind::FloatingWindow {
-                window: py_window,
+                window,
                 dismissible,
             },
             expires_at: timeout.map(|d| Instant::now() + d),
             priority,
         };
 
-        let py_dialog = Py::new(py, dialog).unwrap();
-        self.add_dialog(py, &py_dialog);
-        py_dialog
+        self.add_dialog(dialog);
     }
 
     /// Dismiss a specific dialog by ID.
-    pub(crate) fn dismiss(&mut self, py: Python<'_>, id: &str) {
-        let Some(pos) = self.active.iter().position(|d| d.borrow(py).id == id) else {
+    pub(crate) fn dismiss(&mut self, id: &str) {
+        let Some(pos) = self.active.iter().position(|d| d.id == id) else {
             return;
         };
         let removed = self.active.remove(pos).unwrap();
-        let removed = removed.borrow(py);
         debug!(id = ?removed.id, "dismissed dialog");
-    }
-
-    /// Clear all dialogs.
-    pub(crate) fn clear(&mut self) {
-        debug!(count = self.active.len(), "clearing all dialogs");
-        self.active.clear();
     }
 }
 
@@ -788,58 +681,53 @@ mod tests {
 
     #[test]
     fn test_dialog_priority_ordering() {
-        Python::initialize();
-        Python::attach(|py| {
-            let mut dm = DialogManager::new();
+        let mut dm = DialogManager::new();
 
-            let low_dialog = Dialog {
-                id: "low".to_string(),
-                kind: DialogKind::Notification {
-                    message: "Low priority".to_string(),
-                    severity: Severity::Info,
-                    dismissible: true,
-                    occurrence_count: 1,
-                },
-                expires_at: None,
-                priority: DialogPriority::Low,
-            };
-            dm.add_dialog(py, &Py::new(py, low_dialog).unwrap());
+        let low_dialog = Dialog {
+            id: "low".to_string(),
+            kind: DialogKind::Notification {
+                message: "Low priority".to_string(),
+                severity: Severity::Info,
+                dismissible: true,
+                occurrence_count: 1,
+            },
+            expires_at: None,
+            priority: DialogPriority::Low,
+        };
+        dm.add_dialog(low_dialog);
 
-            let high_dialog = Dialog {
-                id: "high".to_string(),
-                kind: DialogKind::Notification {
-                    message: "High priority".to_string(),
-                    severity: Severity::Error,
-                    dismissible: true,
-                    occurrence_count: 1,
-                },
-                expires_at: None,
-                priority: DialogPriority::High,
-            };
-            dm.add_dialog(py, &Py::new(py, high_dialog).unwrap());
+        let high_id = "high";
+        let high_dialog = Dialog {
+            id: high_id.to_owned(),
+            kind: DialogKind::Notification {
+                message: "High priority".to_string(),
+                severity: Severity::Error,
+                dismissible: true,
+                occurrence_count: 1,
+            },
+            expires_at: None,
+            priority: DialogPriority::High,
+        };
+        dm.add_dialog(high_dialog);
 
-            // High priority should be shown first
-            let active = dm.active.front().unwrap();
-            assert_eq!(active.borrow(py).id, "high");
-        });
+        // High priority should be shown first
+        let active = dm.active.front().unwrap();
+        assert_eq!(active.id, high_id);
     }
 
     #[test]
     fn test_error_deduplication() {
-        Python::initialize();
-        Python::attach(|py| {
-            let mut dm = DialogManager::new();
+        let mut dm = DialogManager::new();
 
-            dm.show_error(py, "Test error".to_string());
-            assert_eq!(dm.active.len(), 1);
+        dm.show_error("Test error".to_string());
+        assert_eq!(dm.active.len(), 1);
 
-            // Same error immediately - should not add new dialog
-            dm.show_error(py, "Test error".to_string());
-            assert_eq!(dm.active.len(), 1);
+        // Same error immediately - should not add new dialog
+        dm.show_error("Test error".to_string());
+        assert_eq!(dm.active.len(), 1);
 
-            // Different error - should add
-            dm.show_error(py, "Different error".to_string());
-            assert_eq!(dm.active.len(), 2);
-        });
+        // Different error - should add
+        dm.show_error("Different error".to_string());
+        assert_eq!(dm.active.len(), 2);
     }
 }

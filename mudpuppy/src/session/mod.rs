@@ -41,7 +41,7 @@ pub(super) struct Session {
     pub(super) id: u32,
     pub(super) character: String,
     pub(super) event_handlers: python::Handlers,
-    pub(super) dialog_manager: Py<DialogManager>,
+    pub(super) dialog_manager: DialogManager,
     pub(super) prompt: Prompt,
     pub(super) input: Py<Input>,
     pub(super) output: Buffer,
@@ -91,7 +91,7 @@ impl Session {
         Ok(Self {
             id,
             event_handlers: python::Handlers::new(id),
-            dialog_manager: Python::attach(|py| Py::new(py, DialogManager::new()).unwrap()),
+            dialog_manager: DialogManager::new(),
             prompt: Prompt::new(id, python_event_tx.clone()),
             input: Python::attach(|py| Py::new(py, Input::new(py, id, python_event_tx.clone())?))?,
             output,

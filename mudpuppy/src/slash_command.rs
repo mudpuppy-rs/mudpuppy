@@ -53,19 +53,17 @@ impl SlashCommand for QuitCommand {
     }
 
     async fn execute(&self, app: &mut AppData, _line: String) -> Result<Option<TabAction>, Error> {
-        Python::attach(|py| {
-            if app.config.borrow(py).confirm_quit {
-                app.dialog_manager.borrow_mut(py).show_confirmation(
-                    py,
-                    "Are you sure you want to quit?".to_string(),
-                    'q',
-                    dialog::ConfirmAction::Quit {},
-                    Some(Duration::from_secs(25)),
-                );
-            } else {
-                app.should_quit = true;
-            }
-        });
+        let confirm_quit = Python::attach(|py| app.config.borrow(py).confirm_quit);
+        if confirm_quit {
+            app.dialog_manager.show_confirmation(
+                "Are you sure you want to quit?".to_string(),
+                'q',
+                dialog::ConfirmAction::Quit {},
+                Some(Duration::from_secs(25)),
+            );
+        } else {
+            app.should_quit = true;
+        }
 
         if let Some(active_session) = app.active_session_mut() {
             active_session.output.add(OutputItem::CommandResult {

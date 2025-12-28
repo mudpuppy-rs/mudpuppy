@@ -106,7 +106,7 @@ pub(super) async fn init_python_env() -> Result {
 }
 
 #[instrument(level = Level::DEBUG, skip(config, dm))]
-pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) {
+pub(super) async fn run_user_setup(config: &Py<Config>, dm: &mut DialogManager) {
     let mut py_futures = FuturesUnordered::new();
 
     let import_result = Python::attach(|py| {
@@ -128,7 +128,7 @@ pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) 
         // Note: Error::from() to collect backtrace from PyErr.
         let err = Error::from(err);
         error!("python user module setup error: {err}");
-        Python::attach(|py| dm.borrow_mut(py).show_error(py, err.to_string()));
+        dm.show_error(err.to_string());
         return;
     }
 
@@ -137,7 +137,7 @@ pub(super) async fn run_user_setup(config: &Py<Config>, dm: &Py<DialogManager>) 
             // Note: Error::from() to collect backtrace from PyErr.
             let err = Error::from(err);
             error!("python user module setup error: {err}");
-            Python::attach(|py| dm.borrow_mut(py).show_error(py, err.to_string()));
+            dm.show_error(err.to_string());
         }
     }
 }

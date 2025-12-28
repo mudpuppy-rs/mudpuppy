@@ -19,7 +19,7 @@ use futures::{FutureExt, StreamExt};
 use pyo3::{Py, Python};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::Layout;
+use ratatui::layout::{Layout, Rect};
 use std::fmt::Debug;
 use std::io::{IsTerminal, Stdout, stdout};
 use std::num::NonZeroUsize;
@@ -40,7 +40,7 @@ use crate::{cli, dialog, python};
 pub(super) use char_menu::CharacterMenu;
 pub(super) use chrome::{Chrome, Tab, TabKind};
 pub(super) use custom_tab::CustomTab;
-pub(super) use dialog::{Dialog, DialogKind, DialogManager, DialogPriority};
+pub(super) use dialog::{Dialog, DialogManager, DialogPriority};
 pub(super) use layout::{Constraint, Direction, Section};
 pub(super) use session::Character;
 
@@ -159,10 +159,11 @@ impl Tui {
                 // Translate crossterm mouse event to our domain type
                 let mouse_event = MouseEvent::from(mouse_event);
 
+                // TODO(XXX): sus.
                 // Calculate the tab content area (excluding the 3-line tab bar)
                 // This matches the layout in Chrome::render
                 let size = self.terminal.size()?;
-                let full_area = ratatui::layout::Rect {
+                let full_area = Rect {
                     x: 0,
                     y: 0,
                     width: size.width,
@@ -189,19 +190,17 @@ impl Tui {
     ) -> Result<Option<TabAction>, Error> {
         Ok(match shortcut {
             Shortcut::Quit {} => {
-                Python::attach(|py| {
-                    if app.config.borrow(py).confirm_quit {
-                        app.dialog_manager.borrow_mut(py).show_confirmation(
-                            py,
-                            "Are you sure you want to quit?".to_string(),
-                            'q',
-                            dialog::ConfirmAction::Quit {},
-                            Some(Duration::from_secs(15)),
-                        );
-                    } else {
-                        app.should_quit = true;
-                    }
-                });
+                let confirm_quit = Python::attach(|py| app.config.borrow(py).confirm_quit);
+                if confirm_quit {
+                    app.dialog_manager.show_confirmation(
+                        "Are you sure you want to quit?".to_string(),
+                        'q',
+                        dialog::ConfirmAction::Quit {},
+                        Some(Duration::from_secs(15)),
+                    );
+                } else {
+                    app.should_quit = true;
+                }
                 None
             }
             Shortcut::Python(shortcut) => {
@@ -330,19 +329,17 @@ impl Tui {
                     }
                 };
                 let (_, Some(removed)) = self.chrome.close_tab(id) else {
-                    Python::attach(|py| {
-                        if app.config.borrow(py).confirm_quit {
-                            app.dialog_manager.borrow_mut(py).show_confirmation(
-                                py,
-                                "Are you sure you want to quit?".to_string(),
-                                'q',
-                                dialog::ConfirmAction::Quit {},
-                                Some(Duration::from_secs(25)),
-                            );
-                        } else {
-                            app.should_quit = true;
-                        }
-                    });
+                    let confirm_quit = Python::attach(|py| app.config.borrow(py).confirm_quit);
+                    if confirm_quit {
+                        app.dialog_manager.show_confirmation(
+                            "Are you sure you want to quit?".to_string(),
+                            'q',
+                            dialog::ConfirmAction::Quit {},
+                            Some(Duration::from_secs(25)),
+                        );
+                    } else {
+                        app.should_quit = true;
+                    }
                     return Ok(());
                 };
                 if let Some(session) = removed.session().map(|s| s.id) {

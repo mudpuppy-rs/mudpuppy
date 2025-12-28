@@ -1,14 +1,6 @@
 use std::fmt::{Display, Formatter};
+use std::time::Duration;
 
-use super::{
-    APP, AliasCommand, BufferCommand, Command, EventType, FutureResult, GmcpCommand, Handler,
-    PromptCommand, Result, SessionCommand, Slash, TelnetCommand, TriggerCommand, require_coroutine,
-};
-use crate::app::{AppData, SlashCommand, TabAction};
-use crate::error::{Error, ErrorKind};
-use crate::keyboard::KeyEvent;
-use crate::session::{Alias, Buffer, EchoState, InputLine, OutputItem, PromptMode, Trigger};
-use crate::shortcut::{PythonShortcut, Shortcut, TabShortcut};
 use async_trait::async_trait;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::types::{PyAnyMethods, PyList, PyListMethods};
@@ -16,6 +8,18 @@ use pyo3::{Bound, IntoPyObject, Py, PyAny, Python, pyclass, pymethods, pymodule}
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::oneshot;
 use tracing::{error, trace};
+
+use super::{
+    APP, AliasCommand, BufferCommand, Command, DialogCommand, EventType, FutureResult, GmcpCommand,
+    Handler, PromptCommand, Result, SessionCommand, Slash, TelnetCommand, TriggerCommand,
+    require_coroutine,
+};
+use crate::app::{AppData, SlashCommand, TabAction};
+use crate::dialog::{DialogPriority, FloatingWindow};
+use crate::error::{Error, ErrorKind};
+use crate::keyboard::KeyEvent;
+use crate::session::{Alias, Buffer, EchoState, InputLine, OutputItem, PromptMode, Trigger};
+use crate::shortcut::{PythonShortcut, Shortcut, TabShortcut};
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[pyclass(frozen, eq, hash)]
@@ -197,17 +201,6 @@ impl Session {
         self.into()
     }
 
-    /// Get the per-session dialog manager.
-    pub(crate) fn dialog_manager<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
-        dispatch_async_command(py, |tx| {
-            SessionCommand::DialogManager {
-                session_id: self.id,
-                tx,
-            }
-            .into()
-        })
-    }
-
     fn tab<'py>(&'py self, py: Python<'py>) -> FutureResult<'py> {
         dispatch_async_command(py, |tx| {
             Command::Tab(TabAction::TabForSession {
@@ -244,6 +237,31 @@ impl Session {
                 session_id: self.id,
                 cmd: Slash::Remove(name),
             },
+        )
+    }
+
+    #[pyo3(signature = (window, *, id=None, dismissible=true, priority=DialogPriority::Low, timeout=None))]
+    fn new_floating_window(
+        &self,
+        py: Python<'_>,
+        window: Py<FloatingWindow>,
+        id: Option<String>,
+        dismissible: bool,
+        priority: DialogPriority,
+        timeout: Option<Duration>,
+    ) -> Result {
+        dispatch_command(
+            py,
+            Command::Session(SessionCommand::Dialog {
+                session_id: self.id,
+                cmd: DialogCommand::NewFloatingWindow {
+                    window,
+                    id,
+                    dismissible,
+                    priority,
+                    timeout,
+                },
+            }),
         )
     }
 
@@ -778,6 +796,7 @@ fn convert_to_output_item(item: &Bound<'_, PyAny>) -> Result<OutputItem> {
 #[pymodule]
 pub(crate) mod pup {
     use std::path::PathBuf;
+    use std::time::Duration;
 
     use pyo3::types::{PyAnyMethods, PyStringMethods, PyTuple};
     use pyo3::{Bound, Py, PyAny, Python, pyfunction};
@@ -785,7 +804,7 @@ pub(crate) mod pup {
     use super::{Command, FutureResult, Result, dispatch_async_command, dispatch_command};
     use crate::app::TabAction;
     use crate::error::ErrorKind;
-    use crate::python::{ERROR_TX, NewSessionHandler, SessionCommand};
+    use crate::python::{DialogCommand, ERROR_TX, NewSessionHandler, SessionCommand};
 
     #[pymodule_export]
     use super::{Gmcp, Prompt, Session, Tab, Telnet};
@@ -806,9 +825,7 @@ pub(crate) mod pup {
     #[pymodule_export]
     use crate::shortcut::{InputShortcut, MenuShortcut, PythonShortcut, Shortcut, TabShortcut};
     #[pymodule_export]
-    use crate::tui::{
-        Constraint, Dialog, DialogKind, DialogManager, DialogPriority, Direction, Section,
-    };
+    use crate::tui::{Constraint, DialogPriority, Direction, Section};
 
     #[pyfunction]
     fn config(py: Python<'_>) -> FutureResult<'_> {
@@ -869,12 +886,6 @@ pub(crate) mod pup {
         })
     }
 
-    /// Get the global dialog manager.
-    #[pyfunction]
-    fn dialog_manager(py: Python<'_>) -> FutureResult<'_> {
-        dispatch_async_command(py, Command::DialogManager)
-    }
-
     #[pyfunction]
     fn new_session_handler(py: Python<'_>, awaitable: Py<PyAny>) -> Result {
         dispatch_command(
@@ -896,6 +907,28 @@ pub(crate) mod pup {
     #[pyfunction]
     fn set_global_shortcut(py: Python<'_>, key_event: KeyEvent, shortcut: Shortcut) -> Result {
         dispatch_command(py, Command::SetGlobalShortcut(key_event, shortcut))
+    }
+
+    #[pyfunction]
+    #[pyo3(signature = (window, *, id=None, dismissible=true, priority=DialogPriority::Low, timeout=None))]
+    fn new_floating_window(
+        py: Python<'_>,
+        window: Py<FloatingWindow>,
+        id: Option<String>,
+        dismissible: bool,
+        priority: DialogPriority,
+        timeout: Option<Duration>,
+    ) -> Result {
+        dispatch_command(
+            py,
+            Command::GlobalDialog(DialogCommand::NewFloatingWindow {
+                window,
+                id,
+                dismissible,
+                priority,
+                timeout,
+            }),
+        )
     }
 
     #[pyfunction]

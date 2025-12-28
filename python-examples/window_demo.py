@@ -28,9 +28,9 @@ global_window_state = {
 
 session_window_state = {}
 
-global_dialog = None
-absolute_dialog = None
-session_dialogs = {}
+global_window = None
+absolute_window = None
+session_windows = {}
 
 
 async def setup_demo(sesh: Session):
@@ -57,7 +57,7 @@ async def setup_demo(sesh: Session):
 
 async def setup_global_window():
     """Create a global floating window showing fake network activity."""
-    global global_dialog
+    global global_window
 
     logger.info("Creating global network monitor window")
 
@@ -66,17 +66,15 @@ async def setup_global_window():
     buffer.config.all_borders()
 
     # Create the floating window
-    window = FloatingWindow(
+    global_window = FloatingWindow(
         buffer=buffer,
         position=Position.percent(60, 5),
         size=Size.percent(35, 25),
         title="Network Monitor",
     )
 
-    # Get global dialog manager and show window - store the returned dialog
-    dm = await pup.dialog_manager()
-    global_dialog = dm.show_floating_window(
-        window,
+    pup.new_floating_window(
+        global_window,
         dismissible=True,
         priority=DialogPriority.Low,
     )
@@ -89,7 +87,7 @@ async def setup_global_window():
 
 async def setup_absolute_window():
     """Create a global floating window with absolute positioning."""
-    global absolute_dialog
+    global absolute_window
 
     logger.info("Creating absolute positioned window")
 
@@ -100,18 +98,16 @@ async def setup_absolute_window():
     # Create the floating window with ABSOLUTE position and size
     # Position at column 2, row 2 (absolute cell coordinates)
     # Size of 40 columns by 10 rows (absolute cell size)
-    window = FloatingWindow(
+    absolute_window = FloatingWindow(
         buffer=buffer,
         position=Position.absolute(2, 2),
         size=Size.absolute(40, 10),
         title="Absolute Window",
     )
 
-    # Get global dialog manager and show window
-    dm = await pup.dialog_manager()
-    absolute_dialog = dm.show_floating_window(
-        window,
-        dismissible=True,
+    pup.new_floating_window(
+        absolute_window,
+        dismissible=False,
         priority=DialogPriority.Low,
     )
 
@@ -137,14 +133,12 @@ async def setup_session_window(sesh: Session):
         title=f"{sesh.character} Stats",
     )
 
-    # Get session dialog manager and show window - store the returned dialog
-    dm = await sesh.dialog_manager()
-    session_dialog = dm.show_floating_window(
+    sesh.new_floating_window(
         window,
         dismissible=True,
         priority=DialogPriority.Low,
     )
-    session_dialogs[sesh.id] = session_dialog  # Store for position updates
+    session_windows[sesh.id] = window  # Store for position updates
 
     # Create timer for content updates with session attached (1 second)
     Timer(
@@ -159,8 +153,8 @@ async def setup_session_window(sesh: Session):
 
 async def update_global_content(_timer: Timer):
     """Update the content of the global network monitor."""
-    global global_dialog
-    if not global_dialog:
+    global global_window
+    if not global_window:
         return
 
     state = global_window_state
@@ -181,8 +175,8 @@ async def update_global_content(_timer: Timer):
     if len(state["graph_data"]) > 20:
         state["graph_data"].pop(0)
 
-    # Access buffer directly from the dialog
-    buffer_py = global_dialog.kind.window.buffer
+    # Access buffer directly from the window
+    buffer_py = global_window.buffer
 
     if buffer_py:
         # Build content
@@ -226,7 +220,7 @@ async def update_session_content(timer: Timer):
     if (
         not sesh
         or sesh.id not in session_window_state
-        or sesh.id not in session_dialogs
+        or sesh.id not in session_windows
     ):
         return
 
@@ -253,9 +247,9 @@ async def update_session_content(timer: Timer):
         if len(state["combat_log"]) > 6:
             state["combat_log"].pop(0)
 
-    # Access buffer directly from the dialog
-    dialog = session_dialogs[sesh.id]
-    buffer_py = dialog.kind.window.buffer
+    # Access buffer directly from the window
+    window = session_windows[sesh.id]
+    buffer_py = window.buffer
 
     if buffer_py:
         # Build content
@@ -289,14 +283,14 @@ async def update_session_content(timer: Timer):
             buffer_py.add(OutputItem.mud(MudLine(line_bytes)))
 
 
-async def update_absolute_content(timer: Timer):
+async def update_absolute_content(_timer: Timer):
     """Update the content of the absolute positioned window."""
-    global absolute_dialog
-    if not absolute_dialog:
+    global absolute_window
+    if not absolute_window:
         return
 
-    # Access buffer directly from the dialog
-    buffer_py = absolute_dialog.kind.window.buffer
+    # Access buffer directly from the window
+    buffer_py = absolute_window.buffer
 
     if buffer_py:
         # Build content

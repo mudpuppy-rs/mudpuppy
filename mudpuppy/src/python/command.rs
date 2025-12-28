@@ -1,14 +1,14 @@
+use pyo3::{Py, Python};
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use pyo3::{Py, Python};
+use std::time::Duration;
 use strum::Display;
 use tokio::sync::oneshot;
 use tracing::{Level, debug, instrument, warn};
 
 use crate::app::{self, AppData, SlashCommand, TabAction};
 use crate::config::{Character, Config, Mud};
-use crate::dialog::DialogManager;
+use crate::dialog::{DialogPriority, FloatingWindow};
 use crate::error::{Error, ErrorKind};
 use crate::keyboard::KeyEvent;
 use crate::net::connection;
@@ -16,11 +16,11 @@ use crate::python::api::Session;
 use crate::python::{self, PySlashCommand, Result};
 use crate::session::{Alias, Buffer, Input, InputLine, OutputItem, PromptMode, Trigger};
 use crate::shortcut::{Shortcut, TabShortcut};
-use crate::tui::{self, TabKind, Tui};
+use crate::tui::{self, DialogManager, TabKind, Tui};
 
 pub(crate) enum Command {
+    GlobalDialog(DialogCommand),
     Config(oneshot::Sender<Py<Config>>),
-    DialogManager(oneshot::Sender<Py<DialogManager>>),
     Session(SessionCommand),
     AddNewSessionHandler(python::NewSessionHandler),
     GlobalShortcuts(oneshot::Sender<HashMap<KeyEvent, String>>),
@@ -33,11 +33,11 @@ impl Command {
     #[instrument(level = Level::TRACE, skip(self, tui, app), fields(app.active_session))]
     pub(crate) async fn exec(self, tui: &mut Tui, app: &mut AppData) -> Result<bool> {
         match self {
+            Command::GlobalDialog(cmd) => {
+                cmd.exec(&mut app.dialog_manager);
+            }
             Command::Config(tx) => {
                 let _ = tx.send(Python::attach(|py| app.config.clone_ref(py)));
-            }
-            Command::DialogManager(tx) => {
-                let _ = tx.send(Python::attach(|py| app.dialog_manager.clone_ref(py)));
             }
             Command::Session(cmd) => {
                 cmd.exec(app)?;
@@ -84,6 +84,36 @@ impl From<TabShortcut> for Command {
     }
 }
 
+pub(crate) enum DialogCommand {
+    Error(Error),
+    NewFloatingWindow {
+        window: Py<FloatingWindow>,
+        id: Option<String>,
+        dismissible: bool,
+        priority: DialogPriority,
+        timeout: Option<Duration>,
+    },
+}
+
+impl DialogCommand {
+    fn exec(self, dm: &mut DialogManager) {
+        match self {
+            DialogCommand::Error(err) => {
+                dm.show_error(err.to_string());
+            }
+            DialogCommand::NewFloatingWindow {
+                window,
+                id,
+                dismissible,
+                priority,
+                timeout,
+            } => {
+                dm.show_floating_window(window, id, dismissible, priority, timeout);
+            }
+        }
+    }
+}
+
 pub(crate) enum SessionCommand {
     ActiveSession(oneshot::Sender<Option<Session>>),
     Sessions(oneshot::Sender<Vec<Session>>),
@@ -94,10 +124,6 @@ pub(crate) enum SessionCommand {
     SessionForCharacter {
         character: String,
         tx: oneshot::Sender<Option<Session>>,
-    },
-    DialogManager {
-        session_id: u32,
-        tx: oneshot::Sender<Py<DialogManager>>,
     },
     CharacterInfo {
         character: String,
@@ -169,6 +195,10 @@ pub(crate) enum SessionCommand {
         session_id: u32,
         cmd: AliasCommand,
     },
+    Dialog {
+        session_id: u32,
+        cmd: DialogCommand,
+    },
 }
 
 #[allow(clippy::too_many_lines)] // It's fine ¯\_(ツ)_/¯
@@ -190,12 +220,6 @@ impl SessionCommand {
                         .into_iter()
                         .find(|s| s.character == character),
                 );
-            }
-            Self::DialogManager { session_id, tx } => {
-                let dm = Python::attach(|py| {
-                    Ok::<_, Error>(app.session(session_id)?.dialog_manager.clone_ref(py))
-                })?;
-                let _ = tx.send(dm);
             }
             Self::CharacterInfo { character, tx } => {
                 let _ = tx.send(Python::attach(|py| {
@@ -283,6 +307,9 @@ impl SessionCommand {
                 } else {
                     debug!("No active session to output to");
                 }
+            }
+            Self::Dialog { session_id, cmd } => {
+                cmd.exec(&mut app.session_mut(session_id)?.dialog_manager);
             }
         }
         Ok(())

@@ -54,19 +54,16 @@ impl App {
 
         python::init_python_env().await?;
 
-        python::run_user_setup(&self.data.config, &self.data.dialog_manager).await;
+        python::run_user_setup(&self.data.config, &mut self.data.dialog_manager).await;
 
         // Drain Python command queue to ensure new session handlers are registered
         // before auto-connect runs (handlers are registered via commands sent during init)
         while let Ok(py_cmd) = py_rx.try_recv() {
             if let Err(err) = py_cmd.exec(&mut self.tui, &mut self.data).await {
                 error!("python command during init failed: {err}");
-                Python::attach(|py| {
-                    self.data
-                        .dialog_manager
-                        .borrow_mut(py)
-                        .show_error(py, format!("Python command during init failed: {err}"));
-                });
+                self.data
+                    .dialog_manager
+                    .show_error(format!("Python command during init failed: {err}"));
             }
         }
         debug!(
@@ -77,11 +74,11 @@ impl App {
         self.data.auto_connect(&mut self.tui)?;
 
         let result = loop {
-            Python::attach(|py| self.data.dialog_manager.borrow_mut(py).tick());
+            self.data.dialog_manager.tick();
 
             // Tick per-session dialog managers
-            for session in self.data.sessions.values() {
-                Python::attach(|py| session.dialog_manager.borrow_mut(py).tick());
+            for session in self.data.sessions.values_mut() {
+                session.dialog_manager.tick();
             }
 
             if self.data.should_quit {
@@ -104,8 +101,7 @@ impl App {
                     };
                     if let Err(err) = session.handle_event(&event) {
                         error!("session event error: {err}");
-                        Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
-                                py, format!("Session event error: {err}")));
+                        self.data.dialog_manager.show_error(format!("Session event error: {err}"));
                     }
                 }
                 // Python event dispatch (sending events from app -> Python)
@@ -116,8 +112,8 @@ impl App {
                     };
                     if let Err(err) = session.event_handlers.session_event(&event) {
                         error!("python event dispatch error: {err}");
-                        Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
-                                py, format!("Python event dispatch error: {err}")));
+                        self.data.dialog_manager.show_error(
+                                format!("Python event dispatch error: {err}"));
                     }
                 }
                 // Python API command dispatch (processing reqs from Python -> app)
@@ -129,8 +125,8 @@ impl App {
                         }
                         Err(err) => {
                             error!("python error: {err}");
-                            Python::attach(|py| self.data.dialog_manager.borrow_mut(py).show_error(
-                                    py, format!("Python error: {err}")));
+                            self.data.dialog_manager.show_error(
+                                    format!("Python error: {err}"));
                         }
                         _ => {}
                     }
@@ -153,7 +149,7 @@ impl App {
 #[derive(Debug)]
 pub(super) struct AppData {
     pub(super) should_quit: bool,
-    pub(super) dialog_manager: Py<DialogManager>,
+    pub(super) dialog_manager: DialogManager,
     pub(super) args: cli::Args,
     pub(super) config: Py<Config>,
     pub(super) active_session: Option<u32>,
@@ -167,17 +163,11 @@ pub(super) struct AppData {
 
 impl AppData {
     fn new(args: cli::Args, config: &Py<Config>) -> Self {
-        let (dialog_manager, config) = Python::attach(|py| {
-            (
-                Py::new(py, DialogManager::new()).unwrap(),
-                config.clone_ref(py),
-            )
-        });
         Self {
             should_quit: false,
-            dialog_manager,
+            dialog_manager: DialogManager::new(),
             args,
-            config,
+            config: Python::attach(|py| config.clone_ref(py)),
             active_session: None,
             sessions: HashMap::new(),
             new_session_handlers: Vec::new(),
@@ -398,11 +388,8 @@ impl AppData {
             Ok::<_, Error>(())
         }) {
             error!("config reload failed: {err}");
-            Python::attach(|py| {
-                self.dialog_manager
-                    .borrow_mut(py)
-                    .show_error(py, format!("Config reload failed: {err}"));
-            });
+            self.dialog_manager
+                .show_error(format!("Config reload failed: {err}"));
             return; // Continue with old config
         }
 
@@ -417,8 +404,7 @@ impl AppData {
                 {
                     error!("config reload event handler error: {err}");
                     self.dialog_manager
-                        .borrow_mut(py)
-                        .show_error(py, format!("config reload event handler error: {err}"));
+                        .show_error(format!("config reload event handler error: {err}"));
                 }
             }
         });
