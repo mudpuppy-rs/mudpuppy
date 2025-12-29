@@ -80,7 +80,9 @@ async def setup_global_window():
     )
 
     # Create timer for content updates (1 second)
-    Timer("global-window-content", 1.0, callback=update_global_content)
+    t = Timer("global-window-content", 1.0, callback=update_global_content)
+    # Call it manually one time for initial setup.
+    await update_global_content(t)
 
     logger.info("Global network monitor started")
 
@@ -112,7 +114,9 @@ async def setup_absolute_window():
     )
 
     # Create timer for content updates (1 second)
-    Timer("absolute-window-content", 1.0, callback=update_absolute_content)
+    t = Timer("absolute-window-content", 1.0, callback=update_absolute_content)
+    # Call it one time for initial content
+    await update_absolute_content(t)
 
     logger.info("Absolute positioned window started")
 
@@ -141,12 +145,14 @@ async def setup_session_window(sesh: Session):
     session_windows[sesh.id] = window  # Store for position updates
 
     # Create timer for content updates with session attached (1 second)
-    Timer(
+    t = Timer(
         f"session-window-content-{sesh.id}",
         1.0,
         callback=update_session_content,
         session=sesh,
     )
+    # Call it one time for initial content
+    await update_session_content(t)
 
     logger.info(f"Session stats window started for {sesh.character}")
 
