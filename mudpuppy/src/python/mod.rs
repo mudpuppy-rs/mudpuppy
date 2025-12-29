@@ -26,6 +26,23 @@ pub(crate) use api::*;
 pub(crate) use command::*;
 pub(crate) use events::*;
 
+macro_rules! builtin_modules {
+     ($($module:expr),* $(,)?) => {
+        Python::attach(|py| {
+            $(
+                debug!(concat!("loading built-in module ", $module, ".py"));
+                PyModule::from_code(
+                    py,
+                    c_str!(include_str!(concat!($module, ".py"))),
+                    c_str!(concat!($module, ".py")),
+                    c_str!($module),
+                )
+                .unwrap(); // Safety: builtin modules must always compile!
+            )*
+        });
+    }
+}
+
 // TODO(XXX): restore macro for loading built-in modules in a more DRY way.
 #[instrument]
 pub(super) async fn init_python_env() -> Result {
@@ -36,71 +53,18 @@ pub(super) async fn init_python_env() -> Result {
             .cast_into::<PyList>()
             .unwrap()
             .insert(0, config_dir().to_string_lossy())?;
-
-        trace!("loading built-in logging.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("logging.py")),
-            c_str!("logging.py"),
-            c_str!("logging"),
-        )
-        .map(|_| ())?;
-
-        trace!("loading built-in pup_events.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("pup_events.py")),
-            c_str!("pup_events.py"),
-            c_str!("pup_events"),
-        )
-        .map(|_| ())?;
-
-        trace!("loading built-in telnet_charset.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("telnet_charset.py")),
-            c_str!("telnet_charset.py"),
-            c_str!("telnet_charset"),
-        )
-        .map(|_| ())?;
-
-        trace!("loading built-in telnet_naws.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("telnet_naws.py")),
-            c_str!("telnet_naws.py"),
-            c_str!("telnet_naws"),
-        )
-        .map(|_| ())?;
-
-        trace!("loading built-in history.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("history.py")),
-            c_str!("history.py"),
-            c_str!("history"),
-        )
-        .map(|_| ())?;
-
-        trace!("loading built-in cmd_py.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("cmd_py.py")),
-            c_str!("cmd_py.py"),
-            c_str!("cmd_py"),
-        )
-        .map(|_| ())?;
-
-        trace!("loading built-in tui.py");
-        PyModule::from_code(
-            py,
-            c_str!(include_str!("tui.py")),
-            c_str!("tui.py"),
-            c_str!("tui"),
-        )?;
-
-        Ok::<(), Error>(())
+        Ok::<_, Error>(())
     })?;
+
+    builtin_modules!(
+        "logging",
+        "pup_events",
+        "history",
+        "telnet_charset",
+        "telnet_naws",
+        "cmd_py",
+        "tui"
+    );
 
     Ok(())
 }
