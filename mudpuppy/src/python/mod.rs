@@ -26,7 +26,7 @@ pub(crate) use api::*;
 pub(crate) use command::*;
 pub(crate) use events::*;
 
-macro_rules! builtin_modules {
+macro_rules! import_builtin_modules {
      ($($module:expr),* $(,)?) => {
         Python::attach(|py| {
             $(
@@ -56,7 +56,7 @@ pub(super) async fn init_python_env() -> Result {
         Ok::<_, Error>(())
     })?;
 
-    builtin_modules!(
+    import_builtin_modules!(
         "logging",
         "pup_events",
         "history",
@@ -106,7 +106,6 @@ pub(super) async fn run_user_setup(config: &Py<Config>, dm: &mut DialogManager) 
     }
 }
 
-// TODO(XXX): error dialogs
 #[instrument(level = Level::DEBUG)]
 pub(super) fn run_character_setup(
     id: u32,
@@ -133,7 +132,15 @@ pub(super) fn run_character_setup(
         Ok((future, module)) => (future, module),
         Err(err) => {
             error!("character {character} module import error: {err}");
-            //let _ = error_tx.send(format!("Character {character} module import error: {err}"));
+            let _ = Python::attach(|py| {
+                dispatch_command(
+                    py,
+                    SessionCommand::Dialog {
+                        session_id: id,
+                        cmd: DialogCommand::Error(err),
+                    },
+                )
+            });
             return None;
         }
     };
@@ -142,13 +149,19 @@ pub(super) fn run_character_setup(
     if let Some(future) = future {
         let character_name = character.to_string();
         tokio::spawn(async move {
-            if let Err(err) = future.await {
+            if let Err(error) = future.await {
                 // NOTE: Using Error::from to collect backtrace from PyErr.
-                let error_msg = Error::from(err);
-                error!("character {character_name} module setup error: {error_msg}");
-                /*let _ = error_tx.send(format!(
-                    "Character {character_name} module setup error: {error_msg}"
-                ));*/
+                let error = Error::from(error);
+                error!("character {character_name} module setup error: {error}");
+                let _ = Python::attach(|py| {
+                    dispatch_command(
+                        py,
+                        SessionCommand::Dialog {
+                            session_id: id,
+                            cmd: DialogCommand::Error(error),
+                        },
+                    )
+                });
             }
         });
     }
