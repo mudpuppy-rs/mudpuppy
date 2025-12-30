@@ -1,9 +1,10 @@
-use async_trait::async_trait;
-use pyo3::Python;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
+
+use async_trait::async_trait;
+use pyo3::Python;
 use tracing::error;
 
 use crate::app::{self, AppData, TabAction};
