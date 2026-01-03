@@ -110,7 +110,7 @@ for name, event_type in EventType.all().items():
 
     def _event_decorator(
         event_type: EventType,
-    ) -> Callable[[EventHandler], EventHandler]:
+    ) -> Callable[..., Callable[[EventHandler], EventHandler]]:
         def decorator(**filters: Any) -> Callable[[EventHandler], EventHandler]:
             return event(event_type, **filters)
 
@@ -125,7 +125,7 @@ __all__ = [
     "event",
     "shortcut",
     "setup",
-    "commandEventType",
+    "EventType",
     "KeyEvent",
     "Session",
     "Event",

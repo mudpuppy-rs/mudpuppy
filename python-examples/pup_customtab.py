@@ -10,8 +10,6 @@ from pup import (
     Session,
     Event,
     Buffer,
-    Section,
-    Constraint,
     OutputItem,
     MudLine,
     Tab,

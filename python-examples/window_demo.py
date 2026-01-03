@@ -31,6 +31,7 @@ session_window_state = {}
 global_window = None
 absolute_window = None
 session_windows = {}
+_global_setup_done = False
 
 
 async def setup_demo(sesh: Session):
@@ -46,8 +47,9 @@ async def setup_demo(sesh: Session):
     }
 
     # Create global network monitor window (only once)
-    if not hasattr(setup_demo, "_global_setup"):
-        setup_demo._global_setup = True
+    global _global_setup_done
+    if not _global_setup_done:
+        _global_setup_done = True
         await setup_global_window()
         await setup_absolute_window()
 

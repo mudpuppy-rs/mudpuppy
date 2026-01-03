@@ -101,7 +101,7 @@ def main() -> None:
         render_docs(
             output_directory=output_directory,
             template_directory=template_directory,
-            modules={"mudpuppy_core", *base_names},
+            modules={"pup", *base_names},
         )
     except Exception as e:
         print(e)

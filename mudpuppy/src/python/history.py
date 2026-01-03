@@ -40,6 +40,7 @@ class InputHistory:
 
     async def sent_line(self, sesh: Session, ev: Event):
         if isinstance(ev, Event.InputLine) and sesh.id == self.sesh.id:
+            assert isinstance(ev.line, InputLine)
             self.add(ev.line)
 
     def add(self, line: InputLine):
@@ -57,7 +58,7 @@ class InputHistory:
         if len(self.lines) >= self.max_lines:
             self.lines.pop(0)
 
-    async def _navigate_history(self, direction: str):
+    async def _navigate_history(self, direction: Direction):
         if self.input.echo() == EchoState.Password:
             return
 

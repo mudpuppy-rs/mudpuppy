@@ -103,9 +103,7 @@
                 };
                 ruff.enable = true;
                 ruff-format.enable = true;
-                # Stubs need to be caught up with the current API to
-                # re-enable type checking.
-                # pyright.enable = true;
+                pyright.enable = true;
                 nightly-fmt = (cargo-check "cargo-fmt" "fmt --check");
                 nightly-clippy = (cargo-check "cargo-clippy"
                   "clippy --all-targets --all-features -- -D warnings");

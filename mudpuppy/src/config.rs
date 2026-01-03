@@ -202,9 +202,6 @@ settings! {
         /// Number of lines to scroll when using scroll shortcuts.
         scroll_lines: u16 = 5,
 
-        /// Whether to show input echo in the output buffer.
-        show_input_echo: bool = true,
-
         /// Percentage of screen to use for scrollback overlay.
         scrollback_percentage: u16 = 70,
 
@@ -900,7 +897,7 @@ mod tests {
         assert!(settings.word_wrap);
         assert_eq!(settings.send_separator, ";;");
         assert_eq!(settings.scroll_lines, 5);
-        assert!(settings.show_input_echo);
+        assert!(settings.echo_input);
         assert_eq!(settings.scrollback_percentage, 70);
     }
 
@@ -1005,7 +1002,7 @@ mod tests {
         // Global settings (lowest priority)
         Python::attach(|py| {
             let mut settings = config.settings.borrow_mut(py);
-            settings.show_input_echo = true;
+            settings.echo_input = true;
             settings.scroll_lines = 5;
             settings.word_wrap = true;
         });
@@ -1015,7 +1012,7 @@ mod tests {
             let mud = config.muds.get(py, TEST_MUD_NAME).unwrap();
             let mud = mud.borrow(py);
             let mut settings = mud.settings.borrow_mut(py);
-            settings.show_input_echo = Some(false);
+            settings.echo_input = Some(false);
             settings.scroll_lines = Some(10);
         });
 
@@ -1030,7 +1027,7 @@ mod tests {
 
         Python::attach(|py| {
             let resolved = config.resolve_settings(py, Some(TEST_CHAR_NAME)).unwrap();
-            assert!(!resolved.show_input_echo); // From MUD override
+            assert!(!resolved.echo_input); // From MUD override
             assert_eq!(resolved.scroll_lines, 11); // From character override.
             assert!(!resolved.word_wrap); // From character override
             assert_eq!(resolved.send_separator, ";;"); // From global default
@@ -1243,7 +1240,7 @@ def test_settings(config):
                 let mud = mud.borrow(py);
                 let mud_settings = mud.settings.borrow(py);
                 assert_eq!(
-                    mud_settings.show_input_echo,
+                    mud_settings.echo_input,
                     Some(false),
                     "MUD show_input_echo should be Some(false)"
                 );
@@ -1281,8 +1278,8 @@ def test_settings(config):
                 "Resolved scroll_lines should be 15 (from MUD override)"
             );
             assert!(
-                !resolved.show_input_echo,
-                "Resolved show_input_echo should be False (from MUD override)"
+                !resolved.echo_input,
+                "Resolved echo_input should be False (from MUD override)"
             );
             assert_eq!(
                 resolved.scrollback_percentage, 80,

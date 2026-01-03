@@ -838,6 +838,11 @@ pub(crate) mod pup {
     }
 
     #[pyfunction]
+    fn config_file() -> PathBuf {
+        crate::config::config_file()
+    }
+
+    #[pyfunction]
     fn data_dir() -> PathBuf {
         crate::config::data_dir().to_owned()
     }

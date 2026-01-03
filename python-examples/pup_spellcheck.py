@@ -1,7 +1,6 @@
 import logging
 import re
 
-import pup
 from pup import (
     Session,
     EventType,
@@ -73,6 +72,8 @@ class Spellchecker:
         assert isinstance(ev, Event.InputChanged)
 
         input = ev.input
+        # InputChanged events always have InputLine, not MudLine
+        assert isinstance(ev.line, InputLine)
         line = ev.line
 
         if input.echo() == EchoState.Password:

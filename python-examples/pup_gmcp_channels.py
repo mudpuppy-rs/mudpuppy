@@ -61,6 +61,9 @@ class GmcpChannelWindow:
         tab = await sesh.tab()
         layout = await tab.layout()
         output_parent = layout.get_parent("MUD Output")
+        if output_parent is None:
+            self.logger.error("Could not find 'MUD Output' parent in layout")
+            return
         output_parent.insert_child(
             0, Constraint.Min(self.layout_min_rows), Section("Channels")
         )
@@ -201,6 +204,7 @@ class GmcpChannelWindow:
     ):
         if self.buffer is None:
             self.logger.warning("scroll up called before setup")
+            return
         self.buffer.scroll_up(5)
 
     async def scroll_down(
@@ -208,4 +212,5 @@ class GmcpChannelWindow:
     ):
         if self.buffer is None:
             self.logger.warning("scroll down called before setup")
+            return
         self.buffer.scroll_down(5)
